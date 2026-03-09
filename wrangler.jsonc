@@ -32,15 +32,15 @@
 	"ai": {
 		"binding": "AI"
 	},  
-  "d1_databases": [
+  	"d1_databases": [
 		{
 			"binding": "DB",
 			"database_name": "core-template-cfw-assets-astro-shadcn",
 			"database_id": "d126139f-6f57-49d2-bbc4-d20bbd46bbf4",
 			"preview_database_id": "d126139f-6f57-49d2-bbc4-d20bbd46bbf4",
-			"migrations_dir": "drizzle/migrations"
+			"migrations_dir": "drizzle"
 		}
-  ] 
+  	], 
 	"secrets_store_secrets": [
 		{
 			"binding": "GITHUB_TOKEN",
