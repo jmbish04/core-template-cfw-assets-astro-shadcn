@@ -22,9 +22,9 @@
     "db:generate": "drizzle-kit generate",
     "db:seed:local": "npx wrangler d1 execute DB --local --file=src/backend/db/seed.sql",
     "db:seed:remote": "npx wrangler d1 execute DB --remote --file=src/backend/db/seed.sql",
-    "migrate:local": "npm run db:generate && npx wrangler d1 migrations apply DB --local && npm run db:seed:local",
-    "migrate:remote": "npm run db:generate && npx wrangler d1 migrations apply DB --remote && npm run db:seed:remote",
-    "deploy": "npm run build && npm run migrate:remote && npx wrangler deploy",
+    "migrate:local": "pnpm run db:generate && npx wrangler d1 migrations apply DB --local && pnpm run db:seed:local",
+    "migrate:remote": "pnpm run db:generate && npx wrangler d1 migrations apply DB --remote && pnpm run db:seed:remote",
+    "deploy": "pnpm run build && pnpm run migrate:remote && npx wrangler deploy",
     "cf-typegen": "wrangler types"
   },
   "dependencies": {
