@@ -97,7 +97,7 @@ dashboardRouter.get('/charts/:category', async (c) => {
       .where(
         and(
           eq(dashboardMetrics.category, category),
-          gte(dashboardMetrics.timestamp, startDate)
+          gte(dashboardMetrics.timestamp, startTimestamp)
         )
       )
       .orderBy(desc(dashboardMetrics.timestamp));
