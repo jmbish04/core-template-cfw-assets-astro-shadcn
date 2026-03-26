@@ -89,6 +89,7 @@ dashboardRouter.get('/charts/:category', async (c) => {
   try {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
+    const startTimestamp = Math.floor(startDate.getTime() / 1000);
 
     const metrics = await db
       .select()
