@@ -71,7 +71,7 @@ authRouter.post('/register', zValidator('json', registerSchema), async (c) => {
 
     // Create session
     const token = generateToken();
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+    const expiresAt = new Date(Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60);
 
     await db.insert(sessions).values({
       userId: user.id,
