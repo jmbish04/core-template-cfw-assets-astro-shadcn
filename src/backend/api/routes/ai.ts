@@ -132,7 +132,7 @@ aiRouter.post('/text-to-speech', zValidator('json', textToSpeechSchema), async (
 });
 
 // POST /api/ai/embeddings
-aiRouter.post('/embeddings', async (c) => {
+aiRouter.post('/embeddings', zValidator('json', z.object({ text: z.string().min(1) })), async (c) => {
   const { text } = await c.req.json();
 
   try {
