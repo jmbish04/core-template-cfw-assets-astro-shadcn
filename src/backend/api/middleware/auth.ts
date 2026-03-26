@@ -40,7 +40,7 @@ export async function authMiddleware(
 
     const session = sessionResult[0];
 
-    if (new Date(session.expiresAt) < new Date()) {
+    if (session.expiresAt * 1000 < Date.now()) {
       return c.json({ error: 'Session expired' }, 401);
     }
 
