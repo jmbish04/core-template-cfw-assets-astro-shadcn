@@ -1,12 +1,30 @@
 ---
-import { ComponentExample } from "@/components/ComponentExample";
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import { siteConfig } from "@/lib/config";
+
+// ==============================================================================
+// 🤖 AI AGENT INSTRUCTIONS 🤖
+// ==============================================================================
+// This is your blank canvas! The template's default content (Hero, Cards, etc.) 
+// has been explicitly removed so you can start fresh.
+//
+// WHAT YOU NEED TO DO:
+// 1. Build the new frontend for the user directly in this file (or add new routes).
+// 2. Use shadcn/ui components in `src/frontend/components/ui/`.
+// 3. DO NOT try to restore or look for the old template placeholders.
+// ==============================================================================
 ---
 
 <BaseLayout
   title={siteConfig.name}
   description={siteConfig.description}
 >
-  <ComponentExample client:load />
+  <main class="flex min-h-screen flex-col items-center justify-center p-24">
+    <div class="text-center">
+      <h1 class="text-4xl font-bold tracking-tight">System Ready</h1>
+      <p class="mt-4 text-muted-foreground">
+        AI Agent: Please implement the user's requested frontend here.
+      </p>
+    </div>
+  </main>
 </BaseLayout>
