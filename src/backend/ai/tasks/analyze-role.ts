@@ -26,7 +26,7 @@ import {
   roleBullets,
   ROLE_BULLET_TYPES,
   roles,
-} from "../../db/schema";
+} from "@/db/schema";
 import type { RoleBulletType } from "@/backend/db/schemas/role-bullets";
 import { generateStructuredOutput } from "@/backend/ai/providers";
 import { consultNotebook } from "@/backend/ai/tools/notebooklm";
