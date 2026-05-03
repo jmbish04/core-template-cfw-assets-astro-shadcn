@@ -77,7 +77,6 @@
       "migrations_dir": "drizzle",
     },
   ],
-  "vars"
   "secrets_store_secrets": [
     {
       "binding": "GITHUB_TOKEN",
