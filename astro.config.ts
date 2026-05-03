@@ -18,6 +18,7 @@ export default defineConfig({
     platformProxy: {
       enabled: true,
     },
+    sessionKVBindingName: "SESSIONS",
     routes: {
       // Extend Cloudflare routes to include backend API routes
       extend: {
@@ -25,6 +26,13 @@ export default defineConfig({
         exclude: [],
       },
     },
+    workerEntryPoint: {
+      path: "src/_worker.ts",
+      namedExports: [
+        "OrchestratorAgent",
+        "NotebookLMAgent",
+      ],
+    },    
   }),
   integrations: [react()],
   vite: {
