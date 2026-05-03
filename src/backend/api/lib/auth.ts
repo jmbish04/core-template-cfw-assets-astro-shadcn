@@ -46,6 +46,11 @@ export function extractBearerToken(authorizationHeader?: string): string | null 
 
 export async function safeEqual(left: string, right: string): Promise<boolean> {
   const [leftBytes, rightBytes] = await Promise.all([hashValue(left), hashValue(right)]);
+
+  if (leftBytes.length !== rightBytes.length) {
+    return false;
+  }
+
   let mismatch = 0;
 
   for (let index = 0; index < leftBytes.length; index += 1) {

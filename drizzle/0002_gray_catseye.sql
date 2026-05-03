@@ -2,6 +2,8 @@ PRAGMA foreign_keys=OFF;--> statement-breakpoint
 -- Existing template data used user-owned records. Map those legacy rows to synthetic
 -- session keys so they remain available for one-time export or manual cleanup after
 -- this migration. Newly created API-key sessions will not reuse these legacy keys.
+-- Cleanup tip: export or review rows where `session_key` starts with `migrated-user-`
+-- before deleting them or reassigning them to newly created session-owned records.
 CREATE TABLE `__new_documents` (
 `id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 `session_key` text NOT NULL,
