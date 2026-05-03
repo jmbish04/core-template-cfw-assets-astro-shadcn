@@ -1,6 +1,6 @@
 {
   "name": "core-template-cfw-assets-astro-shadcn",
-  "main": "src/_worker.js",
+   "main": "dist/_worker.js/index.js",
   "compatibility_date": "2026-05-03",
   "compatibility_flags": ["nodejs_compat"],
   "upload_source_maps": true,
