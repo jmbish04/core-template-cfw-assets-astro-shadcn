@@ -6,6 +6,8 @@
 
 import type { ExportedHandler } from '@cloudflare/workers-types';
 import { app as honoApp } from './backend/api/index';
+import { OrchestratorAgent } from "./backend/ai/agents/orchestrator";
+import { NotebookLMAgent } from "./backend/ai/agents/notebooklm";
 
 const handler: ExportedHandler<Env> = {
   async fetch(request, env, ctx) {
@@ -27,3 +29,5 @@ const handler: ExportedHandler<Env> = {
 };
 
 export default handler;
+
+export OrchestratorAgent, NotebookLMAgent;
