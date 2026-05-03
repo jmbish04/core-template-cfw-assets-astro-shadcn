@@ -1,5 +1,7 @@
 import * as React from "react";
 
+const COPY_FEEDBACK_TIMEOUT_MS = 2000;
+
 export type FrontendErrorPayload = {
   sourcePage: {
     url: string;
@@ -104,7 +106,7 @@ export function useFrontendErrorHandler() {
       timeoutRef.current = window.setTimeout(() => {
         setCopyState("idle");
         timeoutRef.current = null;
-      }, 2000);
+      }, COPY_FEEDBACK_TIMEOUT_MS);
     } catch (error) {
       const fallbackError: FrontendErrorState = {
         sourcePage: activeError.sourcePage,

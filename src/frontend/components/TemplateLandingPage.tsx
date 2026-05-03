@@ -100,10 +100,10 @@ export function TemplateLandingPage({ currentPath }: TemplateLandingPageProps) {
               <p className="text-sm font-medium uppercase tracking-[0.2em]">Template follow-up required</p>
             </div>
             <CardTitle className="text-3xl font-semibold">
-              If you&apos;re seeing this page, your worker URL routes are still pointing to template pages.
+              If you're seeing this page, your worker URL routes are still pointing to template pages.
             </CardTitle>
             <CardDescription className="max-w-3xl text-base">
-              Replace this landing page with your project&apos;s real frontend, keep the shared header visible on all pages, and preserve the dynamic docs endpoints at <code>/openapi.json</code>, <code>/swagger</code>, and <code>/scaler</code>.
+              Replace this landing page with your project's real frontend, keep the shared header visible on all pages, and preserve the dynamic docs endpoints at <code>/openapi.json</code>, <code>/swagger</code>, and <code>/scaler</code>.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">

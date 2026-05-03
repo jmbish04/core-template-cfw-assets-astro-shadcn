@@ -7,7 +7,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
-import { authRouter } from './routes/auth';
+import { sessionRouter } from './routes/auth';
 import { dashboardRouter } from './routes/dashboard';
 import { threadsRouter } from './routes/threads';
 import { healthRouter } from './routes/health';
@@ -32,7 +32,7 @@ app.use('*', logger());
 app.get('/api/ping', (c) => c.json({ status: 'ok', timestamp: Date.now() }));
 
 // Mount routers
-app.route('/api/auth', authRouter);
+app.route('/api/auth', sessionRouter);
 app.route('/api/dashboard', dashboardRouter);
 app.route('/api/threads', threadsRouter);
 app.route('/api/health', healthRouter);

@@ -18,7 +18,7 @@ import {
   safeEqual,
 } from '../lib/auth';
 
-const authRouter = new Hono<{ Bindings: Env }>();
+const sessionRouter = new Hono<{ Bindings: Env }>();
 
 const createSessionSchema = z.object({
   apiKey: z.string().min(1),
@@ -31,7 +31,7 @@ async function createSession(c: Context<{ Bindings: Env }>) {
   try {
     const configuredApiKey = await readWorkerApiKey(c.env);
 
-    if (!safeEqual(apiKey, configuredApiKey)) {
+    if (!(await safeEqual(apiKey, configuredApiKey))) {
       return c.json({ error: 'Invalid API key' }, 401);
     }
 
@@ -66,10 +66,9 @@ async function createSession(c: Context<{ Bindings: Env }>) {
   }
 }
 
-authRouter.post('/session', zValidator('json', createSessionSchema), createSession);
-authRouter.post('/login', zValidator('json', createSessionSchema), createSession);
+sessionRouter.post('/session', zValidator('json', createSessionSchema), createSession);
 
-authRouter.post('/logout', async (c) => {
+sessionRouter.post('/logout', async (c) => {
   const token = extractBearerToken(c.req.header('Authorization'));
 
   if (!token) {
@@ -87,4 +86,4 @@ authRouter.post('/logout', async (c) => {
   }
 });
 
-export { authRouter };
+export { sessionRouter };
