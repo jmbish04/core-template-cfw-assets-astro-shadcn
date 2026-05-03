@@ -38,7 +38,7 @@ corepack pnpm lint
 corepack pnpm build
 ```
 
-- `deps:lockfile` refreshes the pnpm lockfile and regenerated Wrangler types
+- `deps:lockfile` refreshes the pnpm lockfile and regenerates Wrangler types
 - `deps:update` pulls the latest dependency versions first, then refreshes the lockfile and types
 
 ## Fixing GitHub or Cloudflare Build Failures
