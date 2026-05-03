@@ -1,4 +1,4 @@
-import { getCloudflareImagesToken } from "../../utils/secrets";
+import { getCloudflareImagesToken } from "@/backend/utils/secrets";
 
 // ---------------------------------------------------------------------------
 // Public types

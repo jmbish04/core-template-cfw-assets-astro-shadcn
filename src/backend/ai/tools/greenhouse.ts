@@ -10,7 +10,7 @@
  * https://developers.greenhouse.io/job-board.html
  */
 
-import type { ScrapedPage } from "./browser-rendering";
+import type { ScrapedPage } from "@/backend/ai/tools/browser-rendering";
 
 // ---------------------------------------------------------------------------
 // URL pattern matching

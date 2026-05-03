@@ -2,9 +2,9 @@
  * @fileoverview Synchronous chat task — single-turn AI response.
  */
 
-import type { ChatMessage } from "../providers";
-import { getModelRegistry } from "../models";
-import { getProvider } from "../providers";
+import type { ChatMessage } from "@/backend/ai/providers";
+import { getModelRegistry } from "@/backend/ai/models";
+import { getProvider } from "@/backend/ai/providers";
 
 export type { ChatMessage };
 

@@ -7,7 +7,7 @@
 
 import type { z } from "zod";
 
-import { generateStructuredOutput } from "../providers";
+import { generateStructuredOutput } from "@/backend/ai/providers";
 
 export async function extract<TSchema extends z.ZodTypeAny>(
   env: Env,

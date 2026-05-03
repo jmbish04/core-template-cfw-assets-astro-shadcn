@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { defineModel, readResultObject } from "./_define";
+import { defineModel, readResultObject } from "@/backend/ai/models/_define";
 
 export const LlavaInput = z.object({
   image: z.array(z.number()).min(1),

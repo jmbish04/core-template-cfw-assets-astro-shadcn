@@ -10,7 +10,7 @@
  *   6. Remember — Store the full exchange in career memory (D1 + Vectorize)
  */
 
-import type { NotebookLMAgent } from "../index";
+import type { NotebookLMAgent } from "@/backend/ai/agents/notebooklm/index";
 import type { Connection } from "agents";
 
 import { consultNotebook } from "@/ai/tools/notebooklm";

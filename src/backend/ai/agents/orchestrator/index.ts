@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getDb } from "@/db";
 import { threads, messages, roles } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
-import type { OrchestratorState, OrchestratorTask } from "./types";
+import type { OrchestratorState, OrchestratorTask } from "@/backend/ai/agents/orchestrator/types";
 import {
   handleEnqueueTask,
   handleProcessPendingTasks,
@@ -26,7 +26,7 @@ import {
   handleDraftEmailReply,
 } from "./methods";
 import type { TemplateType } from "@/ai/tools/google/templates/template-engine";
-import { checkHealth as healthProbeImpl } from "./health";
+import { checkHealth as healthProbeImpl } from "@/backend/ai/agents/orchestrator/health";
 
 const IncomingMessage = z.object({
   type: z.literal("chat"),

@@ -1,5 +1,5 @@
-import type { OrchestratorAgent } from "../../index";
-import type { OrchestratorTask, OrchestratorTaskStatus } from "../../types";
+import type { OrchestratorAgent } from "@/backend/ai/agents/orchestrator/index";
+import type { OrchestratorTask, OrchestratorTaskStatus } from "@/backend/ai/agents/orchestrator/types";
 import { draft } from "@/ai/tasks/draft";
 import { analyzeRole } from "@/ai/tasks/analyze-role";
 import { getDb } from "@/db";

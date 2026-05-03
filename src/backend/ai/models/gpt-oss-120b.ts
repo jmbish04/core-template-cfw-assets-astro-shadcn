@@ -11,7 +11,7 @@
 
 import { z } from "zod";
 
-import { defineModel, readTextResponse } from "./_define";
+import { defineModel, readTextResponse } from "@/backend/ai/models/_define";
 
 // ---------------------------------------------------------------------------
 // Shared types

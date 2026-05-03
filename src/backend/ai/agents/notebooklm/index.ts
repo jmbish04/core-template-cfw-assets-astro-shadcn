@@ -1,5 +1,5 @@
 import { Agent, callable, type Connection } from "agents";
-import { handleConsult, handleMessage } from "./methods/consult";
+import { handleConsult, handleMessage } from "@/backend/ai/agents/notebooklm/methods/consult";
 import { checkNotebookLMSession } from "@/ai/tools/notebooklm";
 
 export class NotebookLMAgent extends Agent<Env> {

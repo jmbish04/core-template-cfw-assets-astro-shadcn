@@ -7,14 +7,14 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
-import { sessionRouter } from './routes/auth';
-import { dashboardRouter } from './routes/dashboard';
-import { threadsRouter } from './routes/threads';
-import { healthRouter } from './routes/health';
-import { notificationsRouter } from './routes/notifications';
-import { aiRouter } from './routes/ai';
-import { documentsRouter } from './routes/documents';
-import { openapiRouter } from './routes/openapi';
+import { sessionRouter } from '@/backend/api/routes/auth';
+import { dashboardRouter } from '@/backend/api/routes/dashboard';
+import { threadsRouter } from '@/backend/api/routes/threads';
+import { healthRouter } from '@/backend/api/routes/health';
+import { notificationsRouter } from '@/backend/api/routes/notifications';
+import { aiRouter } from '@/backend/api/routes/ai';
+import { documentsRouter } from '@/backend/api/routes/documents';
+import { openapiRouter } from '@/backend/api/routes/openapi';
 
 export type Variables = {
   sessionId?: number;

@@ -12,8 +12,8 @@
  * method here is a deprecated shim that delegates to the Drive client.
  */
 
-import { getServiceAccountAccessToken } from "../../../lib/google-auth";
-import { extractGoogleId } from "./utils";
+import { getServiceAccountAccessToken } from "@/backend/lib/google-auth";
+import { extractGoogleId } from "@/backend/ai/tools/google/utils";
 
 const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive";
 const DOCS_SCOPE = "https://www.googleapis.com/auth/documents";

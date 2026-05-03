@@ -1,6 +1,6 @@
 import type { z } from "zod";
 
-import type { ModelDescriptor, ModelCapability } from "../providers/base";
+import type { ModelDescriptor, ModelCapability } from "@/backend/ai/providers/base";
 
 export function defineModel<TInput, TOutput>(spec: {
   id: string;

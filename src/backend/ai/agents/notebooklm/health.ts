@@ -1,4 +1,4 @@
-import type { NotebookLMAgent } from "./index";
+import type { NotebookLMAgent } from "@/backend/ai/agents/notebooklm/index";
 import { getAgentByName } from "agents";
 import type { ModuleResult } from "@/backend/health/types";
 import { checkNotebookLMSession } from "@/ai/tools/notebooklm";

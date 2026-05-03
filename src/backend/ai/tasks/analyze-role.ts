@@ -17,7 +17,7 @@
 import { desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { getDb } from "../../db";
+import { getDb } from "@/backend/db";
 import {
   globalConfig,
   roleAlignmentScores,
@@ -27,10 +27,10 @@ import {
   ROLE_BULLET_TYPES,
   roles,
 } from "../../db/schema";
-import type { RoleBulletType } from "../../db/schemas/role-bullets";
-import { generateStructuredOutput } from "../providers";
-import { consultNotebook } from "../tools/notebooklm";
-import { getActiveBullets } from "./draft";
+import type { RoleBulletType } from "@/backend/db/schemas/role-bullets";
+import { generateStructuredOutput } from "@/backend/ai/providers";
+import { consultNotebook } from "@/backend/ai/tools/notebooklm";
+import { getActiveBullets } from "@/backend/ai/tasks/draft";
 
 // ---------------------------------------------------------------------------
 // Type labels for human-readable prompt sections

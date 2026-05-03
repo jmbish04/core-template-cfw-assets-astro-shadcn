@@ -30,4 +30,4 @@ const handler: ExportedHandler<Env> = {
 
 export default handler;
 
-export OrchestratorAgent, NotebookLMAgent;
+export { OrchestratorAgent, NotebookLMAgent };

@@ -13,13 +13,13 @@
 
 import { eq } from "drizzle-orm";
 
-import { getDb } from "../../db";
-import { roles, resumeBullets } from "../../db/schema";
-import { getModelRegistry } from "../models";
-import { getProvider } from "../providers";
-import { consultNotebook } from "../tools/notebooklm";
-import { GoogleDocsClient } from "../tools/google/docs";
-import { CareerMemoryService } from "../../services/career-memory-service";
+import { getDb } from "@/backend/db";
+import { roles, resumeBullets } from "@/backend/db/schema";
+import { getModelRegistry } from "@/backend/ai/models";
+import { getProvider } from "@/backend/ai/providers";
+import { consultNotebook } from "@/backend/ai/tools/notebooklm";
+import { GoogleDocsClient } from "@/backend/ai/tools/google/docs";
+import { CareerMemoryService } from "@/backend/services/career-memory-service";
 
 // ---------------------------------------------------------------------------
 // Types

@@ -14,12 +14,12 @@
 
 import { eq } from "drizzle-orm";
 
-import { getDb } from "../../db";
-import { roles, documents, resumeBullets, type Role } from "../../db/schema";
-import { getModelRegistry } from "../models";
-import { getProvider } from "../providers";
-import { consultNotebook } from "../tools/notebooklm";
-import { CareerMemoryService } from "../../services/career-memory-service";
+import { getDb } from "@/backend/db";
+import { roles, documents, resumeBullets, type Role } from "@/backend/db/schema";
+import { getModelRegistry } from "@/backend/ai/models";
+import { getProvider } from "@/backend/ai/providers";
+import { consultNotebook } from "@/backend/ai/tools/notebooklm";
+import { CareerMemoryService } from "@/backend/services/career-memory-service";
 import {
   handleCreateBrandedDocFromTemplate,
 } from "../agents/orchestrator/methods/docs/google-docs";

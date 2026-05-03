@@ -6,8 +6,8 @@ import type { Context, Next } from 'hono';
 import { drizzle } from 'drizzle-orm/d1';
 import { eq } from 'drizzle-orm';
 import { sessions } from '@db/schemas';
-import { extractBearerToken } from '../lib/auth';
-import type { Variables } from '../index';
+import { extractBearerToken } from '@/backend/api/lib/auth';
+import type { Variables } from '@/backend/api/index';
 
 export async function authMiddleware(
   c: Context<{ Bindings: Env; Variables: Variables }>,

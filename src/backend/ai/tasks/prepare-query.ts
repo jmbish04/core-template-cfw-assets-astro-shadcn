@@ -9,8 +9,8 @@
  * citation quality and evidence coverage.
  */
 
-import { getProvider } from "../providers";
-import { getModelRegistry } from "../models";
+import { getProvider } from "@/backend/ai/providers";
+import { getModelRegistry } from "@/backend/ai/models";
 
 // ---------------------------------------------------------------------------
 // Types

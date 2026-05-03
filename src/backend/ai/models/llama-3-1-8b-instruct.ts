@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { defineModel, readTextResponse } from "./_define";
+import { defineModel, readTextResponse } from "@/backend/ai/models/_define";
 
 export const Llama31ChatMessage = z.object({
   role: z.enum(["system", "user", "assistant", "tool"]),

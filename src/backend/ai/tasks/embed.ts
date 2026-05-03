@@ -1,5 +1,5 @@
-import { getModelRegistry } from "../models";
-import { getProvider } from "../providers";
+import { getModelRegistry } from "@/backend/ai/models";
+import { getProvider } from "@/backend/ai/providers";
 
 export async function embed(
   env: Env,

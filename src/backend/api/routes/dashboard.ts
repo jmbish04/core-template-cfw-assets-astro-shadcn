@@ -6,8 +6,8 @@ import { Hono } from 'hono';
 import { drizzle } from 'drizzle-orm/d1';
 import { desc, eq, and, gte } from 'drizzle-orm';
 import { dashboardMetrics } from '@db/schemas';
-import { authMiddleware } from '../middleware/auth';
-import type { Variables } from '../index';
+import { authMiddleware } from '@/backend/api/middleware/auth';
+import type { Variables } from '@/backend/api/index';
 
 const dashboardRouter = new Hono<{ Bindings: Env; Variables: Variables }>();
 

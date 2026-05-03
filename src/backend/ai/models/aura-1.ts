@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { defineModel } from "./_define";
+import { defineModel } from "@/backend/ai/models/_define";
 
 export const Aura1Input = z.object({
   text: z.string().min(1),

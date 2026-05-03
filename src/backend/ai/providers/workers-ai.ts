@@ -3,7 +3,7 @@
  * `env.AI.run()` through the AI Gateway.
  */
 
-import type { AIProvider, InvokeOpts, ModelDescriptor } from "./base";
+import type { AIProvider, InvokeOpts, ModelDescriptor } from "@/backend/ai/providers/base";
 
 export class WorkersAIProvider implements AIProvider {
   constructor(private readonly env: Env) {}

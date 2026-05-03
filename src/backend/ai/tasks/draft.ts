@@ -1,9 +1,9 @@
 import { eq } from "drizzle-orm";
 
-import { getDb } from "../../db";
-import { resumeBullets, type ResumeBullet } from "../../db/schema";
-import { getModelRegistry } from "../models";
-import { getProvider } from "../providers";
+import { getDb } from "@/backend/db";
+import { resumeBullets, type ResumeBullet } from "@/backend/db/schema";
+import { getModelRegistry } from "@/backend/ai/models";
+import { getProvider } from "@/backend/ai/providers";
 
 export type DraftDocType = "resume" | "cover_letter" | "email_reply";
 

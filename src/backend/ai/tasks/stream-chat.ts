@@ -3,8 +3,8 @@
  * suitable for the frontend chat UI.
  */
 
-import type { ChatMessage } from "../providers";
-import { streamChat as rawStreamChat } from "../providers";
+import type { ChatMessage } from "@/backend/ai/providers";
+import { streamChat as rawStreamChat } from "@/backend/ai/providers";
 
 export type { ChatMessage };
 

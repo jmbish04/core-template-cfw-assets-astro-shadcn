@@ -9,13 +9,13 @@
 import type { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 
-import type { AIProvider } from "./base";
-import { WorkersAIProvider } from "./workers-ai";
-import { getModelRegistry } from "../models";
-import type { GptOssMessage } from "../models/gpt-oss-120b";
+import type { AIProvider } from "@/backend/ai/providers/base";
+import { WorkersAIProvider } from "@/backend/ai/providers/workers-ai";
+import { getModelRegistry } from "@/backend/ai/models";
+import type { GptOssMessage } from "@/backend/ai/models/gpt-oss-120b";
 
 // Re-export the shared message type for consumers
-export type { GptOssMessage as ChatMessage } from "../models/gpt-oss-120b";
+export type { GptOssMessage as ChatMessage } from "@/backend/ai/models/gpt-oss-120b";
 
 // ---------------------------------------------------------------------------
 // Provider factory

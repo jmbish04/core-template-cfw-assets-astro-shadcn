@@ -9,15 +9,15 @@
  * new model ID (backward-compatible).
  */
 
-import type { ModelDescriptor } from "../providers/base";
+import type { ModelDescriptor } from "@/backend/ai/providers/base";
 
-import { aura_1 } from "./aura-1";
-import { bge_large_en_v1_5 } from "./bge-large-en-v1-5";
-import { gpt_oss_120b } from "./gpt-oss-120b";
-import { llama_3_1_8b } from "./llama-3-1-8b-instruct";
-import { llama_3_3_70b } from "./llama-3-3-70b-instruct-fp8-fast";
-import { llava_1_5_7b_hf } from "./llava-1-5-7b-hf";
-import { whisper } from "./whisper";
+import { aura_1 } from "@/backend/ai/models/aura-1";
+import { bge_large_en_v1_5 } from "@/backend/ai/models/bge-large-en-v1-5";
+import { gpt_oss_120b } from "@/backend/ai/models/gpt-oss-120b";
+import { llama_3_1_8b } from "@/backend/ai/models/llama-3-1-8b-instruct";
+import { llama_3_3_70b } from "@/backend/ai/models/llama-3-3-70b-instruct-fp8-fast";
+import { llava_1_5_7b_hf } from "@/backend/ai/models/llava-1-5-7b-hf";
+import { whisper } from "@/backend/ai/models/whisper";
 
 // ---------------------------------------------------------------------------
 // Known model descriptors — keyed by Workers AI model ID

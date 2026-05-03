@@ -1,4 +1,4 @@
-import type { OrchestratorAgent } from "../../index";
+import type { OrchestratorAgent } from "@/backend/ai/agents/orchestrator/index";
 import { getDb } from "@/db";
 import { roles } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";

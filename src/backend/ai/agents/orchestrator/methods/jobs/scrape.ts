@@ -6,7 +6,7 @@ import {
 } from "@/ai/tools/browser-rendering";
 import { extract } from "@/ai/tasks/extract";
 import { parseGreenhouseUrl, scrapeGreenhouseJob } from "@/ai/tools/greenhouse";
-import { JobPosting } from "../../types";
+import { JobPosting } from "@/backend/ai/agents/orchestrator/types";
 
 /**
  * Scrapes a job URL using BR /markdown (for AI extraction content) and

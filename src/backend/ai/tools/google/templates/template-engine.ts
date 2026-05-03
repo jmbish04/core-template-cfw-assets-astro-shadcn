@@ -22,9 +22,9 @@
 
 import Mustache from "mustache";
 
-import { RESUME_HTML_TEMPLATE } from "./resume-template";
-import { COVER_LETTER_HTML_TEMPLATE } from "./cover-letter-template";
-import { CANDIDATE_INFO } from "./constants";
+import { RESUME_HTML_TEMPLATE } from "@/backend/ai/tools/google/templates/resume-template";
+import { COVER_LETTER_HTML_TEMPLATE } from "@/backend/ai/tools/google/templates/cover-letter-template";
+import { CANDIDATE_INFO } from "@/backend/ai/tools/google/templates/constants";
 import {
   buildBaseStyles,
   buildResumeStyles,
