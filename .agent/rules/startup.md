@@ -31,3 +31,14 @@ When starting a new feature or project using this template, your **first step** 
 ## 4. Deployment Context
 - This project deploys to Cloudflare Workers using Astro's Cloudflare adapter mapped via Workers Assets.
 - Ensure that backend endpoints and frontend assets cleanly interact and share the `Env` bindings without duplication.
+
+## 5. Dependency and CI Maintenance
+- Follow `.agent/rules/dependency-maintenance.md` whenever you touch dependencies, Wrangler config, or generated Cloudflare types.
+- Use Node.js 22+ for any workflow that runs Wrangler, including `pnpm run cf-typegen`, `deps:lockfile`, and `deps:update`.
+- If GitHub Actions or Cloudflare deployment checks fail because the pnpm lockfile is frozen/out of date, Wrangler is stale, or generated types drifted, run:
+  1. `corepack pnpm run deps:lockfile`
+  2. `corepack pnpm run deps:update` when versions are outdated and the lockfile refresh alone is not enough
+  3. switch to Node.js 22+ if Wrangler reports a Node version error
+  4. `corepack pnpm lint`
+  5. `corepack pnpm build`
+- Commit `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml` when touched, and `worker-configuration.d.ts` when regenerated. Do not add `package-lock.json`.

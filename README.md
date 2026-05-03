@@ -1,35 +1,57 @@
-# Astro shadcn/ui template
+# Core Template: Cloudflare Workers + Astro + shadcn/ui
 
-A modern starter template using [Astro](https://astro.build/), [Tailwind CSS](https://tailwindcss.com/), and [shadcn/ui](https://ui.shadcn.com/) - perfect for building fast, accessible, and themeable web apps.
-
----
+This template combines Cloudflare Workers, Hono, Astro, React, Tailwind CSS, and shadcn/ui into a single full-stack starter.
 
 ## Getting Started
 
-Before you begin, ensure that you have **Node.js** and **pnpm** installed.
-
-### Setup
+Use Node.js 22+ so Wrangler can generate Cloudflare types successfully, then use Corepack so the repository runs with the pinned pnpm version from `package.json`.
 
 ```bash
-git clone https://github.com/area44/astro-shadcn-ui-template
-cd astro-shadcn-ui-template
-pnpm install
-pnpm dev
+corepack enable
+corepack pnpm install
+corepack pnpm dev
 ```
 
-Open your browser and go to [http://localhost:4321](http://localhost:4321) to see the app running.
+## Template Intake Automation
 
-## Adding Components
+When this repository is used through GitHub's **Use this template** flow, `.github/workflows/setup-template.yml` runs once on the first push in the new repository. It will:
 
-`shadcn/ui` provides pre-built, accessible UI components. To add one:
+- rename the package and Wrangler worker to the new repository name
+- update the repository URL in `package.json`
+- refresh dependencies with pnpm, including the lockfile
+- regenerate `worker-configuration.d.ts`
+- remove `package-lock.json`
+- delete the setup workflow from the generated repository after it finishes
 
-1. Follow the official [Astro installation guide](https://ui.shadcn.com/docs/installation/astro).
-2. Pick a component (e.g., [Accordion](https://ui.shadcn.com/docs/components/accordion), [Dialog](https://ui.shadcn.com/docs/components/dialog)) and follow the usage instructions.
+The workflow now rebases before pushing its setup commit so the initial template update does not fail on a non-fast-forward push.
 
-> [!NOTE]
-> In Astro, an [island](https://docs.astro.build/en/concepts/islands/) is an interactive component rendered on the client. For complex or dynamic components, check [Add a Shadcn UI Component | Space Madness Stack](https://spacemadness.dev/docs/add-a-shadcn-ui-component)
+## Dependency Maintenance
 
-If you're new to using React (or other frameworks) inside Astro, start with the [Framework Components guide](https://docs.astro.build/en/guides/framework-components/).
+This template is pnpm-first. Keep `pnpm-lock.yaml` committed and in sync with `package.json`.
+
+Useful maintenance commands:
+
+```bash
+corepack pnpm run deps:lockfile
+corepack pnpm run deps:update
+corepack pnpm lint
+corepack pnpm build
+```
+
+- `deps:lockfile` refreshes the pnpm lockfile and regenerated Wrangler types
+- `deps:update` pulls the latest dependency versions first, then refreshes the lockfile and types
+
+## Fixing GitHub or Cloudflare Build Failures
+
+If a GitHub Actions run or Cloudflare PR deployment fails because the lockfile is frozen, pnpm metadata is stale, or Wrangler/generated types drifted:
+
+1. Run `corepack pnpm run deps:lockfile`
+2. If versions are stale, run `corepack pnpm run deps:update`
+3. If Wrangler reports a Node version error, switch the environment to Node.js 22+ and rerun the maintenance commands
+4. Re-run `corepack pnpm lint` and `corepack pnpm build`
+5. Commit the resulting `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml` (if changed), and `worker-configuration.d.ts` (if changed)
+
+Do not add `package-lock.json` back to the repository.
 
 ## License
 
