@@ -30,6 +30,44 @@
   "ai": {
     "binding": "AI",
   },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "ORCHESTRATOR_AGENT",
+        "class_name": "OrchestratorAgent",
+      },
+      {
+        "name": "NOTEBOOKLM_AGENT",
+        "class_name": "NotebookLMAgent",
+      },
+    ],
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "OrchestratorAgent",
+        "NotebookLMAgent",
+      ],
+    },
+  ],
+  "vars": {
+    "DEFAULT_MODEL_EMBEDDING": "@cf/baai/bge-large-en-v1.5",
+    "PARENT_DRIVE_FOLDER_ID": "1jCokY9_gi3w3_qjdCX8MbnbtZrF9p52j",
+    "HEALTH_CHECK_DRIVE_FOLDER_ID": "1Sc-uzcth6LfaaDvWsTI7tCcbzL1eTwym",
+    "AI_GATEWAY_ID": "default-gateway",
+    "MODEL_CHAT": "@cf/openai/gpt-oss-120b",
+    "MODEL_EXTRACT": "@cf/openai/gpt-oss-120b",
+    "MODEL_DRAFT": "@cf/openai/gpt-oss-120b",
+    "MODEL_TRANSCRIBE": "@cf/openai/whisper-large-v3-turbo",
+  },
+  "kv_namespaces": [
+    {
+      "binding": "SESSIONS",
+      "id": "aba8552a49c64335ba4832d34ce9459d",
+      "remote": true,
+    },
+  ],
   "d1_databases": [
     {
       "binding": "DB",
@@ -39,6 +77,7 @@
       "migrations_dir": "drizzle",
     },
   ],
+  "vars"
   "secrets_store_secrets": [
     {
       "binding": "GITHUB_TOKEN",
@@ -51,29 +90,14 @@
       "secret_name": "CLOUDFLARE_ACCOUNT_ID",
     },
     {
-      "binding": "CLOUDFLARE_API_TOKEN",
+      "binding": "CLOUDFLARE_WRANGLER_API_TOKEN",
       "store_id": "8c42fa70938644e0a8a109744467375f",
-      "secret_name": "CLOUDFLARE_API_TOKEN",
-    },
-    {
-      "binding": "CLOUDFLARE_SECRETS_STORE_TOKEN",
-      "store_id": "8c42fa70938644e0a8a109744467375f",
-      "secret_name": "CLOUDFLARE_SECRETS_STORE_TOKEN",
-    },
-    {
-      "binding": "CLOUDFLARE_WORKER_ADMIN_TOKEN",
-      "store_id": "8c42fa70938644e0a8a109744467375f",
-      "secret_name": "CLOUDFLARE_WORKER_ADMIN_TOKEN",
+      "secret_name": "CLOUDFLARE_WRANGLER_API_TOKEN",
     },
     {
       "binding": "CLOUDFLARE_AI_SEARCH_TOKEN",
       "store_id": "8c42fa70938644e0a8a109744467375f",
       "secret_name": "CLOUDFLARE_AI_SEARCH_TOKEN",
-    },
-    {
-      "binding": "CLOUDFLARE_OBSERVABILITY_TOKEN",
-      "store_id": "8c42fa70938644e0a8a109744467375f",
-      "secret_name": "CLOUDFLARE_OBSERVABILITY_TOKEN",
     },
     {
       "binding": "WORKER_API_KEY",
@@ -101,39 +125,29 @@
       "secret_name": "JULES_API_KEY",
     },
     {
-      "binding": "GEMINI_API_KEY",
+      "binding": "STITCH_API_KEY",
       "store_id": "8c42fa70938644e0a8a109744467375f",
-      "secret_name": "GOOGLE_API_KEY",
+      "secret_name": "STITCH_API_KEY",
     },
-    {
-      "binding": "ANTHROPIC_API_KEY",
-      "store_id": "8c42fa70938644e0a8a109744467375f",
-      "secret_name": "ANTHROPIC_API_KEY",
-    },
-    {
-      "binding": "OPENAI_API_KEY",
-      "store_id": "8c42fa70938644e0a8a109744467375f",
-      "secret_name": "OPENAI_API_KEY",
-    },
-		{
-			"binding": "GOOGLE_CREDS_SA_PRIVATE_KEY_PT_1",
-			"store_id": "8c42fa70938644e0a8a109744467375f",
-			"secret_name": "GOOGLE_CREDS_SA_PRIVATE_KEY_PT_1",
-		},
-		{
-			"binding": "GOOGLE_CREDS_SA_PRIVATE_KEY_PT_2",
-			"store_id": "8c42fa70938644e0a8a109744467375f",
-			"secret_name": "GOOGLE_CREDS_SA_PRIVATE_KEY_PT_2",
-		},
-		{
-			"binding": "GOOGLE_CREDS_SA_CLIENT_EMAIL",
-			"store_id": "8c42fa70938644e0a8a109744467375f",
-			"secret_name": "GOOGLE_CREDS_SA_CLIENT_EMAIL",
-		},
-		{
-			"binding": "NOTEBOOKLM_AUTH_TOKEN",
-			"store_id": "8c42fa70938644e0a8a109744467375f",
-			"secret_name": "NOTEBOOKLM_AUTH_TOKEN",
-		},
+	{
+		"binding": "GOOGLE_CREDS_SA_PRIVATE_KEY_PT_1",
+		"store_id": "8c42fa70938644e0a8a109744467375f",
+		"secret_name": "GOOGLE_CREDS_SA_PRIVATE_KEY_PT_1",
+	},
+	{
+		"binding": "GOOGLE_CREDS_SA_PRIVATE_KEY_PT_2",
+		"store_id": "8c42fa70938644e0a8a109744467375f",
+		"secret_name": "GOOGLE_CREDS_SA_PRIVATE_KEY_PT_2",
+	},
+	{
+		"binding": "GOOGLE_CREDS_SA_CLIENT_EMAIL",
+		"store_id": "8c42fa70938644e0a8a109744467375f",
+		"secret_name": "GOOGLE_CREDS_SA_CLIENT_EMAIL",
+	},
+	{
+		"binding": "NOTEBOOKLM_AUTH_TOKEN",
+		"store_id": "8c42fa70938644e0a8a109744467375f",
+		"secret_name": "NOTEBOOKLM_AUTH_TOKEN",
+	},
   ],
 }
