@@ -5,11 +5,11 @@
 import { Hono } from 'hono';
 import { drizzle } from 'drizzle-orm/d1';
 import { desc, eq, and, gte } from 'drizzle-orm';
-import { dashboardMetrics } from '../../db/schema';
+import { dashboardMetrics } from '@db/schemas';
 import { authMiddleware } from '../middleware/auth';
-import type { Bindings, Variables } from '../index';
+import type { Variables } from '../index';
 
-const dashboardRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+const dashboardRouter = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 // Apply auth middleware to all routes
 dashboardRouter.use('*', authMiddleware);
@@ -18,7 +18,7 @@ dashboardRouter.use('*', authMiddleware);
 dashboardRouter.get('/metrics', async (c) => {
   const db = drizzle(c.env.DB);
   const category = c.req.query('category');
-  const limit = parseInt(c.req.query('limit') || '100');
+  const limit = Number.parseInt(c.req.query('limit') || '100', 10);
 
   try {
     let query = db.select().from(dashboardMetrics);
@@ -27,18 +27,15 @@ dashboardRouter.get('/metrics', async (c) => {
       query = query.where(eq(dashboardMetrics.category, category));
     }
 
-    const metrics = await query
-      .orderBy(desc(dashboardMetrics.timestamp))
-      .limit(limit);
+    const metrics = await query.orderBy(desc(dashboardMetrics.timestamp)).limit(limit);
 
-    // Group metrics by category
-    const grouped = metrics.reduce((acc, metric) => {
-      if (!acc[metric.category]) {
-        acc[metric.category] = [];
+    const grouped = metrics.reduce<Record<string, typeof metrics>>((accumulator, metric) => {
+      if (!accumulator[metric.category]) {
+        accumulator[metric.category] = [];
       }
-      acc[metric.category].push(metric);
-      return acc;
-    }, {} as Record<string, typeof metrics>);
+      accumulator[metric.category].push(metric);
+      return accumulator;
+    }, {});
 
     return c.json({
       metrics,
@@ -56,20 +53,24 @@ dashboardRouter.get('/summary', async (c) => {
   const db = drizzle(c.env.DB);
 
   try {
-    // Get latest metrics for each category
     const allMetrics = await db
       .select()
       .from(dashboardMetrics)
       .orderBy(desc(dashboardMetrics.timestamp))
       .limit(1000);
 
-    // Get the most recent metric for each metric name
-    const latestMetrics = allMetrics.reduce((acc, metric) => {
-      if (!acc[metric.metricName] || new Date(metric.timestamp) > new Date(acc[metric.metricName].timestamp)) {
-        acc[metric.metricName] = metric;
-      }
-      return acc;
-    }, {} as Record<string, typeof allMetrics[0]>);
+    const latestMetrics = allMetrics.reduce<Record<string, (typeof allMetrics)[number]>>(
+      (accumulator, metric) => {
+        if (
+          !accumulator[metric.metricName] ||
+          metric.timestamp.getTime() > accumulator[metric.metricName].timestamp.getTime()
+        ) {
+          accumulator[metric.metricName] = metric;
+        }
+        return accumulator;
+      },
+      {},
+    );
 
     return c.json({
       summary: Object.values(latestMetrics),
@@ -84,12 +85,11 @@ dashboardRouter.get('/summary', async (c) => {
 dashboardRouter.get('/charts/:category', async (c) => {
   const db = drizzle(c.env.DB);
   const category = c.req.param('category');
-  const days = parseInt(c.req.query('days') || '7');
+  const days = Number.parseInt(c.req.query('days') || '7', 10);
 
   try {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
-    const startTimestamp = Math.floor(startDate.getTime() / 1000);
 
     const metrics = await db
       .select()
@@ -97,17 +97,16 @@ dashboardRouter.get('/charts/:category', async (c) => {
       .where(
         and(
           eq(dashboardMetrics.category, category),
-          gte(dashboardMetrics.timestamp, startTimestamp)
-        )
+          gte(dashboardMetrics.timestamp, startDate),
+        ),
       )
       .orderBy(desc(dashboardMetrics.timestamp));
 
-    // Format data for charts
-    const chartData = metrics.map((m) => ({
-      timestamp: m.timestamp,
-      value: m.metricValue,
-      name: m.metricName,
-      type: m.metricType,
+    const chartData = metrics.map((metric) => ({
+      timestamp: metric.timestamp,
+      value: metric.metricValue,
+      name: metric.metricName,
+      type: metric.metricType,
     }));
 
     return c.json({ data: chartData });

@@ -5,17 +5,15 @@
 import { Hono } from 'hono';
 import { swaggerUI } from '@hono/swagger-ui';
 import { apiReference } from '@scalar/hono-api-reference';
-import type { Bindings } from '../index';
 
-const openapiRouter = new Hono<{ Bindings: Bindings }>();
+const openapiRouter = new Hono<{ Bindings: Env }>();
 
-// OpenAPI specification
 const openApiSpec = {
   openapi: '3.1.0',
   info: {
     title: 'Core Template API',
     version: '1.0.0',
-    description: 'API documentation for Cloudflare Workers AI powered application',
+    description: 'API documentation for the Cloudflare Workers template',
   },
   servers: [
     {
@@ -24,39 +22,27 @@ const openApiSpec = {
     },
   ],
   paths: {
-    '/auth/login': {
+    '/auth/session': {
       post: {
-        summary: 'User login',
+        summary: 'Create an authenticated session from the WORKER_API_KEY secret',
         tags: ['Authentication'],
         requestBody: {
+          required: true,
           content: {
             'application/json': {
               schema: {
                 type: 'object',
                 properties: {
-                  email: { type: 'string', format: 'email' },
-                  password: { type: 'string', minLength: 8 },
+                  apiKey: { type: 'string' },
                 },
-                required: ['email', 'password'],
+                required: ['apiKey'],
               },
             },
           },
         },
         responses: {
-          '200': {
-            description: 'Login successful',
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  properties: {
-                    user: { type: 'object' },
-                    token: { type: 'string' },
-                    expiresAt: { type: 'string', format: 'date-time' },
-                  },
-                },
-              },
-            },
+          '201': {
+            description: 'Session created successfully',
           },
         },
       },
@@ -87,7 +73,7 @@ const openApiSpec = {
     },
     '/threads': {
       get: {
-        summary: 'List user threads',
+        summary: 'List session threads',
         tags: ['AI Threads'],
         security: [{ bearerAuth: [] }],
         responses: {
@@ -142,28 +128,18 @@ const openApiSpec = {
   },
 };
 
-// GET /openapi.json
-openapiRouter.get('/openapi.json', (c) => {
-  return c.json(openApiSpec);
-});
-
-// GET /swagger
+openapiRouter.get('/openapi.json', (c) => c.json(openApiSpec));
 openapiRouter.get('/swagger', swaggerUI({ url: '/openapi.json' }));
 
-// GET /scalar
-openapiRouter.get(
-  '/scalar',
-  apiReference({
-    spec: {
-      url: '/openapi.json',
-    },
-    theme: 'dark',
-  })
-);
-
-// GET /docs - redirect to scalar
-openapiRouter.get('/docs', (c) => {
-  return c.redirect('/scalar');
+const scalarReference = apiReference({
+  spec: {
+    url: '/openapi.json',
+  },
+  theme: 'dark',
 });
+
+openapiRouter.get('/scalar', scalarReference);
+openapiRouter.get('/scaler', scalarReference);
+openapiRouter.get('/docs', (c) => c.redirect('/scalar'));
 
 export { openapiRouter };

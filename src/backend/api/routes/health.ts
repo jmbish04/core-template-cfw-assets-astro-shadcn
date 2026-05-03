@@ -5,10 +5,9 @@
 import { Hono } from 'hono';
 import { drizzle } from 'drizzle-orm/d1';
 import { desc, eq } from 'drizzle-orm';
-import { healthChecks } from '../../db/schema';
-import type { Bindings } from '../index';
+import { healthChecks } from '@db/schemas';
 
-const healthRouter = new Hono<{ Bindings: Bindings }>();
+const healthRouter = new Hono<{ Bindings: Env }>();
 
 // GET /api/health
 healthRouter.get('/', async (c) => {
@@ -16,26 +15,26 @@ healthRouter.get('/', async (c) => {
   const startTime = Date.now();
 
   try {
-    // Test database connection
     await db.select().from(healthChecks).limit(1);
     const dbResponseTime = Date.now() - startTime;
 
-    // Get latest health check for each service
     const allChecks = await db
       .select()
       .from(healthChecks)
       .orderBy(desc(healthChecks.timestamp))
       .limit(100);
 
-    const latestChecks = allChecks.reduce((acc, check) => {
-      if (!acc[check.serviceName]) {
-        acc[check.serviceName] = check;
-      }
-      return acc;
-    }, {} as Record<string, typeof allChecks[0]>);
+    const latestChecks = allChecks.reduce<Record<string, (typeof allChecks)[number]>>(
+      (accumulator, check) => {
+        if (!accumulator[check.serviceName]) {
+          accumulator[check.serviceName] = check;
+        }
+        return accumulator;
+      },
+      {},
+    );
 
-    // Determine overall status
-    const statuses = Object.values(latestChecks).map((c) => c.status);
+    const statuses = Object.values(latestChecks).map((check) => check.status);
     let overallStatus = 'healthy';
 
     if (statuses.includes('down')) {
@@ -44,7 +43,6 @@ healthRouter.get('/', async (c) => {
       overallStatus = 'degraded';
     }
 
-    // Record this health check
     await db.insert(healthChecks).values({
       serviceName: 'api',
       status: 'healthy',
@@ -66,7 +64,7 @@ healthRouter.get('/', async (c) => {
         timestamp: new Date().toISOString(),
         error: 'Health check failed',
       },
-      503
+      503,
     );
   }
 });
@@ -75,7 +73,7 @@ healthRouter.get('/', async (c) => {
 healthRouter.get('/history', async (c) => {
   const db = drizzle(c.env.DB);
   const service = c.req.query('service');
-  const limit = parseInt(c.req.query('limit') || '100');
+  const limit = Number.parseInt(c.req.query('limit') || '100', 10);
 
   try {
     let query = db.select().from(healthChecks);
@@ -84,9 +82,7 @@ healthRouter.get('/history', async (c) => {
       query = query.where(eq(healthChecks.serviceName, service));
     }
 
-    const history = await query
-      .orderBy(desc(healthChecks.timestamp))
-      .limit(limit);
+    const history = await query.orderBy(desc(healthChecks.timestamp)).limit(limit);
 
     return c.json({ history });
   } catch (error) {

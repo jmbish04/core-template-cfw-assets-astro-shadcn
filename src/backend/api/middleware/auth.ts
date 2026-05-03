@@ -5,32 +5,26 @@
 import type { Context, Next } from 'hono';
 import { drizzle } from 'drizzle-orm/d1';
 import { eq } from 'drizzle-orm';
-import { sessions, users } from '../../db/schema';
-import type { Bindings, Variables } from '../index';
+import { sessions } from '@db/schemas';
+import { extractBearerToken } from '../lib/auth';
+import type { Variables } from '../index';
 
 export async function authMiddleware(
-  c: Context<{ Bindings: Bindings; Variables: Variables }>,
-  next: Next
+  c: Context<{ Bindings: Env; Variables: Variables }>,
+  next: Next,
 ) {
-  const authHeader = c.req.header('Authorization');
+  const token = extractBearerToken(c.req.header('Authorization'));
 
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  if (!token) {
     return c.json({ error: 'Unauthorized' }, 401);
   }
 
-  const token = authHeader.substring(7);
   const db = drizzle(c.env.DB);
 
   try {
     const sessionResult = await db
-      .select({
-        userId: sessions.userId,
-        expiresAt: sessions.expiresAt,
-        email: users.email,
-        name: users.name,
-      })
+      .select()
       .from(sessions)
-      .innerJoin(users, eq(sessions.userId, users.id))
       .where(eq(sessions.token, token))
       .limit(1);
 
@@ -40,16 +34,13 @@ export async function authMiddleware(
 
     const session = sessionResult[0];
 
-    if (session.expiresAt * 1000 < Date.now()) {
+    if (session.expiresAt.getTime() < Date.now()) {
       return c.json({ error: 'Session expired' }, 401);
     }
 
-    c.set('userId', session.userId);
-    c.set('user', {
-      id: session.userId,
-      email: session.email,
-      name: session.name,
-    });
+    c.set('sessionId', session.id);
+    c.set('sessionKey', session.sessionKey);
+    c.set('sessionToken', session.token);
 
     await next();
   } catch (error) {

@@ -6,8 +6,9 @@
     "jsx": "react-jsx",
     "jsxImportSource": "react",
     "paths": {
-      "@/*": ["src/frontend/*", "src/backend/*"]
+      "@/*": ["src/frontend/*", "src/backend/*"],
+      "@db/*": ["db/*"]
     }
   },
-  "include": [".astro/types.d.ts", "src/**/*", "worker-configuration.d.ts"]
+  "include": [".astro/types.d.ts", "src/**/*", "db/**/*", "worker-configuration.d.ts"]
 }

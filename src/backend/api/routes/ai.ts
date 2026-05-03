@@ -6,9 +6,9 @@ import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth';
-import type { Bindings, Variables } from '../index';
+import type { Variables } from '../index';
 
-const aiRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+const aiRouter = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 // Apply auth middleware
 aiRouter.use('*', authMiddleware);
@@ -18,13 +18,13 @@ const chatSchema = z.object({
     z.object({
       role: z.enum(['user', 'assistant', 'system']),
       content: z.string(),
-    })
+    }),
   ),
   model: z.string().optional(),
 });
 
 const speechToTextSchema = z.object({
-  audio: z.string(), // base64 encoded audio
+  audio: z.string(),
 });
 
 const textToSpeechSchema = z.object({
@@ -63,7 +63,7 @@ aiRouter.post('/chat/stream', zValidator('json', chatSchema), async (c) => {
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
+        Connection: 'keep-alive',
       },
     });
   } catch (error) {
@@ -77,8 +77,7 @@ aiRouter.post('/speech-to-text', zValidator('json', speechToTextSchema), async (
   const { audio } = c.req.valid('json');
 
   try {
-    // Decode base64 audio
-    const audioBuffer = Uint8Array.from(atob(audio), (c) => c.charCodeAt(0));
+    const audioBuffer = Uint8Array.from(atob(audio), (char) => char.charCodeAt(0));
 
     const response = await c.env.AI.run('@cf/openai/whisper', {
       audio: Array.from(audioBuffer),
@@ -101,7 +100,6 @@ aiRouter.post('/text-to-speech', zValidator('json', textToSpeechSchema), async (
       voice,
     });
 
-    // Return audio as base64
     if (response instanceof ReadableStream) {
       const reader = response.getReader();
       const chunks: Uint8Array[] = [];
@@ -112,7 +110,7 @@ aiRouter.post('/text-to-speech', zValidator('json', textToSpeechSchema), async (
         chunks.push(value);
       }
 
-      const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
+      const totalLength = chunks.reduce((accumulator, chunk) => accumulator + chunk.length, 0);
       const audioData = new Uint8Array(totalLength);
       let offset = 0;
       for (const chunk of chunks) {
@@ -133,7 +131,7 @@ aiRouter.post('/text-to-speech', zValidator('json', textToSpeechSchema), async (
 
 // POST /api/ai/embeddings
 aiRouter.post('/embeddings', zValidator('json', z.object({ text: z.string().min(1) })), async (c) => {
-  const { text } = await c.req.json();
+  const { text } = c.req.valid('json');
 
   try {
     const response = await c.env.AI.run('@cf/baai/bge-base-en-v1.5', {

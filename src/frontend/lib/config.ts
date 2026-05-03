@@ -18,7 +18,7 @@ export type SiteConfig = {
 
 export const siteConfig: SiteConfig = {
   name: "New Project",
-  description: "A new project built with Astro, Tailwind CSS, and shadcn/ui.",
+  description: "A Cloudflare Workers starter with Astro, shadcn/ui, session-based auth, and dynamic API documentation.",
   url: "https://example.com",
   author: {
     name: "Author",
@@ -28,6 +28,8 @@ export const siteConfig: SiteConfig = {
     github: "https://github.com",
   },
   navItems: [
-    // AI AGENT: Add your navigation items here
+    { href: "/openapi.json", label: "OpenAPI" },
+    { href: "/swagger", label: "Swagger" },
+    { href: "/scaler", label: "Scaler" },
   ],
 };

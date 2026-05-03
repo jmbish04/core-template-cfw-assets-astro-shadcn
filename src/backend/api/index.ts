@@ -7,7 +7,6 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
-import type { D1Database, Ai } from '@cloudflare/workers-types';
 import { authRouter } from './routes/auth';
 import { dashboardRouter } from './routes/dashboard';
 import { threadsRouter } from './routes/threads';
@@ -17,23 +16,13 @@ import { aiRouter } from './routes/ai';
 import { documentsRouter } from './routes/documents';
 import { openapiRouter } from './routes/openapi';
 
-export type Bindings = {
-  DB: D1Database;
-  AI: Ai;
-  AI_GATEWAY_TOKEN?: string;
-  CLOUDFLARE_ACCOUNT_ID?: string;
-};
-
 export type Variables = {
-  userId?: number;
-  user?: {
-    id: number;
-    email: string;
-    name: string;
-  };
+  sessionId?: number;
+  sessionKey?: string;
+  sessionToken?: string;
 };
 
-const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 // Middleware
 app.use('*', cors());

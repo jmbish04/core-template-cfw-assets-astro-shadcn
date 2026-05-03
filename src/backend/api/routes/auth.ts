@@ -3,156 +3,79 @@
  */
 
 import { Hono } from 'hono';
+import type { Context } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { drizzle } from 'drizzle-orm/d1';
 import { eq } from 'drizzle-orm';
-import { users, sessions } from '../../db/schema';
-import type { Bindings } from '../index';
+import { sessions } from '@db/schemas';
+import {
+  createSessionExpiry,
+  createSessionKey,
+  createSessionToken,
+  extractBearerToken,
+  readWorkerApiKey,
+  safeEqual,
+} from '../lib/auth';
 
-const authRouter = new Hono<{ Bindings: Bindings }>();
+const authRouter = new Hono<{ Bindings: Env }>();
 
-// Validation schemas
-const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8),
+const createSessionSchema = z.object({
+  apiKey: z.string().min(1),
 });
 
-const registerSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8),
-  name: z.string().min(2),
-});
-
-// Simple password hashing (in production, use a proper library)
-async function hashPassword(password: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-function generateToken(): string {
-  const array = new Uint8Array(32);
-  crypto.getRandomValues(array);
-  return Array.from(array, (byte) => byte.toString(16).padStart(2, '0')).join('');
-}
-
-// POST /api/auth/register
-authRouter.post('/register', zValidator('json', registerSchema), async (c) => {
-  const { email, password, name } = c.req.valid('json');
+async function createSession(c: Context<{ Bindings: Env }>) {
+  const { apiKey } = c.req.valid('json');
   const db = drizzle(c.env.DB);
 
   try {
-    // Check if user already exists
-    const existingUser = await db
-      .select()
-      .from(users)
-      .where(eq(users.email, email))
-      .limit(1);
+    const configuredApiKey = await readWorkerApiKey(c.env);
 
-    if (existingUser.length > 0) {
-      return c.json({ error: 'User already exists' }, 400);
+    if (!safeEqual(apiKey, configuredApiKey)) {
+      return c.json({ error: 'Invalid API key' }, 401);
     }
 
-    // Create user
-    const passwordHash = await hashPassword(password);
+    const token = createSessionToken();
+    const sessionKey = await createSessionKey(configuredApiKey);
+    const expiresAt = createSessionExpiry();
+
     const result = await db
-      .insert(users)
+      .insert(sessions)
       .values({
-        email,
-        passwordHash,
-        name,
+        token,
+        sessionKey,
+        expiresAt,
+        updatedAt: new Date(),
       })
       .returning();
 
-    const user = result[0];
-
-    // Create session
-    const token = generateToken();
-    const expiresAt = new Date(Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60);
-
-    await db.insert(sessions).values({
-      userId: user.id,
-      token,
-      expiresAt,
-    });
-
-    return c.json({
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
+    return c.json(
+      {
+        session: {
+          id: result[0].id,
+          token,
+          sessionKey,
+          expiresAt: expiresAt.toISOString(),
+        },
       },
-      token,
-      expiresAt: expiresAt.toISOString(),
-    });
+      201,
+    );
   } catch (error) {
-    console.error('Registration error:', error);
-    return c.json({ error: 'Registration failed' }, 500);
+    console.error('Session creation error:', error);
+    return c.json({ error: 'Session creation failed' }, 500);
   }
-});
+}
 
-// POST /api/auth/login
-authRouter.post('/login', zValidator('json', loginSchema), async (c) => {
-  const { email, password } = c.req.valid('json');
-  const db = drizzle(c.env.DB);
+authRouter.post('/session', zValidator('json', createSessionSchema), createSession);
+authRouter.post('/login', zValidator('json', createSessionSchema), createSession);
 
-  try {
-    // Find user
-    const userResult = await db
-      .select()
-      .from(users)
-      .where(eq(users.email, email))
-      .limit(1);
-
-    if (userResult.length === 0) {
-      return c.json({ error: 'Invalid credentials' }, 401);
-    }
-
-    const user = userResult[0];
-
-    // Verify password
-    const passwordHash = await hashPassword(password);
-    if (passwordHash !== user.passwordHash) {
-      return c.json({ error: 'Invalid credentials' }, 401);
-    }
-
-    // Create session
-    const token = generateToken();
-    const expiresAt = new Date(Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60);
-
-    await db.insert(sessions).values({
-      userId: user.id,
-      token,
-      expiresAt,
-    });
-
-    return c.json({
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-      },
-      token,
-      expiresAt: expiresAt.toISOString(),
-    });
-  } catch (error) {
-    console.error('Login error:', error);
-    return c.json({ error: 'Login failed' }, 500);
-  }
-});
-
-// POST /api/auth/logout
 authRouter.post('/logout', async (c) => {
-  const authHeader = c.req.header('Authorization');
+  const token = extractBearerToken(c.req.header('Authorization'));
 
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  if (!token) {
     return c.json({ error: 'No token provided' }, 400);
   }
 
-  const token = authHeader.substring(7);
   const db = drizzle(c.env.DB);
 
   try {

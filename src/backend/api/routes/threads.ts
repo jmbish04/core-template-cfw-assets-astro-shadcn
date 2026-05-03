@@ -4,41 +4,40 @@
 
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
-import { z } from 'zod';
 import { drizzle } from 'drizzle-orm/d1';
-import { desc, eq } from 'drizzle-orm';
-import { threads, messages } from '../../db/schema';
+import { desc, eq, and } from 'drizzle-orm';
+import { insertMessageSchema, insertThreadSchema, messages, threads } from '@db/schemas';
 import { authMiddleware } from '../middleware/auth';
-import type { Bindings, Variables } from '../index';
+import type { Variables } from '../index';
 
-const threadsRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+const threadsRouter = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 // Apply auth middleware
 threadsRouter.use('*', authMiddleware);
 
-const createThreadSchema = z.object({
-  title: z.string().min(1),
+const createThreadSchema = insertThreadSchema.pick({
+  title: true,
 });
 
-const createMessageSchema = z.object({
-  role: z.enum(['user', 'assistant', 'system']),
-  content: z.string().min(1),
-  metadata: z.string().optional(),
+const createMessageSchema = insertMessageSchema.pick({
+  role: true,
+  content: true,
+  metadata: true,
 });
 
 // GET /api/threads
 threadsRouter.get('/', async (c) => {
   const db = drizzle(c.env.DB);
-  const userId = c.get('userId')!;
+  const sessionKey = c.get('sessionKey')!;
 
   try {
-    const userThreads = await db
+    const sessionThreads = await db
       .select()
       .from(threads)
-      .where(eq(threads.userId, userId))
+      .where(eq(threads.sessionKey, sessionKey))
       .orderBy(desc(threads.updatedAt));
 
-    return c.json({ threads: userThreads });
+    return c.json({ threads: sessionThreads });
   } catch (error) {
     console.error('Error fetching threads:', error);
     return c.json({ error: 'Failed to fetch threads' }, 500);
@@ -48,14 +47,14 @@ threadsRouter.get('/', async (c) => {
 // POST /api/threads
 threadsRouter.post('/', zValidator('json', createThreadSchema), async (c) => {
   const db = drizzle(c.env.DB);
-  const userId = c.get('userId')!;
+  const sessionKey = c.get('sessionKey')!;
   const { title } = c.req.valid('json');
 
   try {
     const result = await db
       .insert(threads)
       .values({
-        userId,
+        sessionKey,
         title,
       })
       .returning();
@@ -70,27 +69,21 @@ threadsRouter.post('/', zValidator('json', createThreadSchema), async (c) => {
 // GET /api/threads/:id
 threadsRouter.get('/:id', async (c) => {
   const db = drizzle(c.env.DB);
-  const userId = c.get('userId')!;
-  const threadId = parseInt(c.req.param('id'));
+  const sessionKey = c.get('sessionKey')!;
+  const threadId = Number.parseInt(c.req.param('id'), 10);
 
   try {
     const threadResult = await db
       .select()
       .from(threads)
-      .where(eq(threads.id, threadId))
+      .where(and(eq(threads.id, threadId), eq(threads.sessionKey, sessionKey)))
       .limit(1);
 
     if (threadResult.length === 0) {
       return c.json({ error: 'Thread not found' }, 404);
     }
 
-    const thread = threadResult[0];
-
-    if (thread.userId !== userId) {
-      return c.json({ error: 'Unauthorized' }, 403);
-    }
-
-    return c.json({ thread });
+    return c.json({ thread: threadResult[0] });
   } catch (error) {
     console.error('Error fetching thread:', error);
     return c.json({ error: 'Failed to fetch thread' }, 500);
@@ -100,18 +93,17 @@ threadsRouter.get('/:id', async (c) => {
 // GET /api/threads/:id/messages
 threadsRouter.get('/:id/messages', async (c) => {
   const db = drizzle(c.env.DB);
-  const userId = c.get('userId')!;
-  const threadId = parseInt(c.req.param('id'));
+  const sessionKey = c.get('sessionKey')!;
+  const threadId = Number.parseInt(c.req.param('id'), 10);
 
   try {
-    // Verify thread ownership
     const threadResult = await db
       .select()
       .from(threads)
-      .where(eq(threads.id, threadId))
+      .where(and(eq(threads.id, threadId), eq(threads.sessionKey, sessionKey)))
       .limit(1);
 
-    if (threadResult.length === 0 || threadResult[0].userId !== userId) {
+    if (threadResult.length === 0) {
       return c.json({ error: 'Thread not found' }, 404);
     }
 
@@ -129,72 +121,60 @@ threadsRouter.get('/:id/messages', async (c) => {
 });
 
 // POST /api/threads/:id/messages
-threadsRouter.post(
-  '/:id/messages',
-  zValidator('json', createMessageSchema),
-  async (c) => {
-    const db = drizzle(c.env.DB);
-    const userId = c.get('userId')!;
-    const threadId = parseInt(c.req.param('id'));
-    const { role, content, metadata } = c.req.valid('json');
+threadsRouter.post('/:id/messages', zValidator('json', createMessageSchema), async (c) => {
+  const db = drizzle(c.env.DB);
+  const sessionKey = c.get('sessionKey')!;
+  const threadId = Number.parseInt(c.req.param('id'), 10);
+  const { role, content, metadata } = c.req.valid('json');
 
-    try {
-      // Verify thread ownership
-      const threadResult = await db
-        .select()
-        .from(threads)
-        .where(eq(threads.id, threadId))
-        .limit(1);
+  try {
+    const threadResult = await db
+      .select()
+      .from(threads)
+      .where(and(eq(threads.id, threadId), eq(threads.sessionKey, sessionKey)))
+      .limit(1);
 
-      if (threadResult.length === 0 || threadResult[0].userId !== userId) {
-        return c.json({ error: 'Thread not found' }, 404);
-      }
-
-      // Create message
-      const result = await db
-        .insert(messages)
-        .values({
-          threadId,
-          role,
-          content,
-          metadata,
-        })
-        .returning();
-
-      // Update thread's updatedAt
-      await db
-        .update(threads)
-        .set({ updatedAt: new Date() })
-        .where(eq(threads.id, threadId));
-
-      return c.json({ message: result[0] }, 201);
-    } catch (error) {
-      console.error('Error creating message:', error);
-      return c.json({ error: 'Failed to create message' }, 500);
+    if (threadResult.length === 0) {
+      return c.json({ error: 'Thread not found' }, 404);
     }
+
+    const result = await db
+      .insert(messages)
+      .values({
+        threadId,
+        role,
+        content,
+        metadata,
+      })
+      .returning();
+
+    await db
+      .update(threads)
+      .set({ updatedAt: new Date() })
+      .where(eq(threads.id, threadId));
+
+    return c.json({ message: result[0] }, 201);
+  } catch (error) {
+    console.error('Error creating message:', error);
+    return c.json({ error: 'Failed to create message' }, 500);
   }
-);
+});
 
 // DELETE /api/threads/:id
 threadsRouter.delete('/:id', async (c) => {
   const db = drizzle(c.env.DB);
-  const userId = c.get('userId')!;
-  const threadId = parseInt(c.req.param('id'));
+  const sessionKey = c.get('sessionKey')!;
+  const threadId = Number.parseInt(c.req.param('id'), 10);
 
   try {
-    // Verify thread ownership
-    const threadResult = await db
-      .select()
-      .from(threads)
-      .where(eq(threads.id, threadId))
-      .limit(1);
+    const result = await db
+      .delete(threads)
+      .where(and(eq(threads.id, threadId), eq(threads.sessionKey, sessionKey)))
+      .returning();
 
-    if (threadResult.length === 0 || threadResult[0].userId !== userId) {
+    if (result.length === 0) {
       return c.json({ error: 'Thread not found' }, 404);
     }
-
-    // Delete thread (messages will cascade delete)
-    await db.delete(threads).where(eq(threads.id, threadId));
 
     return c.json({ message: 'Thread deleted successfully' });
   } catch (error) {

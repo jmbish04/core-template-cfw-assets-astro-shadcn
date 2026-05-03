@@ -4,36 +4,35 @@
 
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
-import { z } from 'zod';
 import { drizzle } from 'drizzle-orm/d1';
-import { desc, eq } from 'drizzle-orm';
-import { documents } from '../../db/schema';
+import { desc, eq, and } from 'drizzle-orm';
+import { documents, insertDocumentSchema } from '@db/schemas';
 import { authMiddleware } from '../middleware/auth';
-import type { Bindings, Variables } from '../index';
+import type { Variables } from '../index';
 
-const documentsRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+const documentsRouter = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 // Apply auth middleware
 documentsRouter.use('*', authMiddleware);
 
-const createDocumentSchema = z.object({
-  title: z.string().min(1),
-  content: z.string(), // JSON string of Slate nodes
+const createDocumentSchema = insertDocumentSchema.pick({
+  title: true,
+  content: true,
 });
 
 // GET /api/documents
 documentsRouter.get('/', async (c) => {
   const db = drizzle(c.env.DB);
-  const userId = c.get('userId')!;
+  const sessionKey = c.get('sessionKey')!;
 
   try {
-    const userDocuments = await db
+    const sessionDocuments = await db
       .select()
       .from(documents)
-      .where(eq(documents.userId, userId))
+      .where(eq(documents.sessionKey, sessionKey))
       .orderBy(desc(documents.updatedAt));
 
-    return c.json({ documents: userDocuments });
+    return c.json({ documents: sessionDocuments });
   } catch (error) {
     console.error('Error fetching documents:', error);
     return c.json({ error: 'Failed to fetch documents' }, 500);
@@ -43,14 +42,14 @@ documentsRouter.get('/', async (c) => {
 // POST /api/documents
 documentsRouter.post('/', zValidator('json', createDocumentSchema), async (c) => {
   const db = drizzle(c.env.DB);
-  const userId = c.get('userId')!;
+  const sessionKey = c.get('sessionKey')!;
   const { title, content } = c.req.valid('json');
 
   try {
     const result = await db
       .insert(documents)
       .values({
-        userId,
+        sessionKey,
         title,
         content,
       })
@@ -66,27 +65,21 @@ documentsRouter.post('/', zValidator('json', createDocumentSchema), async (c) =>
 // GET /api/documents/:id
 documentsRouter.get('/:id', async (c) => {
   const db = drizzle(c.env.DB);
-  const userId = c.get('userId')!;
-  const documentId = parseInt(c.req.param('id'));
+  const sessionKey = c.get('sessionKey')!;
+  const documentId = Number.parseInt(c.req.param('id'), 10);
 
   try {
     const documentResult = await db
       .select()
       .from(documents)
-      .where(eq(documents.id, documentId))
+      .where(and(eq(documents.id, documentId), eq(documents.sessionKey, sessionKey)))
       .limit(1);
 
     if (documentResult.length === 0) {
       return c.json({ error: 'Document not found' }, 404);
     }
 
-    const document = documentResult[0];
-
-    if (document.userId !== userId) {
-      return c.json({ error: 'Unauthorized' }, 403);
-    }
-
-    return c.json({ document });
+    return c.json({ document: documentResult[0] });
   } catch (error) {
     console.error('Error fetching document:', error);
     return c.json({ error: 'Failed to fetch document' }, 500);
@@ -96,23 +89,11 @@ documentsRouter.get('/:id', async (c) => {
 // PUT /api/documents/:id
 documentsRouter.put('/:id', zValidator('json', createDocumentSchema), async (c) => {
   const db = drizzle(c.env.DB);
-  const userId = c.get('userId')!;
-  const documentId = parseInt(c.req.param('id'));
+  const sessionKey = c.get('sessionKey')!;
+  const documentId = Number.parseInt(c.req.param('id'), 10);
   const { title, content } = c.req.valid('json');
 
   try {
-    // Verify ownership
-    const documentResult = await db
-      .select()
-      .from(documents)
-      .where(eq(documents.id, documentId))
-      .limit(1);
-
-    if (documentResult.length === 0 || documentResult[0].userId !== userId) {
-      return c.json({ error: 'Document not found' }, 404);
-    }
-
-    // Update document
     const result = await db
       .update(documents)
       .set({
@@ -120,8 +101,12 @@ documentsRouter.put('/:id', zValidator('json', createDocumentSchema), async (c) 
         content,
         updatedAt: new Date(),
       })
-      .where(eq(documents.id, documentId))
+      .where(and(eq(documents.id, documentId), eq(documents.sessionKey, sessionKey)))
       .returning();
+
+    if (result.length === 0) {
+      return c.json({ error: 'Document not found' }, 404);
+    }
 
     return c.json({ document: result[0] });
   } catch (error) {
@@ -133,22 +118,18 @@ documentsRouter.put('/:id', zValidator('json', createDocumentSchema), async (c) 
 // DELETE /api/documents/:id
 documentsRouter.delete('/:id', async (c) => {
   const db = drizzle(c.env.DB);
-  const userId = c.get('userId')!;
-  const documentId = parseInt(c.req.param('id'));
+  const sessionKey = c.get('sessionKey')!;
+  const documentId = Number.parseInt(c.req.param('id'), 10);
 
   try {
-    // Verify ownership
-    const documentResult = await db
-      .select()
-      .from(documents)
-      .where(eq(documents.id, documentId))
-      .limit(1);
+    const result = await db
+      .delete(documents)
+      .where(and(eq(documents.id, documentId), eq(documents.sessionKey, sessionKey)))
+      .returning();
 
-    if (documentResult.length === 0 || documentResult[0].userId !== userId) {
+    if (result.length === 0) {
       return c.json({ error: 'Document not found' }, 404);
     }
-
-    await db.delete(documents).where(eq(documents.id, documentId));
 
     return c.json({ message: 'Document deleted successfully' });
   } catch (error) {
