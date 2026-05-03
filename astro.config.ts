@@ -22,10 +22,10 @@ export default defineConfig({
   integrations: [react()],
   vite: {
     plugins: [
-      // Cast to any to bypass Vite 6 / @tailwindcss/vite 7 HotUpdateOptions mismatch.
-      // We use 'any' instead of 'import("vite").Plugin' because Vite is a transient
-      // dependency via Astro, and strict pnpm resolution hides its types.
-      tailwindcss() as any
+      // Cast through the Vite plugin type to work around the current
+      // Vite/@tailwindcss-vite HotUpdateOptions mismatch without dropping
+      // type information entirely.
+      tailwindcss() as unknown as import("vite").Plugin
     ],
   },
 });
