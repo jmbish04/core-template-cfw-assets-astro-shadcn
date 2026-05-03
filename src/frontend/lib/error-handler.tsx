@@ -60,8 +60,21 @@ export function buildErrorAgentPrompt(error: FrontendErrorState): string {
 export function useFrontendErrorHandler() {
   const [activeError, setActiveError] = React.useState<FrontendErrorState | null>(null);
   const [copyState, setCopyState] = React.useState<"idle" | "copied">("idle");
+  const timeoutRef = React.useRef<number | null>(null);
+
+  React.useEffect(() => {
+    return () => {
+      if (timeoutRef.current !== null) {
+        window.clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
 
   const clearError = React.useCallback(() => {
+    if (timeoutRef.current !== null) {
+      window.clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
     setActiveError(null);
     setCopyState("idle");
   }, []);
@@ -85,7 +98,13 @@ export function useFrontendErrorHandler() {
     try {
       await navigator.clipboard.writeText(buildErrorAgentPrompt(activeError));
       setCopyState("copied");
-      window.setTimeout(() => setCopyState("idle"), 2000);
+      if (timeoutRef.current !== null) {
+        window.clearTimeout(timeoutRef.current);
+      }
+      timeoutRef.current = window.setTimeout(() => {
+        setCopyState("idle");
+        timeoutRef.current = null;
+      }, 2000);
     } catch (error) {
       const fallbackError: FrontendErrorState = {
         sourcePage: activeError.sourcePage,

@@ -139,6 +139,7 @@ const scalarReference = apiReference({
 });
 
 openapiRouter.get('/scalar', scalarReference);
+// Keep `/scaler` as a compatibility alias for the template landing page prompt and header links.
 openapiRouter.get('/scaler', scalarReference);
 openapiRouter.get('/docs', (c) => c.redirect('/scalar'));
 

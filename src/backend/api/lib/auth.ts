@@ -9,10 +9,9 @@ export function createSessionToken(): string {
   return bytesToHex(bytes);
 }
 
-export async function createSessionKey(apiKey: string): Promise<string> {
-  const encoded = new TextEncoder().encode(apiKey);
-  const digest = await crypto.subtle.digest("SHA-256", encoded);
-  return bytesToHex(new Uint8Array(digest));
+export function createSessionKey(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return bytesToHex(bytes);
 }
 
 export function createSessionExpiry(): Date {
@@ -20,7 +19,13 @@ export function createSessionExpiry(): Date {
 }
 
 export async function readWorkerApiKey(env: Env): Promise<string> {
-  return env.WORKER_API_KEY.get();
+  const apiKey = await env.WORKER_API_KEY.get();
+
+  if (!apiKey) {
+    throw new Error("WORKER_API_KEY secret is not configured.");
+  }
+
+  return apiKey;
 }
 
 export function extractBearerToken(authorizationHeader?: string): string | null {

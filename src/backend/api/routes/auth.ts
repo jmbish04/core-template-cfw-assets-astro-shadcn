@@ -36,7 +36,7 @@ async function createSession(c: Context<{ Bindings: Env }>) {
     }
 
     const token = createSessionToken();
-    const sessionKey = await createSessionKey(configuredApiKey);
+    const sessionKey = createSessionKey();
     const expiresAt = createSessionExpiry();
 
     const result = await db

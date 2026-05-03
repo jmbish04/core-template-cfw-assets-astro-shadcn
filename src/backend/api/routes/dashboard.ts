@@ -61,9 +61,13 @@ dashboardRouter.get('/summary', async (c) => {
 
     const latestMetrics = allMetrics.reduce<Record<string, (typeof allMetrics)[number]>>(
       (accumulator, metric) => {
+        const nextMetricTime = metric.timestamp?.getTime?.() ?? 0;
+        const currentMetricTime =
+          accumulator[metric.metricName]?.timestamp?.getTime?.() ?? 0;
+
         if (
           !accumulator[metric.metricName] ||
-          metric.timestamp.getTime() > accumulator[metric.metricName].timestamp.getTime()
+          nextMetricTime > currentMetricTime
         ) {
           accumulator[metric.metricName] = metric;
         }

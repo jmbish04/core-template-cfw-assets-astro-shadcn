@@ -1,5 +1,5 @@
 import * as React from "react";
-import { ArrowRightIcon, ExternalLinkIcon, FileTextIcon, SparklesIcon } from "lucide-react";
+import { ArrowRightIcon, FileTextIcon, RefreshCwIcon, SparklesIcon } from "lucide-react";
 
 import { CopyButton } from "@/components/CopyButton";
 import { FrontendErrorDialog } from "@/components/FrontendErrorDialog";
@@ -173,7 +173,7 @@ export function TemplateLandingPage({ currentPath }: TemplateLandingPageProps) {
           </CardContent>
           <CardFooter className="border-t pt-4">
             <Button type="button" variant="ghost" onClick={() => void openLinkSafely("/")}>
-              <ExternalLinkIcon className="size-4" />
+              <RefreshCwIcon className="size-4" />
               Refresh home route
             </Button>
           </CardFooter>
