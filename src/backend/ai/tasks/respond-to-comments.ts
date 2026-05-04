@@ -11,13 +11,10 @@
  *   6. Store the interaction in career memory
  */
 
-import { eq } from "drizzle-orm";
-
 import { getModelRegistry } from "@/backend/ai/models";
 import { getProvider } from "@/backend/ai/providers";
 import { GoogleDocsClient } from "@/backend/ai/tools/google/docs";
 import { consultNotebook } from "@/backend/ai/tools/notebooklm";
-import { getDb } from "@/backend/db";
 import { CareerMemoryService } from "@/backend/services/career-memory-service";
 
 // ---------------------------------------------------------------------------
@@ -53,7 +50,7 @@ export async function respondToComments(
   onProgress?: (progress: CommentResponseProgress) => void,
 ): Promise<CommentResponseResult> {
   const progress = onProgress ?? (() => {});
-  const memory = new CareerMemoryService(env);
+  const _memory = new CareerMemoryService(env);
   const docsClient = new GoogleDocsClient(env);
   const provider = getProvider(env);
   const model = getModelRegistry(env).chat;

@@ -8,7 +8,7 @@ import type {
 
 import { analyzeRole } from "@/ai/tasks/analyze-role";
 import { classifyEmailStatus } from "@/ai/tasks/classify-email-status";
-import { draft } from "@/ai/tasks/draft";
+import { getActiveBullets } from "@/ai/tasks/draft";
 import { getDb } from "@/db";
 import { emails, roles } from "@/db/schema";
 

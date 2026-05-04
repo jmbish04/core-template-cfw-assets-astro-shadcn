@@ -64,7 +64,7 @@ export async function draft(
  *
  * Returns an empty string if no active bullets exist.
  */
-async function buildBulletsContext(env: Env): Promise<string> {
+async function buildBulletsContext(_env: Env): Promise<string> {
   // const bullets = await getActiveBullets(env);
 
   // if (bullets.length === 0) {

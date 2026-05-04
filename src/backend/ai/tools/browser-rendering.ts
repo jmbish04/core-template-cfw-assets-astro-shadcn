@@ -15,7 +15,7 @@ export type ScrapedPage = {
   pdfUrl?: string;
 };
 
-export type JsonExtractionOptions<T = unknown> = {
+export type JsonExtractionOptions<_T = unknown> = {
   /** Natural-language instruction for the AI extractor. */
   prompt?: string;
   /** JSON Schema describing the desired output shape. */

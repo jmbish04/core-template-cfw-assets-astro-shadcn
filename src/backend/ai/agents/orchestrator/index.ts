@@ -103,7 +103,7 @@ export class OrchestratorAgent extends Agent<Env, OrchestratorState> {
         roleId ?? "global",
         "I've received your message and added it to the thread context.",
       );
-    } catch (e) {
+    } catch (_e) {
       connection.send(JSON.stringify({ type: "error", message: "Invalid chat payload" }));
     }
   }

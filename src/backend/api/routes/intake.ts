@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { enqueueOrchestratorTask } from "../../ai/agents/orchestrator";
 import { JobPosting } from "../../ai/agents/orchestrator/types";
 import { extract } from "../../ai/tasks/extract";
-import { BrowserRendering, type ScrapedPage } from "../../ai/tools/browser-rendering";
+import { scrapeUrl, capturePdf, extractMarkdown, extractJson, type ScrapedPage } from "../../ai/tools/browser-rendering";
 import { GoogleDocsClient } from "../../ai/tools/google/docs";
 import { parseGreenhouseUrl, scrapeGreenhouseJob } from "../../ai/tools/greenhouse";
 import { buildRoleMarkdown } from "../../ai/tools/role-markdown";
@@ -100,12 +100,11 @@ async function scrapeWithFallback(
   // ── Multi-method Browser Rendering ──────────────────────────────────────
   onStage?.("scraping", { source: "browser-rendering", methods: ["pdf", "markdown", "json"] });
 
-  const browser = new BrowserRendering(env);
   const [pdfResult, mdResult, jsonResult, snapshotResult] = await Promise.allSettled([
-    browser.capturePdf(url),
-    browser.extractMarkdown(url),
-    browser.captureJSON(url, { prompt: BR_JSON_PROMPT, responseFormat: BR_JSON_SCHEMA }),
-    browser.scrapeUrl(url),
+    capturePdf(env, url),
+    extractMarkdown(env, url),
+    extractJson(env, url, { prompt: BR_JSON_PROMPT, responseFormat: BR_JSON_SCHEMA }),
+    scrapeUrl(env, url),
   ]);
 
   // Track which methods succeeded
