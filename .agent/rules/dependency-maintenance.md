@@ -6,6 +6,7 @@ Use Node.js 22+ for any command that invokes Wrangler.
 ## When to refresh dependencies
 
 Run the dependency refresh flow whenever:
+
 - `package.json` changes
 - `wrangler.jsonc` changes in a way that affects generated types
 - `pnpm-lock.yaml` is out of sync or frozen installs fail

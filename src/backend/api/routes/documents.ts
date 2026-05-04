@@ -1,141 +1,80 @@
-/**
- * @fileoverview Documents API routes for PlateJS integration
- */
+import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
+import { eq } from "drizzle-orm";
 
-import { Hono } from 'hono';
-import { zValidator } from '@hono/zod-validator';
-import { drizzle } from 'drizzle-orm/d1';
-import { desc, eq, and } from 'drizzle-orm';
-import { documents, insertDocumentSchema } from '@db/schemas';
-import { authMiddleware } from '@/backend/api/middleware/auth';
-import type { Variables } from '@/backend/api/index';
+import { getDb } from "../../db";
+import { documents, insertDocumentSchema, selectDocumentSchema } from "../../db/schema";
 
-const documentsRouter = new Hono<{ Bindings: Env; Variables: Variables }>();
+const documentQuery = z.object({ roleId: z.string().optional() });
+const documentParam = z.object({ id: z.string() });
+const documentCreate = insertDocumentSchema.omit({ id: true });
 
-// Apply auth middleware
-documentsRouter.use('*', authMiddleware);
+export const documentsRouter = new OpenAPIHono<{ Bindings: Env }>();
 
-const createDocumentSchema = insertDocumentSchema.pick({
-  title: true,
-  content: true,
-});
+documentsRouter.openapi(
+  createRoute({
+    method: "get",
+    path: "/",
+    operationId: "documentsList",
+    request: { query: documentQuery },
+    responses: {
+      200: {
+        description: "List documents",
+        content: { "application/json": { schema: z.array(selectDocumentSchema) } },
+      },
+    },
+  }),
+  async (c) => {
+    const { roleId } = c.req.valid("query");
+    const db = getDb(c.env);
+    const rows = roleId
+      ? await db.select().from(documents).where(eq(documents.roleId, roleId))
+      : await db.select().from(documents);
 
-// GET /api/documents
-documentsRouter.get('/', async (c) => {
-  const db = drizzle(c.env.DB);
-  const sessionKey = c.get('sessionKey')!;
+    return c.json(rows);
+  },
+);
 
-  try {
-    const sessionDocuments = await db
-      .select()
-      .from(documents)
-      .where(eq(documents.sessionKey, sessionKey))
-      .orderBy(desc(documents.updatedAt));
-
-    return c.json({ documents: sessionDocuments });
-  } catch (error) {
-    console.error('Error fetching documents:', error);
-    return c.json({ error: 'Failed to fetch documents' }, 500);
-  }
-});
-
-// POST /api/documents
-documentsRouter.post('/', zValidator('json', createDocumentSchema), async (c) => {
-  const db = drizzle(c.env.DB);
-  const sessionKey = c.get('sessionKey')!;
-  const { title, content } = c.req.valid('json');
-
-  try {
-    const result = await db
+documentsRouter.openapi(
+  createRoute({
+    method: "post",
+    path: "/",
+    operationId: "documentsCreate",
+    request: { body: { content: { "application/json": { schema: documentCreate } } } },
+    responses: {
+      201: {
+        description: "Created document link",
+        content: { "application/json": { schema: selectDocumentSchema } },
+      },
+    },
+  }),
+  async (c) => {
+    const body = c.req.valid("json");
+    const [document] = await getDb(c.env)
       .insert(documents)
-      .values({
-        sessionKey,
-        title,
-        content,
-      })
+      .values({ ...body, id: crypto.randomUUID() })
       .returning();
 
-    return c.json({ document: result[0] }, 201);
-  } catch (error) {
-    console.error('Error creating document:', error);
-    return c.json({ error: 'Failed to create document' }, 500);
-  }
-});
+    return c.json(document, 201);
+  },
+);
 
-// GET /api/documents/:id
-documentsRouter.get('/:id', async (c) => {
-  const db = drizzle(c.env.DB);
-  const sessionKey = c.get('sessionKey')!;
-  const documentId = Number.parseInt(c.req.param('id'), 10);
+documentsRouter.openapi(
+  createRoute({
+    method: "delete",
+    path: "/{id}",
+    operationId: "documentsDelete",
+    request: { params: documentParam },
+    responses: {
+      200: {
+        description: "Deleted document",
+        content: { "application/json": { schema: z.object({ ok: z.boolean() }) } },
+      },
+    },
+  }),
+  async (c) => {
+    const { id } = c.req.valid("param");
+    await getDb(c.env).delete(documents).where(eq(documents.id, id));
 
-  try {
-    const documentResult = await db
-      .select()
-      .from(documents)
-      .where(and(eq(documents.id, documentId), eq(documents.sessionKey, sessionKey)))
-      .limit(1);
-
-    if (documentResult.length === 0) {
-      return c.json({ error: 'Document not found' }, 404);
-    }
-
-    return c.json({ document: documentResult[0] });
-  } catch (error) {
-    console.error('Error fetching document:', error);
-    return c.json({ error: 'Failed to fetch document' }, 500);
-  }
-});
-
-// PUT /api/documents/:id
-documentsRouter.put('/:id', zValidator('json', createDocumentSchema), async (c) => {
-  const db = drizzle(c.env.DB);
-  const sessionKey = c.get('sessionKey')!;
-  const documentId = Number.parseInt(c.req.param('id'), 10);
-  const { title, content } = c.req.valid('json');
-
-  try {
-    const result = await db
-      .update(documents)
-      .set({
-        title,
-        content,
-        updatedAt: new Date(),
-      })
-      .where(and(eq(documents.id, documentId), eq(documents.sessionKey, sessionKey)))
-      .returning();
-
-    if (result.length === 0) {
-      return c.json({ error: 'Document not found' }, 404);
-    }
-
-    return c.json({ document: result[0] });
-  } catch (error) {
-    console.error('Error updating document:', error);
-    return c.json({ error: 'Failed to update document' }, 500);
-  }
-});
-
-// DELETE /api/documents/:id
-documentsRouter.delete('/:id', async (c) => {
-  const db = drizzle(c.env.DB);
-  const sessionKey = c.get('sessionKey')!;
-  const documentId = Number.parseInt(c.req.param('id'), 10);
-
-  try {
-    const result = await db
-      .delete(documents)
-      .where(and(eq(documents.id, documentId), eq(documents.sessionKey, sessionKey)))
-      .returning();
-
-    if (result.length === 0) {
-      return c.json({ error: 'Document not found' }, 404);
-    }
-
-    return c.json({ message: 'Document deleted successfully' });
-  } catch (error) {
-    console.error('Error deleting document:', error);
-    return c.json({ error: 'Failed to delete document' }, 500);
-  }
-});
-
-export { documentsRouter };
+    return c.json({ ok: true });
+  },
+);

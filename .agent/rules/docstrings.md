@@ -4,7 +4,7 @@
 
 Every `.ts` file in `src/backend/` MUST start with a JSDoc file-level comment:
 
-```typescript
+````typescript
 /**
  * @fileoverview Brief description of the module's purpose
  *
@@ -21,18 +21,20 @@ Every `.ts` file in `src/backend/` MUST start with a JSDoc file-level comment:
  * const result = await someFunction(args);
  * ```
  */
-```
+````
 
 ## Function and Method Documentation
 
 Every exported function, method, or class MUST have JSDoc comments including:
 
 ### Required Tags
+
 - `@param` for each parameter (with type and description)
 - `@returns` describing the return value
 - `@throws` if the function can throw errors
 
 ### Optional but Encouraged Tags
+
 - `@example` showing typical usage
 - `@remarks` for implementation notes or gotchas
 - `@see` linking to related functions
@@ -40,7 +42,7 @@ Every exported function, method, or class MUST have JSDoc comments including:
 
 ### Example
 
-```typescript
+````typescript
 /**
  * Performs constant-time string comparison to prevent timing attacks.
  * Both strings are hashed using SHA-256 before comparison to ensure
@@ -66,7 +68,7 @@ Every exported function, method, or class MUST have JSDoc comments including:
 export async function safeEqual(left: string, right: string): Promise<boolean> {
   // implementation
 }
-```
+````
 
 ## Code Comments Within Functions
 
@@ -77,6 +79,7 @@ export async function safeEqual(left: string, right: string): Promise<boolean> {
 - Document "why" not "what" — code shows what, comments explain why
 
 ### Good Inline Comments
+
 ```typescript
 // Use constant-time comparison to prevent timing attacks
 let mismatch = 0;
@@ -97,6 +100,7 @@ When working on this codebase, you MUST:
 ## Rationale
 
 Comprehensive documentation:
+
 - Helps future agents understand code context quickly
 - Enables faster onboarding for human developers
 - Reduces the need for exploratory reads during agentic turns

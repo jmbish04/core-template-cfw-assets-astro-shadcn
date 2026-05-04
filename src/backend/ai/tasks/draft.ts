@@ -1,7 +1,3 @@
-import { eq } from "drizzle-orm";
-
-import { getDb } from "@/backend/db";
-import { resumeBullets, type ResumeBullet } from "@/backend/db/schema";
 import { getModelRegistry } from "@/backend/ai/models";
 import { getProvider } from "@/backend/ai/providers";
 
@@ -28,7 +24,7 @@ export async function draft(
     typeof opts.context === "string" ? opts.context : JSON.stringify(opts.context, null, 2);
 
   // Fetch active bullets and build the context block
-  const bulletsBlock = await buildBulletsContext(env);
+  const bulletsBlock = ""; //await buildBulletsContext(env);
 
   const systemPrompt = [
     "You are Colby, a precise career assistant. Draft polished, truthful job-application content from the provided context.",
@@ -69,23 +65,18 @@ export async function draft(
  * Returns an empty string if no active bullets exist.
  */
 async function buildBulletsContext(env: Env): Promise<string> {
-  const bullets = await getActiveBullets(env);
+  // const bullets = await getActiveBullets(env);
 
-  if (bullets.length === 0) {
-    return "";
-  }
+  // if (bullets.length === 0) {
+  //   return "";
+  // }
 
-  const lines = bullets.map((b) => {
-    const metric = b.impactMetric ? ` (${b.impactMetric})` : "";
-    return `[${b.category}]${metric} ${b.content}`;
-  });
+  // const lines = bullets.map((b) => {
+  //   const metric = b.impactMetric ? ` (${b.impactMetric})` : "";
+  //   return `[${b.category}]${metric} ${b.content}`;
+  // });
 
-  return [
-    "## Historical Performance Truths",
-    "Use these verified accomplishments as source material. Map each bullet's category and impact_metric to the specific requirements of the job description being analyzed. Prioritize bullets whose category and tags align with the role's key responsibilities.",
-    "",
-    ...lines,
-  ].join("\n");
+  return "## Historical Performance Truths";
 }
 
 /**
@@ -93,12 +84,12 @@ async function buildBulletsContext(env: Env): Promise<string> {
  * Used internally by the draft task — agents should use this
  * indirectly through the draft() function.
  */
-export async function getActiveBullets(env: Env): Promise<ResumeBullet[]> {
-  const db = getDb(env);
+// export async function getActiveBullets(env: Env): Promise<ResumeBullet[]> {
+//   const db = getDb(env);
 
-  return db
-    .select()
-    .from(resumeBullets)
-    .where(eq(resumeBullets.isActive, true))
-    .orderBy(resumeBullets.category);
-}
+//   return db
+//     .select()
+//     .from(resumeBullets)
+//     .where(eq(resumeBullets.isActive, true))
+//     .orderBy(resumeBullets.category);
+// }

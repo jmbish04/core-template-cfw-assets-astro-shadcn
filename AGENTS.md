@@ -3,11 +3,13 @@
 Welcome to the `core-template-cfw-assets-astro-shadcn` template. This is a unified full-stack template combining Cloudflare Workers (Backend & Assets) with Astro and React + Shadcn/ui (Frontend).
 
 ## Core Architecture
+
 - **Backend:** Cloudflare Workers, Hono (Routing), D1 (Database with Drizzle ORM).
 - **Frontend:** Astro (SSR/Static Hybrid), React (Interactive Islands), Tailwind CSS, Shadcn/ui.
 - **Deployment:** Deployed using Cloudflare Workers Assets via `wrangler.jsonc`.
 
 ## Mandatory Agent Directives
+
 This repository relies heavily on AI agents for rapid prototyping and feature generation. If you are an AI agent, you must strictly follow these directives:
 
 1. **Read Startup Rules:** Immediately review `.agent/rules/startup.md` before writing any code. It contains critical instructions for your first steps.

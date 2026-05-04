@@ -26,25 +26,25 @@
  *   - @db/schemas → db/schemas (special case for Drizzle schemas)
  */
 
-import { readFileSync, writeFileSync, readdirSync, statSync } from 'fs';
-import { join, dirname, relative, resolve, sep } from 'path';
-import { fileURLToPath } from 'url';
+import { readFileSync, writeFileSync, readdirSync, statSync } from "fs";
+import { join, dirname, relative, resolve, sep } from "path";
+import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const rootDir = resolve(__dirname, '..');
-const backendDir = join(rootDir, 'src', 'backend');
+const rootDir = resolve(__dirname, "..");
+const backendDir = join(rootDir, "src", "backend");
 
-const dryRun = process.argv.includes('--dry-run');
+const dryRun = process.argv.includes("--dry-run");
 
 // Path alias mapping configuration based on tsconfig.json
 const pathAliases = {
-  'db': '@db',  // Special case for db/schemas → @db/schemas
-  'backend/db': '@/backend/db',
-  'backend/ai': '@/backend/ai',
-  'backend/logging': '@/backend/logging',
-  'backend/modules': '@/backend/modules',
-  'backend': '@/backend',
+  db: "@db", // Special case for db/schemas → @db/schemas
+  "backend/db": "@/backend/db",
+  "backend/ai": "@/backend/ai",
+  "backend/logging": "@/backend/logging",
+  "backend/modules": "@/backend/modules",
+  backend: "@/backend",
 };
 
 /**
@@ -62,7 +62,7 @@ function findTypeScriptFiles(dir) {
 
     if (stat.isDirectory()) {
       files.push(...findTypeScriptFiles(fullPath));
-    } else if (entry.endsWith('.ts') && !entry.endsWith('.d.ts')) {
+    } else if (entry.endsWith(".ts") && !entry.endsWith(".d.ts")) {
       files.push(fullPath);
     }
   }
@@ -78,7 +78,7 @@ function findTypeScriptFiles(dir) {
  */
 function convertToAliasPath(fromFile, importPath) {
   // Skip external packages and non-relative paths
-  if (!importPath.startsWith('.')) {
+  if (!importPath.startsWith(".")) {
     return null;
   }
 
@@ -90,31 +90,31 @@ function convertToAliasPath(fromFile, importPath) {
   const relativeToRoot = relative(rootDir, absoluteImportPath);
 
   // Check if the import is within src/backend
-  if (!relativeToRoot.startsWith('src' + sep + 'backend') && !relativeToRoot.startsWith('db')) {
+  if (!relativeToRoot.startsWith("src" + sep + "backend") && !relativeToRoot.startsWith("db")) {
     return null;
   }
 
   // Handle db/schemas → @db/schemas
-  if (relativeToRoot.startsWith('db' + sep + 'schemas')) {
-    const pathWithinDb = relativeToRoot.substring('db/'.length).replace(/\\/g, '/');
+  if (relativeToRoot.startsWith("db" + sep + "schemas")) {
+    const pathWithinDb = relativeToRoot.substring("db/".length).replace(/\\/g, "/");
     return `@db/${pathWithinDb}`;
   }
 
   // Handle src/backend paths
-  if (relativeToRoot.startsWith('src' + sep + 'backend')) {
-    const pathWithinBackend = relativeToRoot.substring('src/backend/'.length).replace(/\\/g, '/');
+  if (relativeToRoot.startsWith("src" + sep + "backend")) {
+    const pathWithinBackend = relativeToRoot.substring("src/backend/".length).replace(/\\/g, "/");
 
     // Check for more specific aliases first
-    if (pathWithinBackend.startsWith('db/')) {
+    if (pathWithinBackend.startsWith("db/")) {
       return `@/backend/${pathWithinBackend}`;
     }
-    if (pathWithinBackend.startsWith('ai/')) {
+    if (pathWithinBackend.startsWith("ai/")) {
       return `@/backend/${pathWithinBackend}`;
     }
-    if (pathWithinBackend.startsWith('logging/')) {
+    if (pathWithinBackend.startsWith("logging/")) {
       return `@/backend/${pathWithinBackend}`;
     }
-    if (pathWithinBackend.startsWith('modules/')) {
+    if (pathWithinBackend.startsWith("modules/")) {
       return `@/backend/${pathWithinBackend}`;
     }
 
@@ -131,8 +131,8 @@ function convertToAliasPath(fromFile, importPath) {
  * @returns {boolean} - True if file was modified
  */
 function processFile(filePath) {
-  const content = readFileSync(filePath, 'utf-8');
-  const lines = content.split('\n');
+  const content = readFileSync(filePath, "utf-8");
+  const lines = content.split("\n");
   let modified = false;
   const newLines = [];
 
@@ -144,7 +144,9 @@ function processFile(filePath) {
     // import ... from "..."
     // import type ... from '...'
     // export ... from '...'
-    const importMatch = line.match(/^(\s*(?:import|export)(?:\s+type)?\s+.*?\s+from\s+['"])([^'"]+)(['"].*)/);
+    const importMatch = line.match(
+      /^(\s*(?:import|export)(?:\s+type)?\s+.*?\s+from\s+['"])([^'"]+)(['"].*)/,
+    );
 
     if (importMatch) {
       const [, prefix, importPath, suffix] = importMatch;
@@ -170,7 +172,7 @@ function processFile(filePath) {
   }
 
   if (modified && !dryRun) {
-    writeFileSync(filePath, newLines.join('\n'), 'utf-8');
+    writeFileSync(filePath, newLines.join("\n"), "utf-8");
   }
 
   return modified;
@@ -180,11 +182,11 @@ function processFile(filePath) {
  * Main execution
  */
 function main() {
-  console.log('Import Path Migration Script');
-  console.log('============================\n');
+  console.log("Import Path Migration Script");
+  console.log("============================\n");
 
   if (dryRun) {
-    console.log('🔍 DRY RUN MODE - No files will be modified\n');
+    console.log("🔍 DRY RUN MODE - No files will be modified\n");
   }
 
   console.log(`Scanning: ${relative(rootDir, backendDir)}\n`);
@@ -204,10 +206,10 @@ function main() {
   }
 
   console.log(`\n✅ Processed ${processedCount} files`);
-  console.log(`   ${modifiedCount} files ${dryRun ? 'would be' : 'were'} modified`);
+  console.log(`   ${modifiedCount} files ${dryRun ? "would be" : "were"} modified`);
 
   if (dryRun && modifiedCount > 0) {
-    console.log('\n💡 Run without --dry-run to apply changes');
+    console.log("\n💡 Run without --dry-run to apply changes");
   }
 }
 

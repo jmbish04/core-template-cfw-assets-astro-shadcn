@@ -30,7 +30,7 @@ export function Header() {
 
           <div className="ml-auto flex items-center gap-2 md:flex-1 md:justify-end">
             {/* AI AGENT: Add your custom header actions here */}
-            
+
             <Separator orientation="vertical" className="my-auto" />
             <ThemeToggle />
           </div>

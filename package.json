@@ -11,10 +11,6 @@
     "type": "git",
     "url": "https://github.com/jmbish04/core-template-cfw-assets-astro-shadcn.git"
   },
-  "packageManager": "pnpm@10.33.2",
-  "engines": {
-    "node": ">=22.0.0"
-  },
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
@@ -26,7 +22,8 @@
     "db:generate": "drizzle-kit generate",
     "migrate:local": "drizzle-kit generate && wrangler d1 migrations apply DB --local",
     "migrate:remote": "drizzle-kit generate && wrangler d1 migrations apply DB --remote",
-    "deploy": "astro build && drizzle-kit generate && wrangler d1 migrations apply DB --remote && wrangler deploy",
+    "deploy": "pnpm run verify-sandbox && pnpm run build && cp .assetsignore dist/.assetsignore && pnpm run migrate:remote && npx wrangler deploy",
+    "verify-sandbox": "node scripts/verify-sandbox-version.mjs",
     "cf-typegen": "wrangler types",
     "deps:lockfile": "corepack pnpm install --no-frozen-lockfile && wrangler types",
     "deps:update": "corepack pnpm update --latest && corepack pnpm install --no-frozen-lockfile && wrangler types"
@@ -41,6 +38,7 @@
     "@cloudflare/workers-types": "^4.20260502.1",
     "@fontsource-variable/inter": "^5.2.8",
     "@hono/swagger-ui": "^0.6.1",
+    "@hono/zod-openapi": "^1.3.0",
     "@hono/zod-validator": "^0.7.6",
     "@scalar/hono-api-reference": "^0.10.13",
     "@tailwindcss/vite": "^4.2.4",
@@ -77,5 +75,9 @@
     "shadcn": "^4.6.0",
     "typescript": "^5.9.3",
     "wrangler": "^4.87.0"
-  }
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "packageManager": "pnpm@10.33.2"
 }

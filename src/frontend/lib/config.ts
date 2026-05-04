@@ -18,7 +18,8 @@ export type SiteConfig = {
 
 export const siteConfig: SiteConfig = {
   name: "New Project",
-  description: "A Cloudflare Workers starter with Astro, shadcn/ui, session-based auth, and dynamic API documentation.",
+  description:
+    "A Cloudflare Workers starter with Astro, shadcn/ui, session-based auth, and dynamic API documentation.",
   url: "https://example.com",
   author: {
     name: "Author",

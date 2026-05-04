@@ -8,12 +8,12 @@
 
 import { GoogleDocsClient } from "@/ai/tools/google/docs";
 import { GoogleDriveClient } from "@/ai/tools/google/drive";
+import { extractBrandColors, DEFAULT_BRAND_COLORS } from "@/ai/tools/google/templates/brand-colors";
 import {
   renderDocumentTemplate,
   renderBrandedDocumentTemplate,
   type TemplateType,
 } from "@/ai/tools/google/templates/template-engine";
-import { extractBrandColors, DEFAULT_BRAND_COLORS } from "@/ai/tools/google/templates/brand-colors";
 import { getDb } from "@/db";
 import { companies } from "@/db/schema";
 
@@ -37,12 +37,7 @@ export async function handleWriteDoc(env: Env, docId: string, text: string) {
   return { ok: true };
 }
 
-export async function handleCommentOnDoc(
-  env: Env,
-  docId: string,
-  anchor: string,
-  text: string,
-) {
+export async function handleCommentOnDoc(env: Env, docId: string, anchor: string, text: string) {
   return new GoogleDocsClient(env).addComment(docId, anchor, text);
 }
 
@@ -55,11 +50,7 @@ export async function handleReplyToDocComment(
   return new GoogleDocsClient(env).replyToComment(docId, commentId, text);
 }
 
-export async function handleListDocCommentsTagged(
-  env: Env,
-  docId: string,
-  tag = "#colby",
-) {
+export async function handleListDocCommentsTagged(env: Env, docId: string, tag = "#colby") {
   return new GoogleDocsClient(env).listComments(docId, tag);
 }
 
@@ -90,10 +81,7 @@ export async function handleCreateDocFromHtmlTemplate(
 ) {
   const timestamp = new Date().toISOString();
   const docName =
-    name ??
-    (templateType === "resume"
-      ? `Resume - ${timestamp}`
-      : `Cover Letter - ${timestamp}`);
+    name ?? (templateType === "resume" ? `Resume - ${timestamp}` : `Cover Letter - ${timestamp}`);
 
   const renderedHtml = renderDocumentTemplate(templateType, variables);
   return new GoogleDriveClient(env).createDocFromHtml(docName, renderedHtml, folderId);

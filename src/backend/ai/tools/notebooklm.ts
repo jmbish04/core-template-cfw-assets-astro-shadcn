@@ -74,10 +74,7 @@ export class SessionExpiredError extends Error {
  *          and source references.
  * @throws {SessionExpiredError} if the SDK fails due to expired session cookies.
  */
-export async function consultNotebook(
-  env: Env,
-  query: string,
-): Promise<NotebookConsultation> {
+export async function consultNotebook(env: Env, query: string): Promise<NotebookConsultation> {
   const [client, notebookId, rules] = await Promise.all([
     createNotebookClient(env),
     env.CAREER_NOTEBOOKLM_ID,
@@ -124,14 +121,11 @@ async function createNotebookClient(env: Env): Promise<NotebookLMClient> {
   if (!cookieString || cookieString.length < 10) {
     throw new Error(
       "NOTEBOOKLM_COOKIES is empty or missing. " +
-      "Run: npx wrangler secret put NOTEBOOKLM_COOKIES",
+        "Run: npx wrangler secret put NOTEBOOKLM_COOKIES",
     );
   }
 
-  return NotebookLMClient.connect(
-    { cookies: cookieString },
-    { timeoutMs: 30_000 },
-  );
+  return NotebookLMClient.connect({ cookies: cookieString }, { timeoutMs: 30_000 });
 }
 
 /**
@@ -217,9 +211,7 @@ export type SessionCheckResult = {
  * Does NOT validate the session against Google — only checks that a
  * non-trivial cookie string is present.
  */
-export async function checkNotebookLMSession(
-  env: Env,
-): Promise<SessionCheckResult> {
+export async function checkNotebookLMSession(env: Env): Promise<SessionCheckResult> {
   // Check KV first (hot-swap source)
   try {
     const kvSession = await env.KV.get("ACTIVE_NOTEBOOKLM_SESSION");
@@ -237,4 +229,3 @@ export async function checkNotebookLMSession(
 
   return { available: false, source: "none" };
 }
-

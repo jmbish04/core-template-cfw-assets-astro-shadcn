@@ -1,14 +1,18 @@
-import * as React from "react";
 import { ArrowRightIcon, FileTextIcon, RefreshCwIcon, SparklesIcon } from "lucide-react";
+import * as React from "react";
 
 import { CopyButton } from "@/components/CopyButton";
 import { FrontendErrorDialog } from "@/components/FrontendErrorDialog";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  type FrontendErrorPayload,
-  useFrontendErrorHandler,
-} from "@/lib/error-handler";
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { type FrontendErrorPayload, useFrontendErrorHandler } from "@/lib/error-handler";
 import { TEMPLATE_FRONTEND_REPLACEMENT_PROMPT } from "@/lib/template-prompts";
 
 type TemplateLandingPageProps = {
@@ -97,13 +101,18 @@ export function TemplateLandingPage({ currentPath }: TemplateLandingPageProps) {
           <CardHeader>
             <div className="flex items-center gap-3 text-primary">
               <SparklesIcon className="size-5" />
-              <p className="text-sm font-medium uppercase tracking-[0.2em]">Template follow-up required</p>
+              <p className="text-sm font-medium uppercase tracking-[0.2em]">
+                Template follow-up required
+              </p>
             </div>
             <CardTitle className="text-3xl font-semibold">
-              If you're seeing this page, your worker URL routes are still pointing to template pages.
+              If you're seeing this page, your worker URL routes are still pointing to template
+              pages.
             </CardTitle>
             <CardDescription className="max-w-3xl text-base">
-              Replace this landing page with your project's real frontend, keep the shared header visible on all pages, and preserve the dynamic docs endpoints at <code>/openapi.json</code>, <code>/swagger</code>, and <code>/scaler</code>.
+              Replace this landing page with your project's real frontend, keep the shared header
+              visible on all pages, and preserve the dynamic docs endpoints at{" "}
+              <code>/openapi.json</code>, <code>/swagger</code>, and <code>/scaler</code>.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
@@ -133,15 +142,29 @@ export function TemplateLandingPage({ currentPath }: TemplateLandingPageProps) {
               copiedLabel="Instruction copied"
               onCopyError={handleCopyError}
             />
-            <p className="text-sm text-muted-foreground">The button uses shadcn UI feedback only — no browser alerts.</p>
+            <p className="text-sm text-muted-foreground">
+              The button uses shadcn UI feedback only — no browser alerts.
+            </p>
           </CardFooter>
         </Card>
 
         <div className="grid gap-4 md:grid-cols-3">
           {[
-            { href: "/openapi.json", label: "OpenAPI JSON", description: "Machine-readable API schema exposed dynamically from the Worker." },
-            { href: "/swagger", label: "Swagger UI", description: "Interactive docs rendered from the same live OpenAPI definition." },
-            { href: "/scaler", label: "Scaler Docs", description: "Friendly docs route kept as a dynamic pointer for generated repos." },
+            {
+              href: "/openapi.json",
+              label: "OpenAPI JSON",
+              description: "Machine-readable API schema exposed dynamically from the Worker.",
+            },
+            {
+              href: "/swagger",
+              label: "Swagger UI",
+              description: "Interactive docs rendered from the same live OpenAPI definition.",
+            },
+            {
+              href: "/scaler",
+              label: "Scaler Docs",
+              description: "Friendly docs route kept as a dynamic pointer for generated repos.",
+            },
           ].map((item) => (
             <Card key={item.href} size="sm" className="h-full">
               <CardHeader>
@@ -149,7 +172,11 @@ export function TemplateLandingPage({ currentPath }: TemplateLandingPageProps) {
                 <CardDescription>{item.description}</CardDescription>
               </CardHeader>
               <CardFooter className="border-t pt-4">
-                <Button type="button" variant="outline" onClick={() => void openLinkSafely(item.href)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void openLinkSafely(item.href)}
+                >
                   Open
                   <ArrowRightIcon className="size-4" />
                 </Button>
@@ -162,12 +189,15 @@ export function TemplateLandingPage({ currentPath }: TemplateLandingPageProps) {
           <CardHeader>
             <CardTitle>What stays in place</CardTitle>
             <CardDescription>
-              The shared header remains available on every page so you always have a route back home plus fast access to the generated docs.
+              The shared header remains available on every page so you always have a route back home
+              plus fast access to the generated docs.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2 text-sm text-muted-foreground">
             <span className="rounded-md border border-border bg-muted/40 px-3 py-1">Home</span>
-            <span className="rounded-md border border-border bg-muted/40 px-3 py-1">/openapi.json</span>
+            <span className="rounded-md border border-border bg-muted/40 px-3 py-1">
+              /openapi.json
+            </span>
             <span className="rounded-md border border-border bg-muted/40 px-3 py-1">/swagger</span>
             <span className="rounded-md border border-border bg-muted/40 px-3 py-1">/scaler</span>
           </CardContent>

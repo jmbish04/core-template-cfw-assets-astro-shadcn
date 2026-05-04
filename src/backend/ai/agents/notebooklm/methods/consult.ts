@@ -10,11 +10,12 @@
  *   6. Remember — Store the full exchange in career memory (D1 + Vectorize)
  */
 
-import type { NotebookLMAgent } from "@/backend/ai/agents/notebooklm/index";
 import type { Connection } from "agents";
 
-import { consultNotebook } from "@/ai/tools/notebooklm";
+import type { NotebookLMAgent } from "@/backend/ai/agents/notebooklm/index";
+
 import { prepareNotebookQuery, evaluateNotebookResponse } from "@/ai/tasks/prepare-query";
+import { consultNotebook } from "@/ai/tools/notebooklm";
 import { CareerMemoryService } from "@/services/career-memory-service";
 
 // ---------------------------------------------------------------------------
@@ -136,7 +137,9 @@ export async function handleMessage(
   }
 
   try {
-    connection.send(JSON.stringify({ type: "status", phase: "preparing", message: "Refining query..." }));
+    connection.send(
+      JSON.stringify({ type: "status", phase: "preparing", message: "Refining query..." }),
+    );
 
     const result = await handleConsult(agent, env, query, context);
 

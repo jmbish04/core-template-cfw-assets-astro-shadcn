@@ -9,8 +9,8 @@
  * citation quality and evidence coverage.
  */
 
-import { getProvider } from "@/backend/ai/providers";
 import { getModelRegistry } from "@/backend/ai/models";
+import { getProvider } from "@/backend/ai/providers";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -159,7 +159,10 @@ export async function evaluateNotebookResponse(
 // ---------------------------------------------------------------------------
 
 function parseQueryResponse(response: string, fallbackQuery: string): PreparedQuery {
-  const lines = response.split("\n").map((l) => l.trim()).filter(Boolean);
+  const lines = response
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
 
   let refinedQuery = fallbackQuery;
   const followUpQueries: string[] = [];
@@ -180,7 +183,10 @@ function parseQueryResponse(response: string, fallbackQuery: string): PreparedQu
 }
 
 function parseEvaluationResponse(response: string): ResponseEvaluation {
-  const lines = response.split("\n").map((l) => l.trim()).filter(Boolean);
+  const lines = response
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
 
   let sufficient = true;
   const gaps: string[] = [];
@@ -192,7 +198,12 @@ function parseEvaluationResponse(response: string): ResponseEvaluation {
     } else if (line.startsWith("GAPS:")) {
       const gapStr = line.replace("GAPS:", "").trim();
       if (gapStr.toLowerCase() !== "none") {
-        gaps.push(...gapStr.split(",").map((g) => g.trim()).filter(Boolean));
+        gaps.push(
+          ...gapStr
+            .split(",")
+            .map((g) => g.trim())
+            .filter(Boolean),
+        );
       }
     } else if (line.startsWith("FOLLOWUP:")) {
       const fq = line.replace("FOLLOWUP:", "").trim();

@@ -1,9 +1,14 @@
 import { Agent, callable, type Connection } from "agents";
+import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
+
+import type { TemplateType } from "@/ai/tools/google/templates/template-engine";
+import type { OrchestratorState, OrchestratorTask } from "@/backend/ai/agents/orchestrator/types";
+
+import { checkHealth as healthProbeImpl } from "@/backend/ai/agents/orchestrator/health";
 import { getDb } from "@/db";
 import { threads, messages, roles } from "@/db/schema";
-import { desc, eq } from "drizzle-orm";
-import type { OrchestratorState, OrchestratorTask } from "@/backend/ai/agents/orchestrator/types";
+
 import {
   handleEnqueueTask,
   handleProcessPendingTasks,
@@ -25,8 +30,6 @@ import {
   handleUpdateRole,
   handleDraftEmailReply,
 } from "./methods";
-import type { TemplateType } from "@/ai/tools/google/templates/template-engine";
-import { checkHealth as healthProbeImpl } from "@/backend/ai/agents/orchestrator/health";
 
 const IncomingMessage = z.object({
   type: z.literal("chat"),
@@ -43,9 +46,24 @@ export class OrchestratorAgent extends Agent<Env, OrchestratorState> {
         "The primary Project Management orchestrator agent. Colby tracks task state (e.g., job analysis, resume drafts), manages global & role-specific threads, and interfaces with specialized backend tools like Jules, NotebookLM, and Google Docs.",
       docsPath: "/docs/agents/orchestrator",
       methods: [
-        { name: "enqueueTask", description: "Adds a task to the queue and broadcasts progress", params: "task: OrchestratorTask", returns: "OrchestratorTask" },
-        { name: "scrape_job", description: "Scrape a job URL and extract raw text", params: "url: string", returns: "ScrapedContent" },
-        { name: "extract_job_details", description: "Extract structured job details from raw text", params: "text: string", returns: "JobPosting" },
+        {
+          name: "enqueueTask",
+          description: "Adds a task to the queue and broadcasts progress",
+          params: "task: OrchestratorTask",
+          returns: "OrchestratorTask",
+        },
+        {
+          name: "scrape_job",
+          description: "Scrape a job URL and extract raw text",
+          params: "url: string",
+          returns: "ScrapedContent",
+        },
+        {
+          name: "extract_job_details",
+          description: "Extract structured job details from raw text",
+          params: "text: string",
+          returns: "JobPosting",
+        },
       ],
       tools: ["Google Docs", "NotebookLM SDK", "Cloudflare Browser Rendering"],
     };
@@ -119,7 +137,11 @@ export class OrchestratorAgent extends Agent<Env, OrchestratorState> {
   }
 
   @callable()
-  async create_doc_from_template(templateId: string, vars: Record<string, string>, folderId: string) {
+  async create_doc_from_template(
+    templateId: string,
+    vars: Record<string, string>,
+    folderId: string,
+  ) {
     return handleCreateDocFromTemplate(this.env, templateId, vars, folderId);
   }
 
@@ -146,7 +168,14 @@ export class OrchestratorAgent extends Agent<Env, OrchestratorState> {
     folderId: string,
     name?: string,
   ) {
-    return handleCreateBrandedDocFromTemplate(this.env, templateType, variables, companyName, folderId, name);
+    return handleCreateBrandedDocFromTemplate(
+      this.env,
+      templateType,
+      variables,
+      companyName,
+      folderId,
+      name,
+    );
   }
 
   @callable()
@@ -210,9 +239,8 @@ export class OrchestratorAgent extends Agent<Env, OrchestratorState> {
       env: this.env,
       roleId,
       docType,
-      onProgress: (progress) => this.broadcast(
-        JSON.stringify({ type: "draft_progress", roleId, progress }),
-      ),
+      onProgress: (progress) =>
+        this.broadcast(JSON.stringify({ type: "draft_progress", roleId, progress })),
     });
   }
 
@@ -224,9 +252,7 @@ export class OrchestratorAgent extends Agent<Env, OrchestratorState> {
   async respond_to_comments(roleId: string, gdocId: string) {
     const { respondToComments } = await import("@/ai/tasks/respond-to-comments");
     return respondToComments(this.env, roleId, gdocId, (progress) => {
-      this.broadcast(
-        JSON.stringify({ type: "comment_progress", roleId, gdocId, progress }),
-      );
+      this.broadcast(JSON.stringify({ type: "comment_progress", roleId, gdocId, progress }));
     });
   }
 

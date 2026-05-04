@@ -1,6 +1,7 @@
 import { Agent, callable, type Connection } from "agents";
-import { handleConsult, handleMessage } from "@/backend/ai/agents/notebooklm/methods/consult";
+
 import { checkNotebookLMSession } from "@/ai/tools/notebooklm";
+import { handleConsult, handleMessage } from "@/backend/ai/agents/notebooklm/methods/consult";
 
 export class NotebookLMAgent extends Agent<Env> {
   static docsMetadata() {
@@ -11,10 +12,22 @@ export class NotebookLMAgent extends Agent<Env> {
         "A specialized knowledge-retrieval agent that interfaces with Google NotebookLM. Provides callable RPC and WebSocket-based access to the career knowledge base for answering questions about the user's experience, skills, and career history.",
       docsPath: "/docs/agents/notebooklm",
       methods: [
-        { name: "consult", description: "Query the NotebookLM career knowledge base via callable RPC", params: "query: string", returns: "NotebookConsultation" },
-        { name: "onMessage", description: "Handle WebSocket messages — accepts { query: string } or raw string", params: "connection: Connection, message: unknown", returns: "void (sends result via WebSocket)" },
+        {
+          name: "consult",
+          description: "Query the NotebookLM career knowledge base via callable RPC",
+          params: "query: string",
+          returns: "NotebookConsultation",
+        },
+        {
+          name: "onMessage",
+          description: "Handle WebSocket messages — accepts { query: string } or raw string",
+          params: "connection: Connection, message: unknown",
+          returns: "void (sends result via WebSocket)",
+        },
       ],
-      tools: ["NotebookLM SDK (career knowledge base with conversation context, references, and turn tracking)"],
+      tools: [
+        "NotebookLM SDK (career knowledge base with conversation context, references, and turn tracking)",
+      ],
     };
   }
 

@@ -1,8 +1,10 @@
+import { eq } from "drizzle-orm";
+
 import type { OrchestratorAgent } from "@/backend/ai/agents/orchestrator/index";
+
+import { draft } from "@/ai/tasks/draft";
 import { getDb } from "@/db";
 import { emails } from "@/db/schema";
-import { eq } from "drizzle-orm";
-import { draft } from "@/ai/tasks/draft";
 
 export async function handleReplyToThread(agent: OrchestratorAgent, roleId: string, text: string) {
   const thread = await agent.ensureThread(roleId);

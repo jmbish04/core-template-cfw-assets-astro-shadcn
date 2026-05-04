@@ -1,11 +1,16 @@
+import { eq } from "drizzle-orm";
+
 import type { OrchestratorAgent } from "@/backend/ai/agents/orchestrator/index";
-import type { OrchestratorTask, OrchestratorTaskStatus } from "@/backend/ai/agents/orchestrator/types";
-import { draft } from "@/ai/tasks/draft";
+import type {
+  OrchestratorTask,
+  OrchestratorTaskStatus,
+} from "@/backend/ai/agents/orchestrator/types";
+
 import { analyzeRole } from "@/ai/tasks/analyze-role";
+import { classifyEmailStatus } from "@/ai/tasks/classify-email-status";
+import { draft } from "@/ai/tasks/draft";
 import { getDb } from "@/db";
 import { emails, roles } from "@/db/schema";
-import { eq } from "drizzle-orm";
-import { classifyEmailStatus } from "@/ai/tasks/classify-email-status";
 
 function readString(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
@@ -77,11 +82,7 @@ async function processTask(agent: OrchestratorAgent, env: Env, task: Orchestrato
       // Persist extraction result + pdfUrl back to the role
       if (task.roleId && task.roleId !== "global") {
         const db = getDb(env);
-        const [existing] = await db
-          .select()
-          .from(roles)
-          .where(eq(roles.id, task.roleId))
-          .limit(1);
+        const [existing] = await db.select().from(roles).where(eq(roles.id, task.roleId)).limit(1);
 
         if (existing) {
           const existingMeta = (existing.metadata as Record<string, unknown>) ?? {};
@@ -92,8 +93,10 @@ async function processTask(agent: OrchestratorAgent, env: Env, task: Orchestrato
               extractedAt: new Date().toISOString(),
               // Backfill comprehensive fields into top-level metadata
               responsibilities: extracted.responsibilities ?? existingMeta.responsibilities,
-              requiredQualifications: extracted.requiredQualifications ?? existingMeta.requiredQualifications,
-              preferredQualifications: extracted.preferredQualifications ?? existingMeta.preferredQualifications,
+              requiredQualifications:
+                extracted.requiredQualifications ?? existingMeta.requiredQualifications,
+              preferredQualifications:
+                extracted.preferredQualifications ?? existingMeta.preferredQualifications,
               requiredSkills: extracted.requiredSkills ?? existingMeta.requiredSkills,
               preferredSkills: extracted.preferredSkills ?? existingMeta.preferredSkills,
               location: extracted.location ?? existingMeta.location,
@@ -101,7 +104,8 @@ async function processTask(agent: OrchestratorAgent, env: Env, task: Orchestrato
               rtoPolicy: extracted.rtoPolicy ?? existingMeta.rtoPolicy,
               yearsExperienceMin: extracted.yearsExperienceMin ?? existingMeta.yearsExperienceMin,
               yearsExperienceMax: extracted.yearsExperienceMax ?? existingMeta.yearsExperienceMax,
-              educationRequirements: extracted.educationRequirements ?? existingMeta.educationRequirements,
+              educationRequirements:
+                extracted.educationRequirements ?? existingMeta.educationRequirements,
               department: extracted.department ?? existingMeta.department,
               reportingTo: extracted.reportingTo ?? existingMeta.reportingTo,
               travelRequirements: extracted.travelRequirements ?? existingMeta.travelRequirements,
@@ -156,7 +160,8 @@ async function processTask(agent: OrchestratorAgent, env: Env, task: Orchestrato
       const gdocId = readString(task.payload?.gdocId);
       const targetRoleId = task.roleId ?? readString(task.payload?.roleId);
       if (!gdocId) throw new Error("resume_comment_response requires payload.gdocId");
-      if (!targetRoleId || targetRoleId === "global") throw new Error("resume_comment_response requires a valid roleId");
+      if (!targetRoleId || targetRoleId === "global")
+        throw new Error("resume_comment_response requires a valid roleId");
 
       const { respondToComments } = await import("@/ai/tasks/respond-to-comments");
       return respondToComments(env, targetRoleId, gdocId, (progress) => {

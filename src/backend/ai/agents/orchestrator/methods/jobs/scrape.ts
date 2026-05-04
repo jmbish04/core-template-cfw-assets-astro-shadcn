@@ -1,10 +1,10 @@
+import { extract } from "@/ai/tasks/extract";
 import {
   capturePdf,
   extractMarkdown,
   uploadPdfToR2,
   type ScrapedPage,
 } from "@/ai/tools/browser-rendering";
-import { extract } from "@/ai/tasks/extract";
 import { parseGreenhouseUrl, scrapeGreenhouseJob } from "@/ai/tools/greenhouse";
 import { JobPosting } from "@/backend/ai/agents/orchestrator/types";
 
@@ -71,4 +71,3 @@ export async function handleScrapeJob(
 export async function handleExtractJobDetails(env: Env, text: string) {
   return extract(env, { text, schema: JobPosting });
 }
-

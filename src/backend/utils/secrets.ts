@@ -1,24 +1,24 @@
 /**
  * Generic helper to fetch a secret value.
- * 
+ *
  * Precedence:
  * 1. KV Config (Metadata/Pointer) -> Secret Store (Value)
  * 2. Secrets Store (Direct Binding fallback)
  * 3. Environment Variable (Legacy/Local)
- * 
+ *
  * CAUTION: This should ONLY be used for operations where the worker is retrieving a secret
  * from the secret-store in order to set the value inside of a GitHub repo, or other external provisioning.
- * 
+ *
  * For standard Worker operations (using the key itself), use `env.{SECRET_BINDING_NAME}.get()` directly.
  */
 export async function getSecret(env: Env, key: string): Promise<string | undefined> {
-    // Check Secrets Store or Env Var Binding (Legacy behavior compliance)
-    const envVal = (env as any)[key];
-    if (envVal && typeof envVal?.get === 'function') {
-        const val = await envVal.get();
-        return val;
-    }
-    return envVal;
+  // Check Secrets Store or Env Var Binding (Legacy behavior compliance)
+  const envVal = (env as any)[key];
+  if (envVal && typeof envVal?.get === "function") {
+    const val = await envVal.get();
+    return val;
+  }
+  return envVal;
 }
 
 /**
@@ -28,12 +28,12 @@ export async function getSecret(env: Env, key: string): Promise<string | undefin
  * available to the regular WORKER_API_KEY.
  */
 export async function getWorkerApiKey(env: Env): Promise<string | undefined> {
-    if (env.WORKER_API_KEY) {
-        return typeof env.WORKER_API_KEY === 'string' 
-            ? env.WORKER_API_KEY 
-            : await (env.WORKER_API_KEY as any).get();
-    }
-    return getSecret(env, "WORKER_API_KEY");
+  if (env.WORKER_API_KEY) {
+    return typeof env.WORKER_API_KEY === "string"
+      ? env.WORKER_API_KEY
+      : await (env.WORKER_API_KEY as any).get();
+  }
+  return getSecret(env, "WORKER_API_KEY");
 }
 
 /**
@@ -43,12 +43,12 @@ export async function getWorkerApiKey(env: Env): Promise<string | undefined> {
  * available to the regular WORKER_API_KEY.
  */
 export async function getAgenticWorkerApiKey(env: Env): Promise<string | undefined> {
-    if (env.AGENTIC_WORKER_API_KEY) {
-        return typeof env.AGENTIC_WORKER_API_KEY === 'string'
-            ? env.AGENTIC_WORKER_API_KEY
-            : await env.AGENTIC_WORKER_API_KEY.get();
-    }
-    return getSecret(env, "AGENTIC_WORKER_API_KEY");
+  if (env.AGENTIC_WORKER_API_KEY) {
+    return typeof env.AGENTIC_WORKER_API_KEY === "string"
+      ? env.AGENTIC_WORKER_API_KEY
+      : await env.AGENTIC_WORKER_API_KEY.get();
+  }
+  return getSecret(env, "AGENTIC_WORKER_API_KEY");
 }
 
 // export async function getGithubToken(env: Env): Promise<string | undefined> {
@@ -64,24 +64,24 @@ export async function getAgenticWorkerApiKey(env: Env): Promise<string | undefin
  * Helper to fetch the CLOUDFLARE_WRANGLER_API_TOKEN from the Secrets Store.
  */
 export async function getCloudflareApiToken(env: Env): Promise<string | undefined> {
-    if (env.CLOUDFLARE_WRANGLER_API_TOKEN) {
-        return typeof env.CLOUDFLARE_WRANGLER_API_TOKEN === 'string'
-            ? env.CLOUDFLARE_WRANGLER_API_TOKEN
-            : await (env.CLOUDFLARE_WRANGLER_API_TOKEN as any).get();
-    }
-    return getSecret(env, "CLOUDFLARE_WRANGLER_API_TOKEN");
+  if (env.CLOUDFLARE_WRANGLER_API_TOKEN) {
+    return typeof env.CLOUDFLARE_WRANGLER_API_TOKEN === "string"
+      ? env.CLOUDFLARE_WRANGLER_API_TOKEN
+      : await (env.CLOUDFLARE_WRANGLER_API_TOKEN as any).get();
+  }
+  return getSecret(env, "CLOUDFLARE_WRANGLER_API_TOKEN");
 }
 
 /**
  * Helper to fetch the CLOUDFLARE_ACCOUNT_ID from the Secrets Store.
  */
 export async function getCloudflareAccountId(env: Env): Promise<string | undefined> {
-    if (env.CLOUDFLARE_ACCOUNT_ID) {
-        return typeof env.CLOUDFLARE_ACCOUNT_ID === 'string'
-            ? env.CLOUDFLARE_ACCOUNT_ID
-            : await (env.CLOUDFLARE_ACCOUNT_ID as any).get();
-    }
-    return getSecret(env, "CLOUDFLARE_ACCOUNT_ID");
+  if (env.CLOUDFLARE_ACCOUNT_ID) {
+    return typeof env.CLOUDFLARE_ACCOUNT_ID === "string"
+      ? env.CLOUDFLARE_ACCOUNT_ID
+      : await (env.CLOUDFLARE_ACCOUNT_ID as any).get();
+  }
+  return getSecret(env, "CLOUDFLARE_ACCOUNT_ID");
 }
 
 /**
@@ -89,10 +89,10 @@ export async function getCloudflareAccountId(env: Env): Promise<string | undefin
  * Helper to fetch the CAREER_NOTEBOOKLM_ID from wrangler.jsonc env vars.
  */
 export async function getCareerNotebookLMId(env: Env): Promise<string> {
-    if (env.CAREER_NOTEBOOKLM_ID) {
-        return env.CAREER_NOTEBOOKLM_ID;
-    }
-    throw new Error("Missing env.CAREER_NOTEBOOKLM_ID in Environment Variables");
+  if (env.CAREER_NOTEBOOKLM_ID) {
+    return env.CAREER_NOTEBOOKLM_ID;
+  }
+  throw new Error("Missing env.CAREER_NOTEBOOKLM_ID in Environment Variables");
 }
 
 /**
@@ -101,18 +101,18 @@ export async function getCareerNotebookLMId(env: Env): Promise<string> {
  * must be mutable at runtime for cookie rotation and re-authentication flows.
  */
 export async function getNotebookLMCookieSigningKey(env: Env): Promise<string> {
-    try {
-        let key = await env.KV.get("NOTEBOOKLM_COOKIE_SIGNING_KEY");
-        if (key) return key;
+  try {
+    let key = await env.KV.get("NOTEBOOKLM_COOKIE_SIGNING_KEY");
+    if (key) return key;
 
-        // Auto-provision a new key if not found
-        key = crypto.randomUUID();
-        await env.KV.put("NOTEBOOKLM_COOKIE_SIGNING_KEY", key);
-        return key;
-    } catch (e) {
-        console.warn("Failed to read/write NOTEBOOKLM_COOKIE_SIGNING_KEY from KV", e);
-        return "default_dev_key_fallback";
-    }
+    // Auto-provision a new key if not found
+    key = crypto.randomUUID();
+    await env.KV.put("NOTEBOOKLM_COOKIE_SIGNING_KEY", key);
+    return key;
+  } catch (e) {
+    console.warn("Failed to read/write NOTEBOOKLM_COOKIE_SIGNING_KEY from KV", e);
+    return "default_dev_key_fallback";
+  }
 }
 
 /**
@@ -120,10 +120,10 @@ export async function getNotebookLMCookieSigningKey(env: Env): Promise<string> {
  * Helper to fetch the NOTEBOOKLM_AUTH_TOKEN from the Secret Store.
  */
 export async function getNotebookLMAuthToken(env: Env): Promise<string> {
-    if (env.NOTEBOOKLM_AUTH_TOKEN) {
-        return (await env.NOTEBOOKLM_AUTH_TOKEN.get()).trim();
-    }
-    throw new Error("Missing env.NOTEBOOKLM_AUTH_TOKEN in Environment Variables");
+  if (env.NOTEBOOKLM_AUTH_TOKEN) {
+    return (await env.NOTEBOOKLM_AUTH_TOKEN.get()).trim();
+  }
+  throw new Error("Missing env.NOTEBOOKLM_AUTH_TOKEN in Environment Variables");
 }
 
 /**
@@ -138,49 +138,47 @@ export async function getNotebookLMAuthToken(env: Env): Promise<string> {
  * This two-tier approach decouples cookie rotation from deployments.
  */
 export async function getNotebookLMCookies(env: Env): Promise<string> {
-    // 1. Try KV hot session first (instant rotation, no redeploy)
-    try {
-        const kvSession = await env.KV.get("ACTIVE_NOTEBOOKLM_SESSION");
-        if (kvSession && kvSession.trim().length > 10) {
-            return kvSession;
-        }
-    } catch {
-        // KV read failed — continue to fallback
+  // 1. Try KV hot session first (instant rotation, no redeploy)
+  try {
+    const kvSession = await env.KV.get("ACTIVE_NOTEBOOKLM_SESSION");
+    if (kvSession && kvSession.trim().length > 10) {
+      return kvSession;
     }
+  } catch {
+    // KV read failed — continue to fallback
+  }
 
-    // 2. Fall back to Worker Secret
-    if (env.NOTEBOOKLM_COOKIES && env.NOTEBOOKLM_COOKIES.trim().length > 10) {
-        return env.NOTEBOOKLM_COOKIES;
-    }
+  // 2. Fall back to Worker Secret
+  if (env.NOTEBOOKLM_COOKIES && env.NOTEBOOKLM_COOKIES.trim().length > 10) {
+    return env.NOTEBOOKLM_COOKIES;
+  }
 
-    throw new Error(
-        `Missing NotebookLM session in both KV (ACTIVE_NOTEBOOKLM_SESSION) 
-        and Worker Secret (NOTEBOOKLM_COOKIES). Run: pnpm run session:sync`
-    );
+  throw new Error(
+    `Missing NotebookLM session in both KV (ACTIVE_NOTEBOOKLM_SESSION) 
+        and Worker Secret (NOTEBOOKLM_COOKIES). Run: pnpm run session:sync`,
+  );
 }
 
 /**
  * Google Workspace Service Account with Domain Wide Delegation Private Key
  * Helper to fetch the GOOGLE_CREDS_SA_PRIVATE_KEY_PT_1 and GOOGLE_CREDS_SA_PRIVATE_KEY_PT_2 from the Secret Store.
- * 
+ *
  * Removes header/footer and newlines from PEM string for Web Crypto API compatibility
  */
 export async function getGoogleServiceAccountPrivateKey(env: Env): Promise<string> {
-
-    if (env.GOOGLE_CREDS_SA_PRIVATE_KEY_PT_1 && env.GOOGLE_CREDS_SA_PRIVATE_KEY_PT_2) {
-        const rawKey = (
-            await (env.GOOGLE_CREDS_SA_PRIVATE_KEY_PT_1 as any).get()
-            + await (env.GOOGLE_CREDS_SA_PRIVATE_KEY_PT_2 as any).get()
-        );
-        return rawKey
-            .replace(/-----BEGIN (RSA )?PRIVATE KEY-----/, "")
-            .replace(/-----END (RSA )?PRIVATE KEY-----/, "")
-            .replace(/\s/g, "");
-    }
-    throw new Error(
-        `Missing env.GOOGLE_CREDS_SA_PRIVATE_KEY_PT_1 
-        and/or env.GOOGLE_CREDS_SA_PRIVATE_KEY_PT_2 in Secret Store Bindings`
-    );
+  if (env.GOOGLE_CREDS_SA_PRIVATE_KEY_PT_1 && env.GOOGLE_CREDS_SA_PRIVATE_KEY_PT_2) {
+    const rawKey =
+      (await (env.GOOGLE_CREDS_SA_PRIVATE_KEY_PT_1 as any).get()) +
+      (await (env.GOOGLE_CREDS_SA_PRIVATE_KEY_PT_2 as any).get());
+    return rawKey
+      .replace(/-----BEGIN (RSA )?PRIVATE KEY-----/, "")
+      .replace(/-----END (RSA )?PRIVATE KEY-----/, "")
+      .replace(/\s/g, "");
+  }
+  throw new Error(
+    `Missing env.GOOGLE_CREDS_SA_PRIVATE_KEY_PT_1 
+        and/or env.GOOGLE_CREDS_SA_PRIVATE_KEY_PT_2 in Secret Store Bindings`,
+  );
 }
 
 /**
@@ -188,12 +186,12 @@ export async function getGoogleServiceAccountPrivateKey(env: Env): Promise<strin
  * Helper to fetch the GOOGLE_CREDS_SA_CLIENT_EMAIL from the Secret Store.
  */
 export async function getGoogleServiceAccountClientEmail(env: Env): Promise<string> {
-    if (env.GOOGLE_CREDS_SA_CLIENT_EMAIL) {
-        return typeof env.GOOGLE_CREDS_SA_CLIENT_EMAIL === 'string'
-            ? env.GOOGLE_CREDS_SA_CLIENT_EMAIL
-            : await (env.GOOGLE_CREDS_SA_CLIENT_EMAIL as any).get();
-    }
-    throw new Error("Missing env.GOOGLE_CREDS_SA_CLIENT_EMAIL in Secret Store Bindings");
+  if (env.GOOGLE_CREDS_SA_CLIENT_EMAIL) {
+    return typeof env.GOOGLE_CREDS_SA_CLIENT_EMAIL === "string"
+      ? env.GOOGLE_CREDS_SA_CLIENT_EMAIL
+      : await (env.GOOGLE_CREDS_SA_CLIENT_EMAIL as any).get();
+  }
+  throw new Error("Missing env.GOOGLE_CREDS_SA_CLIENT_EMAIL in Secret Store Bindings");
 }
 
 /**
@@ -201,17 +199,15 @@ export async function getGoogleServiceAccountClientEmail(env: Env): Promise<stri
  * Helper to fetch the GOOGLE_USER_TO_IMPERSONATE from worker secret (env binding that is a string, not a secret store binding).
  */
 export async function getGoogleUserToImpersonate(env: Env): Promise<string> {
-    if (env.GOOGLE_USER_TO_IMPERSONATE) {
-        return env.GOOGLE_USER_TO_IMPERSONATE;
-    }
-    throw new Error(`
+  if (env.GOOGLE_USER_TO_IMPERSONATE) {
+    return env.GOOGLE_USER_TO_IMPERSONATE;
+  }
+  throw new Error(`
         Missing env.GOOGLE_USER_TO_IMPERSONATE in worker secret
         (e.g. via 'wrangler secret put GOOGLE_USER_TO_IMPERSONATE').
         Must be a string, not a secret store binding.
     `);
 }
-
-
 
 // ---------------------------------------------------------------------------
 // COMMENTED OUT: getGoogleWorkspaceAccessToken
@@ -235,14 +231,14 @@ export async function getGoogleUserToImpersonate(env: Env): Promise<string> {
 //   const userToImpersonate = await getGoogleUserToImpersonate(env);
 //   if (!serviceAccountEmail || !userToImpersonate) {
 //     throw new Error(`
-//       Missing Google Workspace credentials; 
-//       Service account email: ${serviceAccountEmail}; 
+//       Missing Google Workspace credentials;
+//       Service account email: ${serviceAccountEmail};
 //       User to impersonate: ${userToImpersonate}
 //     `);
 //   }
 //   // 1. Prepare the RSA Key for Web Crypto
 //   const pemContents = await getGoogleServiceAccountPrivateKey(env);
-//   
+//
 //   const binaryString = atob(pemContents);
 //   const pkcs1Der = new Uint8Array(binaryString.length);
 //   for (let i = 0; i < binaryString.length; i++) {
@@ -277,7 +273,7 @@ export async function getGoogleUserToImpersonate(env: Env): Promise<string> {
 //
 //   // Helper for Base64Url
 //   const b64 = (obj: unknown) => btoa(JSON.stringify(obj)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-//   
+//
 //   const encodedHeader = b64(header);
 //   const encodedPayload = b64(payload);
 //   const dataToSign = new TextEncoder().encode(`${encodedHeader}.${encodedPayload}`);
@@ -298,7 +294,6 @@ export async function getGoogleUserToImpersonate(env: Env): Promise<string> {
 //   const data = (await response.json()) as { access_token: string };
 //   return data.access_token;
 // }
-
 
 /**
  * R2 Access Key ID
@@ -321,7 +316,6 @@ export async function getR2SecretAccessKey(env: Env): Promise<string> {
   }
   throw new Error("Missing env.R2_SECRET_ACCESS_KEY in worker secret");
 }
-
 
 // ---------------------------------------------------------------------------
 // COMMENTED OUT: PKCS#1 → PKCS#8 wrapping helpers
@@ -369,18 +363,19 @@ export async function getR2SecretAccessKey(env: Env): Promise<string> {
  * Maps to WORKER_API_KEY in this project.
  */
 export async function getGitHubWebhookSecret(env: Env): Promise<string> {
-    if (env.WORKER_API_KEY) {
-        const secret = typeof env.WORKER_API_KEY === 'string' 
-            ? env.WORKER_API_KEY 
-            : await (env.WORKER_API_KEY as any).get();
-        if (secret) return secret;
-    }
+  if (env.WORKER_API_KEY) {
+    const secret =
+      typeof env.WORKER_API_KEY === "string"
+        ? env.WORKER_API_KEY
+        : await (env.WORKER_API_KEY as any).get();
+    if (secret) return secret;
+  }
 
-    const secret = await getSecret(env, "WORKER_API_KEY");
-    if (!secret) {
-        throw new Error("Missing WORKER_API_KEY in Secrets Store");
-    }
-    return secret;
+  const secret = await getSecret(env, "WORKER_API_KEY");
+  if (!secret) {
+    throw new Error("Missing WORKER_API_KEY in Secrets Store");
+  }
+  return secret;
 }
 
 /**
@@ -388,10 +383,10 @@ export async function getGitHubWebhookSecret(env: Env): Promise<string> {
  * Maps to CLOUDFLARE_IMAGES_STREAM_TOKEN in this project.
  */
 export async function getCloudflareImagesToken(env: Env): Promise<string> {
-    if (env.CLOUDFLARE_IMAGES_STREAM_TOKEN) {
-        return typeof env.CLOUDFLARE_IMAGES_STREAM_TOKEN === 'string'
-            ? env.CLOUDFLARE_IMAGES_STREAM_TOKEN
-            : await (env.CLOUDFLARE_IMAGES_STREAM_TOKEN as any).get();
-    }
-    throw new Error("Missing env.CLOUDFLARE_IMAGES_STREAM_TOKEN in Secret Store Bindings");
+  if (env.CLOUDFLARE_IMAGES_STREAM_TOKEN) {
+    return typeof env.CLOUDFLARE_IMAGES_STREAM_TOKEN === "string"
+      ? env.CLOUDFLARE_IMAGES_STREAM_TOKEN
+      : await (env.CLOUDFLARE_IMAGES_STREAM_TOKEN as any).get();
+  }
+  throw new Error("Missing env.CLOUDFLARE_IMAGES_STREAM_TOKEN in Secret Store Bindings");
 }

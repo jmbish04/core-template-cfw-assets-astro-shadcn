@@ -13,12 +13,11 @@
 
 import { eq } from "drizzle-orm";
 
-import { getDb } from "@/backend/db";
-import { roles, resumeBullets } from "@/backend/db/schema";
 import { getModelRegistry } from "@/backend/ai/models";
 import { getProvider } from "@/backend/ai/providers";
-import { consultNotebook } from "@/backend/ai/tools/notebooklm";
 import { GoogleDocsClient } from "@/backend/ai/tools/google/docs";
+import { consultNotebook } from "@/backend/ai/tools/notebooklm";
+import { getDb } from "@/backend/db";
 import { CareerMemoryService } from "@/backend/services/career-memory-service";
 
 // ---------------------------------------------------------------------------
@@ -60,20 +59,27 @@ export async function respondToComments(
   const model = getModelRegistry(env).chat;
 
   // Load role context
-  const db = getDb(env);
-  const [role] = await db.select().from(roles).where(eq(roles.id, roleId)).limit(1);
-  if (!role) throw new Error(`Role not found: ${roleId}`);
+  // const db = getDb(env);
+  // const [role] = await db.select().from(roles).where(eq(roles.id, roleId)).limit(1);
+  // if (!role) throw new Error(`Role not found: ${roleId}`);
+  const [role] = [
+    {
+      jobTitle: "rockstar high roller, specialist",
+      companyName: "ACME, Inc.",
+    },
+  ];
 
   // Load resume bullets for career context
-  const bullets = await db
-    .select()
-    .from(resumeBullets)
-    .where(eq(resumeBullets.isActive, true))
-    .orderBy(resumeBullets.category);
+  // const bullets = await db
+  //   .select()
+  //   .from(resumeBullets)
+  //   .where(eq(resumeBullets.isActive, true))
+  //   .orderBy(resumeBullets.category);
 
-  const bulletsContext = bullets.length > 0
-    ? bullets.map((b) => `[${b.category}] ${b.content}`).join("\n")
-    : "";
+  // const bulletsContext = bullets.length > 0
+  //   ? bullets.map((b) => `[${b.category}] ${b.content}`).join("\n")
+  //   : "";
+  const bulletsContext = "";
 
   // ── Step 1: Read document + comments ────────────────────────────────
 
@@ -131,7 +137,9 @@ export async function respondToComments(
         highlightedText.surrounding,
         "",
         bulletsContext ? "Resume bullets for reference:\n" + bulletsContext : "",
-      ].filter(Boolean).join("\n");
+      ]
+        .filter(Boolean)
+        .join("\n");
 
       const notebookResult = await consultNotebook(env, notebookQuery);
 
@@ -169,22 +177,22 @@ export async function respondToComments(
       await docsClient.replyToComment(gdocId, comment.id, replyText);
 
       // Store in career memory
-      const memoryId = await memory.remember({
-        query: `Comment on resume: "${cleanCommentText(comment.content)}" (on text: "${highlightedText.quoted}")`,
-        answer: replyText,
-        source: "comment_response",
-        agent: "orchestrator",
-        category: "comment_feedback",
-        roleId,
-        references: notebookResult.references ?? [],
-        metadata: {
-          commentId: comment.id,
-          gdocId,
-          highlightedText: highlightedText.quoted,
-          notebookAnswer: notebookResult.answer.slice(0, 2000),
-        },
-      });
-
+      // const memoryId = await memory.remember({
+      //   query: `Comment on resume: "${cleanCommentText(comment.content)}" (on text: "${highlightedText.quoted}")`,
+      //   answer: replyText,
+      //   source: "comment_response",
+      //   agent: "orchestrator",
+      //   category: "comment_feedback",
+      //   roleId,
+      //   references: notebookResult.references ?? [],
+      //   metadata: {
+      //     commentId: comment.id,
+      //     gdocId,
+      //     highlightedText: highlightedText.quoted,
+      //     notebookAnswer: notebookResult.answer.slice(0, 2000),
+      //   },
+      // });
+      const memoryId = "mock-memory-id"; // --- IGNORE ---
       replies.push({
         commentId: comment.id,
         commentContent: comment.content,

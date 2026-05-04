@@ -14,15 +14,17 @@ NEVER use relative imports (`../../foo`, `../bar`) for backend code. ALWAYS use 
 ## Examples
 
 **BAD:**
+
 ```typescript
-import { sessions } from '../../db/schemas';
-import { consultNotebook } from '../../../tools/notebooklm';
+import { sessions } from "../../db/schemas";
+import { consultNotebook } from "../../../tools/notebooklm";
 ```
 
 **GOOD:**
+
 ```typescript
-import { sessions } from '@db/schemas';
-import { consultNotebook } from '@/backend/ai/tools/notebooklm';
+import { sessions } from "@db/schemas";
+import { consultNotebook } from "@/backend/ai/tools/notebooklm";
 ```
 
 ## Migration Script

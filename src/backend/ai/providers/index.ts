@@ -7,12 +7,14 @@
  */
 
 import type { z } from "zod";
+
 import { zodToJsonSchema } from "zod-to-json-schema";
 
-import type { AIProvider } from "@/backend/ai/providers/base";
-import { WorkersAIProvider } from "@/backend/ai/providers/workers-ai";
-import { getModelRegistry } from "@/backend/ai/models";
 import type { GptOssMessage } from "@/backend/ai/models/gpt-oss-120b";
+import type { AIProvider } from "@/backend/ai/providers/base";
+
+import { getModelRegistry } from "@/backend/ai/models";
+import { WorkersAIProvider } from "@/backend/ai/providers/workers-ai";
 
 // Re-export the shared message type for consumers
 export type { GptOssMessage as ChatMessage } from "@/backend/ai/models/gpt-oss-120b";

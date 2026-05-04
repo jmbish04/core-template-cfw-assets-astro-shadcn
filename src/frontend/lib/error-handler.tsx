@@ -113,8 +113,7 @@ export function useFrontendErrorHandler() {
         codeSource: {
           file: "src/frontend/lib/error-handler.tsx",
           functionName: "copyErrorPrompt",
-          description:
-            "Copies a coding-agent fix prompt for the active frontend error.",
+          description: "Copies a coding-agent fix prompt for the active frontend error.",
         },
         errorDetails: {
           friendlyError:

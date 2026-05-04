@@ -2,117 +2,117 @@
  * @fileoverview OpenAPI documentation routes
  */
 
-import { Hono } from 'hono';
-import { swaggerUI } from '@hono/swagger-ui';
-import { apiReference } from '@scalar/hono-api-reference';
+import { swaggerUI } from "@hono/swagger-ui";
+import { apiReference } from "@scalar/hono-api-reference";
+import { Hono } from "hono";
 
 const openapiRouter = new Hono<{ Bindings: Env }>();
 
 const openApiSpec = {
-  openapi: '3.1.0',
+  openapi: "3.1.0",
   info: {
-    title: 'Core Template API',
-    version: '1.0.0',
-    description: 'API documentation for the Cloudflare Workers template',
+    title: "Core Template API",
+    version: "1.0.0",
+    description: "API documentation for the Cloudflare Workers template",
   },
   servers: [
     {
-      url: '/api',
-      description: 'API Server',
+      url: "/api",
+      description: "API Server",
     },
   ],
   paths: {
-    '/auth/session': {
+    "/auth/session": {
       post: {
-        summary: 'Create an authenticated session from the WORKER_API_KEY secret',
-        tags: ['Authentication'],
+        summary: "Create an authenticated session from the WORKER_API_KEY secret",
+        tags: ["Authentication"],
         requestBody: {
           required: true,
           content: {
-            'application/json': {
+            "application/json": {
               schema: {
-                type: 'object',
+                type: "object",
                 properties: {
-                  apiKey: { type: 'string' },
+                  apiKey: { type: "string" },
                 },
-                required: ['apiKey'],
+                required: ["apiKey"],
               },
             },
           },
         },
         responses: {
-          '201': {
-            description: 'Session created successfully',
+          "201": {
+            description: "Session created successfully",
           },
         },
       },
     },
-    '/dashboard/metrics': {
+    "/dashboard/metrics": {
       get: {
-        summary: 'Get dashboard metrics',
-        tags: ['Dashboard'],
+        summary: "Get dashboard metrics",
+        tags: ["Dashboard"],
         security: [{ bearerAuth: [] }],
         parameters: [
           {
-            name: 'category',
-            in: 'query',
-            schema: { type: 'string' },
+            name: "category",
+            in: "query",
+            schema: { type: "string" },
           },
           {
-            name: 'limit',
-            in: 'query',
-            schema: { type: 'integer', default: 100 },
+            name: "limit",
+            in: "query",
+            schema: { type: "integer", default: 100 },
           },
         ],
         responses: {
-          '200': {
-            description: 'Metrics retrieved successfully',
+          "200": {
+            description: "Metrics retrieved successfully",
           },
         },
       },
     },
-    '/threads': {
+    "/threads": {
       get: {
-        summary: 'List session threads',
-        tags: ['AI Threads'],
+        summary: "List session threads",
+        tags: ["AI Threads"],
         security: [{ bearerAuth: [] }],
         responses: {
-          '200': {
-            description: 'Threads retrieved successfully',
+          "200": {
+            description: "Threads retrieved successfully",
           },
         },
       },
       post: {
-        summary: 'Create a new thread',
-        tags: ['AI Threads'],
+        summary: "Create a new thread",
+        tags: ["AI Threads"],
         security: [{ bearerAuth: [] }],
         requestBody: {
           content: {
-            'application/json': {
+            "application/json": {
               schema: {
-                type: 'object',
+                type: "object",
                 properties: {
-                  title: { type: 'string', minLength: 1 },
+                  title: { type: "string", minLength: 1 },
                 },
-                required: ['title'],
+                required: ["title"],
               },
             },
           },
         },
         responses: {
-          '201': {
-            description: 'Thread created successfully',
+          "201": {
+            description: "Thread created successfully",
           },
         },
       },
     },
-    '/health': {
+    "/health": {
       get: {
-        summary: 'System health check',
-        tags: ['Health'],
+        summary: "System health check",
+        tags: ["Health"],
         responses: {
-          '200': {
-            description: 'System is healthy',
+          "200": {
+            description: "System is healthy",
           },
         },
       },
@@ -121,27 +121,27 @@ const openApiSpec = {
   components: {
     securitySchemes: {
       bearerAuth: {
-        type: 'http',
-        scheme: 'bearer',
+        type: "http",
+        scheme: "bearer",
       },
     },
   },
 };
 
-openapiRouter.get('/openapi.json', (c) => c.json(openApiSpec));
-openapiRouter.get('/swagger', swaggerUI({ url: '/openapi.json' }));
+openapiRouter.get("/openapi.json", (c) => c.json(openApiSpec));
+openapiRouter.get("/swagger", swaggerUI({ url: "/openapi.json" }));
 
 const scalarReference = apiReference({
   spec: {
-    url: '/openapi.json',
+    url: "/openapi.json",
   },
-  theme: 'dark',
+  theme: "dark",
 });
 
-openapiRouter.get('/scalar', scalarReference);
+openapiRouter.get("/scalar", scalarReference);
 // Keep the intentionally misspelled `/scaler` path as a compatibility alias that still
 // serves Scalar docs, because the template landing page, header, and agent docs reference it.
-openapiRouter.get('/scaler', scalarReference);
-openapiRouter.get('/docs', (c) => c.redirect('/scalar'));
+openapiRouter.get("/scaler", scalarReference);
+openapiRouter.get("/docs", (c) => c.redirect("/scalar"));
 
 export { openapiRouter };

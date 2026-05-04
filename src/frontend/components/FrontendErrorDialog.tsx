@@ -1,5 +1,7 @@
 import { AlertCircleIcon, CheckIcon, CopyIcon } from "lucide-react";
 
+import type { FrontendErrorState } from "@/lib/error-handler";
+
 import {
   AlertDialog,
   AlertDialogAction,
@@ -11,7 +13,6 @@ import {
   AlertDialogMedia,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import type { FrontendErrorState } from "@/lib/error-handler";
 
 type FrontendErrorDialogProps = {
   error: FrontendErrorState | null;
@@ -67,7 +68,11 @@ export function FrontendErrorDialog({
 
         <AlertDialogFooter>
           <AlertDialogAction type="button" variant="outline" onClick={() => void onCopyPrompt()}>
-            {copyState === "copied" ? <CheckIcon className="size-4" /> : <CopyIcon className="size-4" />}
+            {copyState === "copied" ? (
+              <CheckIcon className="size-4" />
+            ) : (
+              <CopyIcon className="size-4" />
+            )}
             {copyState === "copied" ? "Copied" : "Copy fix prompt"}
           </AlertDialogAction>
           <AlertDialogCancel type="button" onClick={() => onOpenChange(false)}>

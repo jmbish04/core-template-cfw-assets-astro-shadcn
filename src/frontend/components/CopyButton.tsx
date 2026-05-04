@@ -1,5 +1,5 @@
-import * as React from "react";
 import { CheckIcon, CopyIcon } from "lucide-react";
+import * as React from "react";
 
 import { Button } from "@/components/ui/button";
 
@@ -10,12 +10,7 @@ type CopyButtonProps = {
   onCopyError?: (error: unknown) => void;
 };
 
-export function CopyButton({
-  text,
-  label,
-  copiedLabel = "Copied",
-  onCopyError,
-}: CopyButtonProps) {
+export function CopyButton({ text, label, copiedLabel = "Copied", onCopyError }: CopyButtonProps) {
   const [copied, setCopied] = React.useState(false);
 
   const handleCopy = React.useCallback(async () => {

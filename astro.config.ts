@@ -28,11 +28,8 @@ export default defineConfig({
     },
     workerEntryPoint: {
       path: "src/_worker.ts",
-      namedExports: [
-        "OrchestratorAgent",
-        "NotebookLMAgent",
-      ],
-    },    
+      namedExports: ["OrchestratorAgent", "NotebookLMAgent"],
+    },
   }),
   integrations: [react()],
   vite: {
@@ -40,7 +37,7 @@ export default defineConfig({
       // Cast through the Vite plugin type to work around the current
       // Vite/@tailwindcss-vite HotUpdateOptions mismatch without dropping
       // type information entirely.
-      tailwindcss() as unknown as import("vite").Plugin
+      tailwindcss() as unknown as import("vite").Plugin,
     ],
     // Explicitly externalize node built-in modules for SSR
     ssr: {
