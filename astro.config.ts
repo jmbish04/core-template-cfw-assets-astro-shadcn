@@ -28,7 +28,7 @@ export default defineConfig({
     },
     workerEntryPoint: {
       path: "src/_worker.ts",
-      namedExports: ["OrchestratorAgent", "NotebookLMAgent"],
+      namedExports: ["OrchestratorAgent", "NotebookLMAgent", "GoogleDocsAgent"],
     },
   }),
   integrations: [react()],

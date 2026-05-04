@@ -56,18 +56,6 @@
         "class_name": "NotebookLMAgent",
       },
       {
-        "name": "NOTEBOOKLM_MCP_AGENT",
-        "class_name": "NotebookLMMcpAgent",
-      },
-      {
-        "name": "TRANSCRIPTION_AGENT",
-        "class_name": "TranscriptionAgent",
-      },
-      {
-        "name": "SANDBOX",
-        "class_name": "Sandbox",
-      },
-      {
         "name": "GOOGLE_DOCS_AGENT",
         "class_name": "GoogleDocsAgent",
       },
@@ -79,9 +67,6 @@
       "new_sqlite_classes": [
         "OrchestratorAgent",
         "NotebookLMAgent",
-        "NotebookLMMcpAgent",
-        "TranscriptionAgent",
-        "Sandbox",
         "GoogleDocsAgent",
       ],
     },

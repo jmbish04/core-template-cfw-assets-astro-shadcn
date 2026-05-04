@@ -1,7 +1,7 @@
 /**
  * @fileoverview Cloudflare Workers entry point
  *
- * This file integrates the Hono API with Astro SSR.
+ * This file integrates the Hono API with Astro SSR and exports all Durable Object agents.
  */
 
 import type { ExportedHandler } from "@cloudflare/workers-types";
@@ -32,4 +32,6 @@ const handler: ExportedHandler<Env> = {
 
 export default handler;
 
+// Export all Durable Object agent classes (required by wrangler.jsonc)
 export { OrchestratorAgent, NotebookLMAgent, GoogleDocsAgent };
+
