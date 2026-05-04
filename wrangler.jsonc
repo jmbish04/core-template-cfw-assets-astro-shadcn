@@ -67,6 +67,10 @@
         "name": "SANDBOX",
         "class_name": "Sandbox",
       },
+      {
+        "name": "GOOGLE_DOCS_AGENT",
+        "class_name": "GoogleDocsAgent",
+      },
     ],
   },
   "migrations": [
@@ -78,6 +82,7 @@
         "NotebookLMMcpAgent",
         "TranscriptionAgent",
         "Sandbox",
+        "GoogleDocsAgent",
       ],
     },
   ],

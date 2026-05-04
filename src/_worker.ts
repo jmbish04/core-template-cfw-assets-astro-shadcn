@@ -8,6 +8,7 @@ import type { ExportedHandler } from "@cloudflare/workers-types";
 
 import { NotebookLMAgent } from "./backend/ai/agents/notebooklm";
 import { OrchestratorAgent } from "./backend/ai/agents/orchestrator";
+import { GoogleDocsAgent } from "./backend/ai/agents/google-docs";
 import { app as honoApp } from "./backend/api/index";
 
 const handler: ExportedHandler<Env> = {
@@ -31,4 +32,4 @@ const handler: ExportedHandler<Env> = {
 
 export default handler;
 
-export { OrchestratorAgent, NotebookLMAgent };
+export { OrchestratorAgent, NotebookLMAgent, GoogleDocsAgent };
