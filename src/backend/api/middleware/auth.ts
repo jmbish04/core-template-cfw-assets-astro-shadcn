@@ -2,58 +2,52 @@
  * @fileoverview Authentication middleware
  */
 
-import type { Context, Next } from 'hono';
-import { drizzle } from 'drizzle-orm/d1';
-import { eq } from 'drizzle-orm';
-import { sessions, users } from '../../db/schema';
-import type { Bindings, Variables } from '../index';
+import type { Context, Next } from "hono";
+
+import { sessions } from "@db/schemas";
+import { eq } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/d1";
+
+import type { Variables } from "@/backend/api/index";
+
+import { extractBearerToken } from "@/backend/api/lib/auth";
 
 export async function authMiddleware(
-  c: Context<{ Bindings: Bindings; Variables: Variables }>,
-  next: Next
+  c: Context<{ Bindings: Env; Variables: Variables }>,
+  next: Next,
 ) {
-  const authHeader = c.req.header('Authorization');
+  const token = extractBearerToken(c.req.header("Authorization"));
 
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return c.json({ error: 'Unauthorized' }, 401);
+  if (!token) {
+    return c.json({ error: "Unauthorized" }, 401);
   }
 
-  const token = authHeader.substring(7);
   const db = drizzle(c.env.DB);
 
   try {
     const sessionResult = await db
-      .select({
-        userId: sessions.userId,
-        expiresAt: sessions.expiresAt,
-        email: users.email,
-        name: users.name,
-      })
+      .select()
       .from(sessions)
-      .innerJoin(users, eq(sessions.userId, users.id))
       .where(eq(sessions.token, token))
       .limit(1);
 
     if (sessionResult.length === 0) {
-      return c.json({ error: 'Invalid session' }, 401);
+      return c.json({ error: "Invalid session" }, 401);
     }
 
     const session = sessionResult[0];
 
-    if (session.expiresAt * 1000 < Date.now()) {
-      return c.json({ error: 'Session expired' }, 401);
+    if (session.expiresAt.getTime() < Date.now()) {
+      return c.json({ error: "Session expired" }, 401);
     }
 
-    c.set('userId', session.userId);
-    c.set('user', {
-      id: session.userId,
-      email: session.email,
-      name: session.name,
-    });
+    c.set("sessionId", session.id);
+    c.set("sessionKey", session.sessionKey);
+    c.set("sessionToken", session.token);
 
     await next();
   } catch (error) {
-    console.error('Auth middleware error:', error);
-    return c.json({ error: 'Authentication failed' }, 500);
+    console.error("Auth middleware error:", error);
+    return c.json({ error: "Authentication failed" }, 500);
   }
 }

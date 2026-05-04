@@ -57,6 +57,7 @@ export function MobileNav({ className }: { className?: string }) {
 
               {siteConfig.navItems.map((item) => (
                 <a
+                  key={item.href}
                   href={item.href}
                   target={item.external ? "_blank" : undefined}
                   rel={item.external ? "noopener noreferrer" : undefined}
