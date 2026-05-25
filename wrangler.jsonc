@@ -38,13 +38,7 @@
       "max_instances": 1,
     },
   ],
-  "workflows": [
-    {
-      "name": "core-resumes-role-assets",
-      "binding": "ROLE_ASSETS_WORKFLOW",
-      "class_name": "RoleAssetsWorkflow",
-    },
-  ],
+  "workflows": [],
   "durable_objects": {
     "bindings": [
       {
@@ -59,6 +53,10 @@
         "name": "GOOGLE_DOCS_AGENT",
         "class_name": "GoogleDocsAgent",
       },
+      {
+        "name": "Sandbox",
+        "class_name": "Sandbox",
+      },
     ],
   },
   "migrations": [
@@ -68,6 +66,7 @@
         "OrchestratorAgent",
         "NotebookLMAgent",
         "GoogleDocsAgent",
+        "Sandbox",
       ],
     },
   ],

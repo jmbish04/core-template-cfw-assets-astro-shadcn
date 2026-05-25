@@ -27,7 +27,7 @@
     "cf-typegen": "wrangler types",
     "deps:lockfile": "corepack pnpm install --no-frozen-lockfile && wrangler types",
     "deps:update": "corepack pnpm update --latest && corepack pnpm install --no-frozen-lockfile && wrangler types",
-    "verify-sandbox": "node scripts/verify-sandbox-version.mjs",
+    "verify-sandbox": "node scripts/verify-sandbox-version.mjs"
   },
   "dependencies": {
     "@ai-sdk/react": "^3.0.176",
