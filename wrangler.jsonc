@@ -1,7 +1,7 @@
 {
   "name": "core-template-cfw-assets-astro-shadcn",
   "main": "dist/_worker.js/index.js",
-  "compatibility_date": "2026-05-03",
+  "compatibility_date": "2026-05-25",
   "compatibility_flags": ["nodejs_compat"],
   "upload_source_maps": true,
   "workers_dev": true,
@@ -25,7 +25,7 @@
     "binding": "ASSETS",
     "directory": "./dist",
     "run_worker_first": true,
-    "not_found_handling": "none",
+    "not_found_handling": "404-page",
   },
   "ai": {
     "binding": "AI",

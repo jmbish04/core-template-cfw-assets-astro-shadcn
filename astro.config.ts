@@ -18,7 +18,6 @@ export default defineConfig({
     platformProxy: {
       enabled: true,
     },
-    sessionKVBindingName: "SESSIONS",
     routes: {
       // Extend Cloudflare routes to include backend API routes
       extend: {
@@ -26,6 +25,7 @@ export default defineConfig({
         exclude: [],
       },
     },
+    // Configure worker entry point with Durable Object exports
     workerEntryPoint: {
       path: "src/_worker.ts",
       namedExports: ["OrchestratorAgent", "NotebookLMAgent", "GoogleDocsAgent"],
@@ -39,7 +39,7 @@ export default defineConfig({
       // type information entirely.
       tailwindcss() as unknown as import("vite").Plugin,
     ],
-    // Explicitly externalize node built-in modules for SSR
+    // Explicitly externalize node built-in modules and Cloudflare-specific packages for SSR
     ssr: {
       external: [
         "node:fs/promises",
