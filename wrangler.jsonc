@@ -46,9 +46,6 @@
       },
     ],
   },
-  "worker_loaders": [
-    { "binding": "WORKER_LOADERS" }
-  ]
   "migrations": [
     {
       "tag": "v1",
@@ -56,9 +53,14 @@
         "OrchestratorAgent",
         "CodeModeAgent",
         "GoogleDocsAgent",
-      ],
-    },
-  ],
+        ],
+      },
+    ],
+    "worker_loaders": [
+      { 
+        "binding": "WORKER_LOADERS" 
+      }
+    ],
     "vars": {
     "PARENT_DRIVE_FOLDER_ID": "1jCokY9_gi3w3_qjdCX8MbnbtZrF9p52j",
     "HEALTH_CHECK_DRIVE_FOLDER_ID": "1Sc-uzcth6LfaaDvWsTI7tCcbzL1eTwym",
