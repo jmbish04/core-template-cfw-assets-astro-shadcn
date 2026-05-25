@@ -10,11 +10,10 @@ import { app as honoApp } from "./backend/api/index";
 
 // Import Durable Object classes
 import { OrchestratorAgent } from "./backend/ai/agents/orchestrator";
-import { NotebookLMAgent } from "./backend/ai/agents/notebooklm";
 import { GoogleDocsAgent } from "./backend/ai/agents/google-docs";
 
 // Re-export Durable Object classes
-export { OrchestratorAgent, NotebookLMAgent, GoogleDocsAgent };
+export { OrchestratorAgent, GoogleDocsAgent };
 
 /**
  * Create exports function required by Astro Cloudflare adapter
