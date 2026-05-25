@@ -8,7 +8,6 @@
 
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 
-import { NotebookLMAgent } from "../../ai/agents/notebooklm";
 import { OrchestratorAgent } from "../../ai/agents/orchestrator";
 import {
   DOCUMENTS_TABLE_DESCRIPTION,
