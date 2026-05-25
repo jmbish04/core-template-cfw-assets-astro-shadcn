@@ -5,7 +5,6 @@
  */
 
 import type { ExportedHandler } from "@cloudflare/workers-types";
-import { Sandbox } from "@cloudflare/sandbox";
 
 import { NotebookLMAgent } from "./backend/ai/agents/notebooklm";
 import { OrchestratorAgent } from "./backend/ai/agents/orchestrator";
@@ -34,5 +33,5 @@ const handler: ExportedHandler<Env> = {
 export default handler;
 
 // Export all Durable Object agent classes (required by wrangler.jsonc)
-export { OrchestratorAgent, NotebookLMAgent, GoogleDocsAgent, Sandbox };
+export { OrchestratorAgent, NotebookLMAgent, GoogleDocsAgent };
 

@@ -11,7 +11,6 @@ import { buildRoleMarkdown } from "../../ai/tools/role-markdown";
 import { getDb } from "../../db";
 import {
   jobFailures,
-  rolePodcasts,
   roleBullets as roleBulletsTable,
   ROLE_BULLET_TYPES,
   roles,
@@ -294,71 +293,6 @@ function asWorkplaceType(v: unknown): "remote" | "hybrid" | "onsite" | undefined
   return s && WORKPLACE_TYPES.has(s) ? (s as "remote" | "hybrid" | "onsite") : undefined;
 }
 
-/**
- * Insert a podcast workflow row and start the durable background pipeline.
- *
- * Intake must never fail solely because Drive/NotebookLM/podcast background
- * processing cannot start. Errors are recorded on the `role_podcasts` row and
- * the newly-created role is still returned to the user.
- */
-async function startRoleAssetsWorkflow(
-  env: Env,
-  role: typeof roles.$inferSelect,
-  scrapedMarkdown?: string,
-  scrapedHtml?: string,
-): Promise<void> {
-  const db = getDb(env);
-  const podcastId = crypto.randomUUID();
-  const notebooklmSourceFilename = `role-${role.id}.md`;
-  const manualMarkdown = scrapedMarkdown?.trim()
-    ? undefined
-    : buildRoleMarkdown({
-        companyName: role.companyName,
-        jobTitle: role.jobTitle,
-        jobUrl: role.jobUrl,
-        salaryMin: role.salaryMin,
-        salaryMax: role.salaryMax,
-        salaryCurrency: role.salaryCurrency,
-        roleInstructions: role.roleInstructions,
-        metadata: role.metadata,
-      });
-
-  await db.insert(rolePodcasts).values({
-    id: podcastId,
-    roleId: role.id,
-    notebooklmSourceFilename,
-    status: "queued",
-  });
-
-  try {
-    const instance = await env.ROLE_ASSETS_WORKFLOW.create({
-      id: podcastId,
-      params: {
-        roleId: role.id,
-        podcastId,
-        scrapedMarkdown,
-        scrapedHtml,
-        manualMarkdown,
-      },
-    });
-    await db
-      .update(rolePodcasts)
-      .set({ workflowInstanceId: instance.id, updatedAt: new Date() })
-      .where(eq(rolePodcasts.id, podcastId));
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    await db
-      .update(rolePodcasts)
-      .set({
-        status: "failed",
-        stepErrors: [{ step: "workflow_create", message, at: new Date().toISOString() }],
-        updatedAt: new Date(),
-      })
-      .where(eq(rolePodcasts.id, podcastId));
-    console.error("Failed to start role assets workflow (non-fatal):", error);
-  }
-}
-
 const confirmBody = z.object({
   companyName: z.string(),
   jobTitle: z.string(),
@@ -567,8 +501,6 @@ intakeRouter.openapi(
       },
     });
 
-    await startRoleAssetsWorkflow(c.env, role, scrapedMarkdown, scrapedHtml);
-
     // Insert role bullets if provided
     if (incomingBullets && incomingBullets.length > 0) {
       const typeCounters: Record<string, number> = {};
@@ -656,8 +588,6 @@ intakeRouter.openapi(
             markdown,
           },
         });
-
-        await startRoleAssetsWorkflow(c.env, role, markdown, html);
 
         succeeded.push(role);
       } catch (error) {

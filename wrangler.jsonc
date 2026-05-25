@@ -30,15 +30,6 @@
   "ai": {
     "binding": "AI",
   },
-  "containers": [
-    {
-      "class_name": "Sandbox",
-      "image": "./Dockerfile",
-      "instance_type": "lite",
-      "max_instances": 1,
-    },
-  ],
-  "workflows": [],
   "durable_objects": {
     "bindings": [
       {
@@ -53,10 +44,6 @@
         "name": "GOOGLE_DOCS_AGENT",
         "class_name": "GoogleDocsAgent",
       },
-      {
-        "name": "Sandbox",
-        "class_name": "Sandbox",
-      },
     ],
   },
   "migrations": [
@@ -66,7 +53,6 @@
         "OrchestratorAgent",
         "NotebookLMAgent",
         "GoogleDocsAgent",
-        "Sandbox",
       ],
     },
   ],
@@ -74,15 +60,12 @@
     "PARENT_DRIVE_FOLDER_ID": "1jCokY9_gi3w3_qjdCX8MbnbtZrF9p52j",
     "HEALTH_CHECK_DRIVE_FOLDER_ID": "1Sc-uzcth6LfaaDvWsTI7tCcbzL1eTwym",
     "AI_GATEWAY_ID": "default-gateway",
-    "CAREER_NOTEBOOKLM_ID": "ae2a743f-231b-4b05-ab98-683d01dd5c65", //  https: //notebooklm.google.com/notebook/ae2a743f-231b-4b05-ab98-683d01dd5c65
+    "CAREER_NOTEBOOKLM_ID": "ae2a743f-231b-4b05-ab98-683d01dd5c65",
     "MODEL_CHAT": "@cf/openai/gpt-oss-120b",
     "MODEL_EXTRACT": "@cf/openai/gpt-oss-120b",
     "MODEL_DRAFT": "@cf/openai/gpt-oss-120b",
     "MODEL_TRANSCRIBE": "@cf/openai/whisper-large-v3-turbo",
     "DEFAULT_MODEL_EMBEDDING": "@cf/baai/bge-large-en-v1.5",
-    "ROLE_PODCAST_POLL_INTERVAL": "5 minutes",
-    "ROLE_PODCAST_MAX_POLLS": "36",
-    "ROLE_PODCAST_SOURCE_WAIT_SECS": "300",
   },
   "kv_namespaces": [
     {

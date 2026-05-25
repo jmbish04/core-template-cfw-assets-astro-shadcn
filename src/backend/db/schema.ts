@@ -18,6 +18,5 @@ export * from "./schemas/transcription-jobs";
 export * from "./schemas/transcription-chunks";
 export * from "./schemas/companies";
 export * from "./schemas/career-memory";
-export * from "./schemas/role-podcasts";
 export * from "./schemas/scoring-rubrics";
 export * from "./schemas/role-insights";

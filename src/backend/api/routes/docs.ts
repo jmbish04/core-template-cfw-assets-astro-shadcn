@@ -52,10 +52,6 @@ import {
   ROLE_INSIGHTS_TABLE_DESCRIPTION,
   ROLE_INSIGHTS_COLUMN_DESCRIPTIONS,
 } from "../../db/schemas/role-insights";
-import {
-  ROLE_PODCASTS_TABLE_DESCRIPTION,
-  ROLE_PODCASTS_COLUMN_DESCRIPTIONS,
-} from "../../db/schemas/role-podcasts";
 import { ROLES_TABLE_DESCRIPTION, ROLES_COLUMN_DESCRIPTIONS } from "../../db/schemas/roles";
 import {
   SCORING_RUBRICS_TABLE_DESCRIPTION,
@@ -140,10 +136,6 @@ const TABLE_DOCS: Record<string, TableDocEntry> = {
   role_bullet_analyses: {
     tableDescription: ROLE_BULLET_ANALYSES_TABLE_DESCRIPTION,
     columnDescriptions: ROLE_BULLET_ANALYSES_COLUMN_DESCRIPTIONS,
-  },
-  role_podcasts: {
-    tableDescription: ROLE_PODCASTS_TABLE_DESCRIPTION,
-    columnDescriptions: ROLE_PODCASTS_COLUMN_DESCRIPTIONS,
   },
   scoring_rubrics: {
     tableDescription: SCORING_RUBRICS_TABLE_DESCRIPTION,

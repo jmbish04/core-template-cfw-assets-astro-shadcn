@@ -2,7 +2,6 @@ import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 
 import { interviewRecordings } from "./interview-recordings";
-import { rolePodcasts } from "./role-podcasts";
 import { roles } from "./roles";
 
 // ---------------------------------------------------------------------------
@@ -17,9 +16,7 @@ export const TRANSCRIPTION_JOBS_TABLE_DESCRIPTION =
 export const TRANSCRIPTION_JOBS_COLUMN_DESCRIPTIONS: Record<string, string> = {
   id: "UUID primary key, generated at creation.",
   recording_id:
-    "Foreign key to the parent interview recording. Null when the job transcribes a NotebookLM role podcast.",
-  podcast_id:
-    "Foreign key to the parent role_podcasts row. Null when the job transcribes an interview recording.",
+    "Foreign key to the parent interview recording.",
   role_id: "Foreign key to the parent role. Cascades on delete.",
   status: "Job lifecycle: pending → chunking → transcribing → complete / error.",
   phase: "Human-readable phase label for UI display (e.g., 'Transcribing chunk 3/12').",
@@ -47,7 +44,6 @@ export const transcriptionJobs = sqliteTable(
     recordingId: text("recording_id").references(() => interviewRecordings.id, {
       onDelete: "cascade",
     }),
-    podcastId: text("podcast_id").references(() => rolePodcasts.id, { onDelete: "cascade" }),
     roleId: text("role_id")
       .notNull()
       .references(() => roles.id, { onDelete: "cascade" }),
@@ -73,7 +69,6 @@ export const transcriptionJobs = sqliteTable(
   },
   (table) => ({
     recordingIdx: index("transcription_jobs_recording_id_idx").on(table.recordingId),
-    podcastIdx: index("transcription_jobs_podcast_id_idx").on(table.podcastId),
     roleIdx: index("transcription_jobs_role_id_idx").on(table.roleId),
     statusIdx: index("transcription_jobs_status_idx").on(table.status),
   }),

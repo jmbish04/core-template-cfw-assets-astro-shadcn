@@ -26,8 +26,7 @@
     "deploy:preview": "pnpm run build && cp .assetsignore dist/.assetsignore && npx wrangler versions upload",
     "cf-typegen": "wrangler types",
     "deps:lockfile": "corepack pnpm install --no-frozen-lockfile && wrangler types",
-    "deps:update": "corepack pnpm update --latest && corepack pnpm install --no-frozen-lockfile && wrangler types",
-    "verify-sandbox": "node scripts/verify-sandbox-version.mjs"
+    "deps:update": "corepack pnpm update --latest && corepack pnpm install --no-frozen-lockfile && wrangler types"
   },
   "dependencies": {
     "@ai-sdk/react": "^3.0.176",
@@ -67,7 +66,6 @@
     "zod-to-json-schema": "^3.25.2"
   },
   "devDependencies": {
-    "@cloudflare/sandbox": "^0.9.2",
     "@types/node": "^24.12.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
