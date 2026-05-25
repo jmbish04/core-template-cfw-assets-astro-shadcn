@@ -11,9 +11,20 @@ import { app as honoApp } from "./backend/api/index";
 // Import Durable Object classes
 import { OrchestratorAgent } from "./backend/ai/agents/orchestrator";
 import { GoogleDocsAgent } from "./backend/ai/agents/google-docs";
+import { CodeModeAgent } from "./backend/ai/agents/CodeModeAgent";
+import { BrowserHitlAgent } from "./backend/ai/agents/BrowserHitlAgent";
+import { WorkflowsAgent } from "./backend/ai/agents/WorkflowsAgent";
+import { ArtifactAgent } from "./backend/ai/agents/ArtifactAgent";
 
 // Re-export Durable Object classes
-export { OrchestratorAgent, GoogleDocsAgent };
+export {
+  OrchestratorAgent,
+  GoogleDocsAgent,
+  CodeModeAgent,
+  BrowserHitlAgent,
+  WorkflowsAgent,
+  ArtifactAgent,
+};
 
 /**
  * Create exports function required by Astro Cloudflare adapter
@@ -48,6 +59,10 @@ export function createExports(manifest: any, _args: any) {
     // Export Durable Object classes
     OrchestratorAgent,
     GoogleDocsAgent,
+    CodeModeAgent,
+    BrowserHitlAgent,
+    WorkflowsAgent,
+    ArtifactAgent,
   };
 }
 

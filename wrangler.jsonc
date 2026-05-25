@@ -44,11 +44,23 @@
         "name": "GOOGLE_DOCS_AGENT",
         "class_name": "GoogleDocsAgent",
       },
+      {
+        "name": "BROWSER_HITL_AGENT",
+        "class_name": "BrowserHitlAgent",
+      },
+      {
+        "name": "WORKFLOWS_AGENT",
+        "class_name": "WorkflowsAgent",
+      },
+      {
+        "name": "ARTIFACT_AGENT",
+        "class_name": "ArtifactAgent",
+      },
     ],
   },
   "worker_loaders": [
     { "binding": "WORKER_LOADERS" }
-  ]
+  ],
   "migrations": [
     {
       "tag": "v1",
@@ -56,6 +68,9 @@
         "OrchestratorAgent",
         "CodeModeAgent",
         "GoogleDocsAgent",
+        "BrowserHitlAgent",
+        "WorkflowsAgent",
+        "ArtifactAgent",
       ],
     },
   ],
