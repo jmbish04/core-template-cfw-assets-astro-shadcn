@@ -37,8 +37,8 @@
         "class_name": "OrchestratorAgent",
       },
       {
-        "name": "NOTEBOOKLM_AGENT",
-        "class_name": "NotebookLMAgent",
+        "name": "CODE_MODE_AGENT",
+        "class_name": "CodeModeAgent",
       },
       {
         "name": "GOOGLE_DOCS_AGENT",
@@ -46,12 +46,15 @@
       },
     ],
   },
+  "worker_loaders": [
+    { "binding": "WORKER_LOADERS" }
+  ]
   "migrations": [
     {
       "tag": "v1",
       "new_sqlite_classes": [
         "OrchestratorAgent",
-        "NotebookLMAgent",
+        "CodeModeAgent",
         "GoogleDocsAgent",
       ],
     },
