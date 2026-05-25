@@ -17,19 +17,20 @@ export type SiteConfig = {
 };
 
 export const siteConfig: SiteConfig = {
-  name: "Astro shadcn/ui template",
-  description: "The template helps you build apps with Astro, Tailwind CSS, and shadcn/ui.",
-  url: "https://astro-shadcn-ui-template.vercel.app",
+  name: "New Project",
+  description:
+    "A Cloudflare Workers starter with Astro, shadcn/ui, session-based auth, and dynamic API documentation.",
+  url: "https://example.com",
   author: {
-    name: "AREA44",
-    url: "https://github.com/area44",
+    name: "Author",
+    url: "https://example.com",
   },
   links: {
-    github: "https://github.com/area44/astro-shadcn-ui-template",
+    github: "https://github.com",
   },
   navItems: [
-    { href: "https://astro.build", label: "Astro", external: true },
-    { href: "https://tailwindcss.com", label: "Tailwind CSS", external: true },
-    { href: "https://ui.shadcn.com", label: "shadcn/ui", external: true },
+    { href: "/openapi.json", label: "OpenAPI" },
+    { href: "/swagger", label: "Swagger" },
+    { href: "/scaler", label: "Scaler" },
   ],
 };

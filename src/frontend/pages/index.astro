@@ -1,12 +1,9 @@
 ---
-import { ComponentExample } from "@/components/ComponentExample";
 import BaseLayout from "@/layouts/BaseLayout.astro";
+import { TemplateLandingPage } from "@/components/TemplateLandingPage";
 import { siteConfig } from "@/lib/config";
 ---
 
-<BaseLayout
-  title={siteConfig.name}
-  description={siteConfig.description}
->
-  <ComponentExample client:load />
+<BaseLayout title={siteConfig.name} description={siteConfig.description}>
+  <TemplateLandingPage currentPath={Astro.url.pathname} client:load />
 </BaseLayout>
