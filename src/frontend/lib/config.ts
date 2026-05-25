@@ -17,9 +17,9 @@ export type SiteConfig = {
 };
 
 export const siteConfig: SiteConfig = {
-  name: "New Project",
+  name: "Cloudflare Edge Showcase",
   description:
-    "A Cloudflare Workers starter with Astro, shadcn/ui, session-based auth, and dynamic API documentation.",
+    "Multi-page edge frontend showcase using Astro, React, Shadcn UI, and assistant-ui with Cloudflare Agents SDK",
   url: "https://example.com",
   author: {
     name: "Author",
@@ -29,6 +29,13 @@ export const siteConfig: SiteConfig = {
     github: "https://github.com",
   },
   navItems: [
+    { href: "/", label: "Overview" },
+    { href: "/playbook", label: "Playbook" },
+    { href: "/showcase/code-mode", label: "Code Mode" },
+    { href: "/showcase/browser-hitl", label: "Browser HITL" },
+    { href: "/showcase/multi-agent", label: "Multi-Agent" },
+    { href: "/showcase/workflows", label: "Workflows" },
+    { href: "/showcase/artifacts", label: "Artifacts" },
     { href: "/openapi.json", label: "OpenAPI" },
     { href: "/swagger", label: "Swagger" },
     { href: "/scaler", label: "Scaler" },
