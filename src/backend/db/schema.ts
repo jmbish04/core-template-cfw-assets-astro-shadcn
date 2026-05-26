@@ -20,3 +20,7 @@ export * from "./schemas/companies";
 export * from "./schemas/career-memory";
 export * from "./schemas/scoring-rubrics";
 export * from "./schemas/role-insights";
+
+export * from "./schemas/best-practices";
+export * from "./schemas/hitl-proposals";
+export * from "./schemas/mcp-logs";

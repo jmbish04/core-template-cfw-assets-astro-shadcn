@@ -6,6 +6,7 @@
  */
 
 import type { ExportedHandler } from "@cloudflare/workers-types";
+import { routeAgentRequest } from "agents";
 import { app as honoApp } from "./backend/api/index";
 
 // Import Durable Object classes
@@ -15,6 +16,7 @@ import { CodeModeAgent } from "./backend/ai/agents/CodeModeAgent";
 import { BrowserHitlAgent } from "./backend/ai/agents/BrowserHitlAgent";
 import { WorkflowsAgent } from "./backend/ai/agents/WorkflowsAgent";
 import { ArtifactAgent } from "./backend/ai/agents/ArtifactAgent";
+import { ChatBroker } from "./backend/ai/agents/ChatBroker";
 
 // Re-export Durable Object classes
 export {
@@ -24,6 +26,7 @@ export {
   BrowserHitlAgent,
   WorkflowsAgent,
   ArtifactAgent,
+  ChatBroker,
 };
 
 /**
@@ -36,6 +39,13 @@ export function createExports(manifest: any, _args: any) {
   const handler: ExportedHandler<Env> = {
     async fetch(request, env, ctx) {
       const url = new URL(request.url);
+
+      // Route agent WebSocket/HTTP connections via the Agents SDK router.
+      // Matches /agents/:agent-name/:instance-name.
+      if (url.pathname.startsWith("/agents/")) {
+        const agentResponse = await routeAgentRequest(request, env);
+        if (agentResponse) return agentResponse;
+      }
 
       // Route API and documentation endpoints to Hono
       if (
@@ -63,6 +73,7 @@ export function createExports(manifest: any, _args: any) {
     BrowserHitlAgent,
     WorkflowsAgent,
     ArtifactAgent,
+    ChatBroker,
   };
 }
 

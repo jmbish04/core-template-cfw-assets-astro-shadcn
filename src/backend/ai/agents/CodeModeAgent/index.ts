@@ -19,7 +19,7 @@
  * ```
  */
 
-import { AIChatAgent } from "agents";
+import { AIChatAgent } from "@cloudflare/ai-chat";
 import { generateText } from "ai";
 import { getProvider } from "@/backend/ai/providers";
 import { getModelRegistry } from "@/backend/ai/models";

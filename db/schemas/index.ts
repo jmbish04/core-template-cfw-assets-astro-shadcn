@@ -5,3 +5,8 @@ export * from "./ai/messages";
 export * from "./system/health-checks";
 export * from "./system/notifications";
 export * from "./content/documents";
+export * from "./system/best-practices";
+export * from "./system/hitl-proposals";
+export * from "./system/mcp-logs";
+export * from "./system/health-runs";
+export * from "./system/health-results";

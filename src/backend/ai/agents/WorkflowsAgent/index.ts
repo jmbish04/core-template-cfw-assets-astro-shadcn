@@ -22,7 +22,8 @@
  * ```
  */
 
-import { AIChatAgent, callable } from "agents";
+import { AIChatAgent } from "@cloudflare/ai-chat";
+import { callable } from "agents";
 import { generateText } from "ai";
 import { getProvider } from "@/backend/ai/providers";
 import { getModelRegistry } from "@/backend/ai/models";

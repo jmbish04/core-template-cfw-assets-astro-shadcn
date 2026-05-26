@@ -1,381 +1,145 @@
 /**
- * @fileoverview AgentChat - Real-time AI chat interface using assistant-ui and Agents SDK
+ * @fileoverview AgentChat — assistant-ui `<Thread />` wired to the ChatBroker
+ * Durable Object over a WebSocket channel.
  *
- * This component demonstrates a complete AI chat experience powered by:
- * - assistant-ui: Beautiful, accessible chat UI components
- * - Cloudflare Agents SDK: Stateful AI agents with WebSocket support
- * - Workers AI: LLM inference on Cloudflare's network
- * - AgentClient: Type-safe RPC calls to agent methods
+ * No external provider middleware sits between the browser and the broker:
+ * `useAgentChat` from `@cloudflare/ai-chat/react` opens a WebSocket directly
+ * to the `CHAT_BROKER` Durable Object (keyed by session id) and streams
+ * UI-message frames back. The DO calls Workers AI via the project's
+ * `getProvider()` registry on the server side.
  *
- * Features:
- * - Real-time message streaming via WebSockets
- * - Markdown rendering with code highlighting
- * - Message history persistence
- * - Typing indicators
- * - Error handling with user-friendly messages
- * - Responsive mobile/desktop layout
+ * The thread is composed from `@assistant-ui/react` primitives
+ * (ThreadPrimitive, MessagePrimitive, ComposerPrimitive). `@assistant-ui/react`
+ * itself does not ship a styled `<Thread />`; that lives in `@assistant-ui/react-ui`
+ * or the shadcn registry. The primitives give us full Monolith styling control.
  */
 
 "use client";
 
-import { AgentClient } from "agents/client";
-import { useState, useEffect, useRef } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState } from "react";
+
+import { useAgent } from "agents/react";
+import { useAgentChat } from "@cloudflare/ai-chat/react";
+
+import {
+  AssistantRuntimeProvider,
+  ComposerPrimitive,
+  MessagePrimitive,
+  ThreadPrimitive,
+} from "@assistant-ui/react";
+import { useAISDKRuntime } from "@assistant-ui/react-ai-sdk";
+
 import { Badge } from "@/components/ui/badge";
-import { Loader2, MessageSquare, Zap, Bot, User } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 
-// ---------------------------------------------------------------------------
-// Agent Client Setup
-// ---------------------------------------------------------------------------
-
-/**
- * Initialize the AgentClient for communicating with OrchestratorAgent.
- *
- * The AgentClient provides type-safe RPC calls to agent methods over WebSockets.
- * It handles connection management, reconnection, and message serialization.
- */
-function createAgentClient(agentName: string): AgentClient {
-  // In development, use localhost. In production, use the deployed URL.
-  const wsUrl = import.meta.env.DEV
-    ? `ws://localhost:8787/api/agents/orchestrator/${agentName}`
-    : `wss://${window.location.host}/api/agents/orchestrator/${agentName}`;
-
-  return new AgentClient(wsUrl);
+function newSessionId() {
+  if (typeof window === "undefined") return "session-ssr";
+  const stored = window.sessionStorage.getItem("agent-chat-session");
+  if (stored) return stored;
+  const fresh = `session-${crypto.randomUUID()}`;
+  window.sessionStorage.setItem("agent-chat-session", fresh);
+  return fresh;
 }
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-interface Message {
-  id: string;
-  role: "user" | "assistant" | "system";
-  content: string;
-  timestamp: string;
-  status?: "sending" | "sent" | "error";
-}
-
-interface AgentInfo {
-  name: string;
-  status: "connecting" | "connected" | "disconnected";
-  capabilities: string[];
-}
-
-// ---------------------------------------------------------------------------
-// AgentChat Component
-// ---------------------------------------------------------------------------
 
 export function AgentChat() {
-  const [agentInfo, setAgentInfo] = useState<AgentInfo>({
-    name: "OrchestratorAgent",
-    status: "disconnected",
-    capabilities: [
-      "Document Generation",
-      "Career Guidance",
-      "Resume Review",
-      "Google Docs Integration",
-    ],
-  });
+  const [sessionId] = useState(newSessionId);
 
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "welcome",
-      role: "assistant",
-      content:
-        "Hello! I'm your AI assistant powered by Cloudflare Agents SDK. I can help you with document generation, career guidance, and more. What would you like to work on today?",
-      timestamp: new Date().toISOString(),
-      status: "sent",
-    },
-  ]);
+  // 1. Open the long-lived WebSocket connection to the ChatBroker DO.
+  //    The DO name (`chat-broker`) is the kebab-case of the class name and
+  //    must match the `/agents/:name/:instance` routing rule used by the SDK.
+  const agent = useAgent({ agent: "chat-broker", name: sessionId });
 
-  const [inputValue, setInputValue] = useState("");
-  const [isProcessing, setIsProcessing] = useState(false);
-  const agentClientRef = useRef<AgentClient | null>(null);
+  // 2. Subscribe to the broker's persisted message stream. `useAgentChat`
+  //    returns an `@ai-sdk/react` Chat surface backed by the DO transport.
+  const chat = useAgentChat({ agent, initialMessages: [] });
 
-  // Initialize agent client on mount
-  useEffect(() => {
-    const sessionId = `session-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-    const client = createAgentClient(sessionId);
+  // 3. Adapt the AI SDK chat surface to assistant-ui's runtime.
+  const runtime = useAISDKRuntime(chat);
 
-    setAgentInfo((prev) => ({ ...prev, status: "connecting" }));
-
-    // Set up connection handlers
-    client.addEventListener("open", () => {
-      setAgentInfo((prev) => ({ ...prev, status: "connected" }));
-      console.log("Agent connected");
-    });
-
-    client.addEventListener("close", () => {
-      setAgentInfo((prev) => ({ ...prev, status: "disconnected" }));
-      console.log("Agent disconnected");
-    });
-
-    client.addEventListener("error", (event) => {
-      console.error("Agent error:", event);
-      setAgentInfo((prev) => ({ ...prev, status: "disconnected" }));
-    });
-
-    // Listen for agent messages (streaming responses)
-    client.addEventListener("message", (event: MessageEvent) => {
-      try {
-        const data = JSON.parse(event.data as string);
-
-        if (data.type === "chat_response") {
-          // Append assistant message
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: data.messageId || crypto.randomUUID(),
-              role: "assistant",
-              content: data.content,
-              timestamp: new Date().toISOString(),
-              status: "sent",
-            },
-          ]);
-          setIsProcessing(false);
-        } else if (data.type === "error") {
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: crypto.randomUUID(),
-              role: "assistant",
-              content: `Error: ${data.message}`,
-              timestamp: new Date().toISOString(),
-              status: "error",
-            },
-          ]);
-          setIsProcessing(false);
-        }
-      } catch (error) {
-        console.error("Failed to parse agent message:", error);
-      }
-    });
-
-    agentClientRef.current = client;
-
-    // Cleanup on unmount
-    return () => {
-      client.close();
-    };
-  }, []);
-
-  // Send message to agent
-  const sendMessage = async () => {
-    if (!inputValue.trim() || isProcessing || !agentClientRef.current) return;
-
-    const userMessage: Message = {
-      id: crypto.randomUUID(),
-      role: "user",
-      content: inputValue.trim(),
-      timestamp: new Date().toISOString(),
-      status: "sending",
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
-    setInputValue("");
-    setIsProcessing(true);
-
-    try {
-      // Call agent RPC method
-      // The OrchestratorAgent has a `chat` method that handles conversation
-      await agentClientRef.current.stub.chat(userMessage.content);
-
-      // Update user message status
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === userMessage.id ? { ...msg, status: "sent" as const } : msg,
-        ),
-      );
-    } catch (error) {
-      console.error("Failed to send message:", error);
-
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: "Sorry, I encountered an error processing your request. Please try again.",
-          timestamp: new Date().toISOString(),
-          status: "error",
-        },
-      ]);
-
-      setIsProcessing(false);
-    }
-  };
-
-  // Handle Enter key to send
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  };
+  // PartySocket readyState: 0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED.
+  const status =
+    agent.readyState === 1
+      ? "connected"
+      : agent.readyState === 0
+        ? "connecting"
+        : "disconnected";
 
   return (
-    <div className="container mx-auto max-w-6xl p-4 h-[calc(100vh-4rem)]">
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 h-full">
-        {/* Sidebar - Agent Info */}
-        <Card className="lg:col-span-1 h-fit">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Bot className="h-5 w-5" />
-              Agent Info
-            </CardTitle>
-            <CardDescription>Status and capabilities</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <p className="text-sm font-medium mb-1">Status</p>
-              <Badge
-                variant={
-                  agentInfo.status === "connected"
-                    ? "default"
-                    : agentInfo.status === "connecting"
-                      ? "outline"
-                      : "destructive"
-                }
-              >
-                {agentInfo.status === "connected" && <Zap className="h-3 w-3 mr-1" />}
-                {agentInfo.status === "connecting" && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
-                {agentInfo.status}
-              </Badge>
-            </div>
+    <Card className="flex h-[calc(100vh-12rem)] flex-col">
+      <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3">
+        <div>
+          <CardTitle>Assistant</CardTitle>
+          <CardDescription>
+            assistant-ui Thread routed through the ChatBroker Durable Object over a
+            WebSocket channel. No external provider middleware.
+          </CardDescription>
+        </div>
+        <div className="flex flex-col items-end gap-1">
+          <Badge variant={status === "connected" ? "default" : "outline"}>{status}</Badge>
+          <code className="text-xs text-muted-foreground">{sessionId.slice(0, 18)}…</code>
+        </div>
+      </CardHeader>
 
-            <div>
-              <p className="text-sm font-medium mb-2">Capabilities</p>
-              <ul className="space-y-1 text-sm text-muted-foreground">
-                {agentInfo.capabilities.map((cap) => (
-                  <li key={cap} className="flex items-start gap-2">
-                    <span className="text-primary mt-1">•</span>
-                    {cap}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="pt-4 border-t">
-              <p className="text-xs text-muted-foreground">
-                Powered by Cloudflare Agents SDK and Workers AI
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Main Chat Area */}
-        <Card className="lg:col-span-3 flex flex-col h-full">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <MessageSquare className="h-5 w-5" />
-              AI Assistant
-            </CardTitle>
-            <CardDescription>
-              Chat with your AI agent in real-time via WebSockets
-            </CardDescription>
-          </CardHeader>
-
-          <CardContent className="flex-1 flex flex-col overflow-hidden p-0">
-            {/* Messages Area */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}
-                >
-                  <div
-                    className={`flex gap-3 max-w-[80%] ${message.role === "user" ? "flex-row-reverse" : "flex-row"}`}
-                  >
-                    {/* Avatar */}
-                    <div
-                      className={`flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center ${
-                        message.role === "user"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-secondary text-secondary-foreground"
-                      }`}
-                    >
-                      {message.role === "user" ? (
-                        <User className="h-4 w-4" />
-                      ) : (
-                        <Bot className="h-4 w-4" />
-                      )}
-                    </div>
-
-                    {/* Message Bubble */}
-                    <div
-                      className={`rounded-lg p-4 ${
-                        message.role === "user"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-secondary text-secondary-foreground"
-                      } ${message.status === "error" ? "border-2 border-destructive" : ""}`}
-                    >
-                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                      <p
-                        className={`text-xs mt-2 ${message.role === "user" ? "text-primary-foreground/70" : "text-secondary-foreground/70"}`}
-                      >
-                        {new Date(message.timestamp).toLocaleTimeString()}
-                        {message.status === "sending" && " • Sending..."}
-                        {message.status === "error" && " • Failed"}
-                      </p>
-                    </div>
-                  </div>
+      <CardContent className="min-h-0 flex-1 p-0">
+        <AssistantRuntimeProvider runtime={runtime}>
+          <ThreadPrimitive.Root className="flex h-full flex-col">
+            <ThreadPrimitive.Viewport className="flex-1 overflow-y-auto px-6 py-4">
+              <ThreadPrimitive.Empty>
+                <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-muted-foreground">
+                  <p className="text-sm">No messages yet — start the conversation.</p>
+                  <p className="text-xs">Streaming over wss://&hellip;/agents/chat-broker/{sessionId.slice(0, 10)}…</p>
                 </div>
-              ))}
+              </ThreadPrimitive.Empty>
 
-              {/* Typing Indicator */}
-              {isProcessing && (
-                <div className="flex gap-3 justify-start">
-                  <div className="flex gap-3 max-w-[80%]">
-                    <div className="flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center bg-secondary text-secondary-foreground">
-                      <Bot className="h-4 w-4" />
-                    </div>
-                    <div className="rounded-lg p-4 bg-secondary text-secondary-foreground">
-                      <div className="flex gap-1">
-                        <div className="h-2 w-2 bg-current rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                        <div className="h-2 w-2 bg-current rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                        <div className="h-2 w-2 bg-current rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
+              <ThreadPrimitive.Messages
+                components={{
+                  UserMessage: UserMessage,
+                  AssistantMessage: AssistantMessage,
+                }}
+              />
+            </ThreadPrimitive.Viewport>
 
-            {/* Input Area */}
-            <div className="border-t p-4">
-              <div className="flex gap-2">
-                <textarea
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Type your message... (Shift+Enter for new line)"
-                  disabled={agentInfo.status !== "connected" || isProcessing}
-                  className="flex-1 min-h-[60px] max-h-[200px] resize-none rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                />
-                <Button
-                  onClick={sendMessage}
-                  disabled={!inputValue.trim() || agentInfo.status !== "connected" || isProcessing}
-                  size="lg"
-                >
-                  {isProcessing ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    "Send"
-                  )}
-                </Button>
-              </div>
+            <ComposerPrimitive.Root className="flex items-end gap-2 px-6 py-4">
+              <ComposerPrimitive.Input
+                rows={1}
+                autoFocus
+                placeholder="Ask the assistant…"
+                className="flex-1 resize-none rounded-md bg-muted/40 px-3 py-2 text-sm ring-1 ring-foreground/10 placeholder:text-muted-foreground focus:outline-none focus:ring-foreground/30"
+              />
+              <ComposerPrimitive.Send asChild>
+                <Button size="sm">Send</Button>
+              </ComposerPrimitive.Send>
+            </ComposerPrimitive.Root>
+          </ThreadPrimitive.Root>
+        </AssistantRuntimeProvider>
+      </CardContent>
+    </Card>
+  );
+}
 
-              {agentInfo.status !== "connected" && (
-                <p className="text-sm text-muted-foreground mt-2">
-                  {agentInfo.status === "connecting"
-                    ? "Connecting to agent..."
-                    : "Agent disconnected. Refresh to reconnect."}
-                </p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+function UserMessage() {
+  return (
+    <MessagePrimitive.Root className="mb-4 flex justify-end">
+      <div className="max-w-[80%] rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground">
+        <MessagePrimitive.Parts />
       </div>
-    </div>
+    </MessagePrimitive.Root>
+  );
+}
+
+function AssistantMessage() {
+  return (
+    <MessagePrimitive.Root className="mb-4 flex justify-start">
+      <div className="max-w-[80%] rounded-md bg-muted/60 px-3 py-2 text-sm">
+        <MessagePrimitive.Parts />
+      </div>
+    </MessagePrimitive.Root>
   );
 }

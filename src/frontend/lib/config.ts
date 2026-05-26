@@ -30,6 +30,7 @@ export const siteConfig: SiteConfig = {
   },
   navItems: [
     { href: "/", label: "Overview" },
+    { href: "/dashboard", label: "Dashboard" },
     { href: "/playbook", label: "Playbook" },
     { href: "/showcase/code-mode", label: "Code Mode" },
     { href: "/showcase/browser-hitl", label: "Browser HITL" },

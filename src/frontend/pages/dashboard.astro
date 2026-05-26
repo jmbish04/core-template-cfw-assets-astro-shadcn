@@ -1,0 +1,35 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { ConfigSpaceManager } from "@/components/ConfigSpaceManager";
+import { DiagnosticsPanel } from "@/components/DiagnosticsPanel";
+import { AgentChat } from "@/components/AgentChat";
+---
+
+<BaseLayout
+  title="Operator Dashboard"
+  description="Configure agent runtimes, watch system health, and converse with the ChatBroker over the WebSocket DO transport."
+>
+  <main class="container mx-auto flex max-w-7xl flex-col gap-8 px-4 py-12">
+    <header class="flex flex-col gap-2">
+      <div class="flex items-center gap-3">
+        <span class="text-4xl">🧭</span>
+        <h1 class="text-3xl font-semibold tracking-tight">Operator Dashboard</h1>
+      </div>
+      <p class="max-w-3xl text-base text-muted-foreground">
+        Editorial control surface for the agent stack: per-agent runtime
+        configuration, live diagnostics across every Durable Object binding,
+        and a state-persistent chat broker wired through a direct WebSocket
+        channel to the ChatBroker DO.
+      </p>
+    </header>
+
+    <section class="grid gap-6 lg:grid-cols-2">
+      <ConfigSpaceManager client:load />
+      <DiagnosticsPanel client:load />
+    </section>
+
+    <section>
+      <AgentChat client:load />
+    </section>
+  </main>
+</BaseLayout>

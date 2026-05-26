@@ -86,6 +86,24 @@ app.onError(errorHandler);
 /** Lightweight liveness probe — returns `{ status: "ok", timestamp }`. */
 app.get("/api/ping", (c) => c.json({ status: "ok", timestamp: Date.now() }));
 
+/**
+ * Public OpenAPI documentation aliases under `/api/*`.
+ *
+ * These mirror the root-mounted `/openapi.json`, `/swagger`, `/scalar`
+ * endpoints so external consumers that expect the docs to live under the
+ * API prefix can discover them. Registered before the auth middleware so
+ * they remain publicly reachable.
+ */
+app.doc("/api/openapi.json", {
+  openapi: "3.1.0",
+  info: {
+    title: "Career Orchestrator",
+    version: "1.0.0",
+  },
+});
+app.get("/api/scalar", apiReference({ url: "/api/openapi.json" }));
+app.get("/api/swagger", swaggerUI({ url: "/api/openapi.json" }));
+
 // ---------------------------------------------------------------------------
 // Auth middleware (applied to all /api/* routes except /api/auth/login)
 // ---------------------------------------------------------------------------
