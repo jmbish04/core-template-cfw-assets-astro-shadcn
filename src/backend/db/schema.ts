@@ -24,3 +24,8 @@ export * from "./schemas/role-insights";
 export * from "./schemas/best-practices";
 export * from "./schemas/hitl-proposals";
 export * from "./schemas/mcp-logs";
+
+export * from "./schemas/sessions";
+export * from "./schemas/dashboard-metrics";
+export * from "./schemas/notifications";
+export * from "./schemas/health-checks";

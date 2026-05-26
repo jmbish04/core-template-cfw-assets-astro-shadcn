@@ -15,9 +15,9 @@
       "@/backend/logging/*": ["src/backend/logging/*"],
       "@/backend/modules/*": ["src/backend/modules/*"],
       "@/services/*": ["src/backend/services/*"],
-      "@db/schemas": ["db/schemas"],
-      "@/db/schema": ["db/schemas"],
-      "@/backend/db/schema": ["db/schemas"]
+      "@db/schemas": ["src/backend/db/schema"],
+      "@/db/schema": ["src/backend/db/schema"],
+      "@/backend/db/schema": ["src/backend/db/schema"]
     }
   },
   "include": [".astro/types.d.ts", "src/**/*", "worker-configuration.d.ts"]
