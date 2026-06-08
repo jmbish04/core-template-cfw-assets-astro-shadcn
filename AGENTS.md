@@ -35,3 +35,39 @@ This repository relies heavily on AI agents for rapid prototyping and feature ge
 14. **Import Path Aliases:** ALWAYS use tsconfig path aliases (`@/backend/*`, `@/backend/db/*`, `@/backend/ai/*`, etc.) for all backend imports. Never use relative imports (`../../foo`). Run `node scripts/migrate-imports.mjs` to convert existing relative imports. See `.agent/rules/import-paths.md` for details.
 15. **Comprehensive Documentation:** Every backend TypeScript file must have a file-level JSDoc comment explaining its purpose, key features, and usage. Every exported function/class must have JSDoc with `@param`, `@returns`, `@throws`, and `@example` tags where applicable. See `.agent/rules/docstrings.md` for standards.
 16. **Agent Meta-Maintenance:** Update `AGENTS.md` and `.agent/rules` files when you add/modify features that future agents should know about. Keep rules concise (<12,000 chars per file), avoid duplication, and resolve conflicts. See `.agent/rules/meta-maintenance.md` for guidelines.
+
+## Template App Surface (reference implementation)
+
+This template ships a real, running app so new projects inherit working patterns
+(extend or delete the pieces you don't need). All of it is wired to D1 via Hono;
+no mock data.
+
+- **Pages** (Astro SSR + React islands, Monolith dark theme):
+  - `/dashboard` — admin dashboard: KPI stat cards, a Workers-AI insights panel,
+    and the full recharts suite (area / donut / bar / horizontal-bar / throughput)
+    with search + range + status filters. Components under `components/dashboard/`.
+  - `/projects`, `/tasks/board` (kanban), `/tasks` (filterable table), `/tasks/[id]`
+    (detail + progress), `/notes`, `/analytics`. Components under `components/tasks/`.
+  - `/settings/{preferences,notifications,webhooks,activity,advanced}` (shared
+    sub-nav) and `/notifications` (realtime). Components under `components/settings/`.
+- **Schemas** live in `db/schemas/{projects,tasks,stats,settings,notifications}/`
+  (drizzle-zod + `*_TABLE_DESCRIPTION`/`*_COLUMN_DESCRIPTIONS` for `/docs`).
+- **APIs**: `/api/{projects,tasks,team-notes,settings,webhooks,activity,
+  notifications,dashboard}` — CRUD + `?q=` search + filters + pagination. The
+  dashboard exposes `/stats`, `/charts`, `/insights` (Workers AI via
+  `ai/providers/ai-sdk.ts#getChatModel`).
+- **Realtime**: the `NotificationsAgent` Durable Object (`NOTIFICATIONS_AGENT`,
+  instance `"global"`) syncs notification state over WebSocket. The client island
+  is `components/NotificationsFeed.tsx` (`useAgent` + `onStateUpdate`); REST
+  mutations proxy to it via `getAgentByName` (never `stub.fetch`).
+- **Shared frontend helpers**: `lib/api.ts` (`apiGet`/`apiSend`/`ApiError`) and
+  `lib/format.ts` (`relativeTime`/`shortDate`/`compactNumber`). Charts use the
+  shadcn `ui/chart.tsx` wrapper + the OKLCH `--chart-1..5` palette in `global.css`.
+- **Seed demo data**: `POST /api/seed` (idempotent). Locally:
+  `pnpm run migrate:local` then `curl -X POST http://localhost:8787/api/seed`.
+- **SSR note**: `src/_worker.ts` exports `start(manifest)` + `createExports()`;
+  page requests are rendered via `@astrojs/cloudflare/handler#handle`. Do NOT
+  revert this to a bare `env.ASSETS.fetch()` fallback — that 404s every SSR page.
+- **Auth**: signed session cookie only (no `users`/`sessions` table). Auth gates
+  `/api/admin/*`; the feature APIs are intentionally open so the template runs
+  out of the box. Tighten before production.
