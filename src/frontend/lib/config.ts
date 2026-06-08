@@ -1,3 +1,14 @@
+export type NavItem = {
+  href: string;
+  label: string;
+  external?: boolean;
+};
+
+export type NavGroup = {
+  label: string;
+  items: NavItem[];
+};
+
 export type SiteConfig = {
   name: string;
   description: string;
@@ -9,11 +20,10 @@ export type SiteConfig = {
   links: {
     github: string;
   };
-  navItems: {
-    href: string;
-    label: string;
-    external?: boolean;
-  }[];
+  /** Primary top-level links shown directly in the navbar. */
+  navItems: NavItem[];
+  /** Grouped destinations rendered as dropdown menus (desktop) / sections (mobile). */
+  navGroups: NavGroup[];
 };
 
 export const siteConfig: SiteConfig = {
@@ -31,14 +41,39 @@ export const siteConfig: SiteConfig = {
   navItems: [
     { href: "/", label: "Overview" },
     { href: "/dashboard", label: "Dashboard" },
-    { href: "/playbook", label: "Playbook" },
-    { href: "/showcase/code-mode", label: "Code Mode" },
-    { href: "/showcase/browser-hitl", label: "Browser HITL" },
-    { href: "/showcase/multi-agent", label: "Multi-Agent" },
-    { href: "/showcase/workflows", label: "Workflows" },
-    { href: "/showcase/artifacts", label: "Artifacts" },
-    { href: "/openapi.json", label: "OpenAPI" },
-    { href: "/swagger", label: "Swagger" },
-    { href: "/scaler", label: "Scaler" },
+  ],
+  navGroups: [
+    {
+      label: "Workspace",
+      items: [
+        { href: "/projects", label: "Projects" },
+        { href: "/tasks/board", label: "Task Board" },
+        { href: "/tasks", label: "Tasks" },
+        { href: "/notes", label: "Notes" },
+        { href: "/analytics", label: "Analytics" },
+      ],
+    },
+    {
+      label: "Agents",
+      items: [
+        { href: "/chat", label: "Chat" },
+        { href: "/showcase/code-mode", label: "Code Mode" },
+        { href: "/showcase/browser-hitl", label: "Browser HITL" },
+        { href: "/showcase/multi-agent", label: "Multi-Agent" },
+        { href: "/showcase/workflows", label: "Workflows" },
+        { href: "/showcase/artifacts", label: "Artifacts" },
+      ],
+    },
+    {
+      label: "System",
+      items: [
+        { href: "/notifications", label: "Notifications" },
+        { href: "/settings", label: "Settings" },
+        { href: "/playbook", label: "Playbook" },
+        { href: "/openapi.json", label: "OpenAPI" },
+        { href: "/swagger", label: "Swagger" },
+        { href: "/scalar", label: "Scalar" },
+      ],
+    },
   ],
 };

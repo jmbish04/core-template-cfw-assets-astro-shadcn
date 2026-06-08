@@ -46,29 +46,43 @@ export function MobileNav({ className }: { className?: string }) {
         alignOffset={-16}
         sideOffset={12}
       >
-        <div className="flex flex-col gap-12 overflow-auto px-6 py-6">
-          <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-8 overflow-auto px-6 py-6">
+          <div className="flex flex-col gap-3">
             <div className="text-sm font-medium text-muted-foreground">Menu</div>
-
-            <div className="flex flex-col gap-3">
-              <a href="/" className="text-2xl font-medium" onClick={() => setOpen(false)}>
-                Home
+            <a href="/" className="text-2xl font-medium" onClick={() => setOpen(false)}>
+              Home
+            </a>
+            {siteConfig.navItems.map((item) => (
+              <a
+                key={item.href}
+                href={item.href}
+                target={item.external ? "_blank" : undefined}
+                rel={item.external ? "noopener noreferrer" : undefined}
+                onClick={() => setOpen(false)}
+                className="text-2xl font-medium"
+              >
+                {item.label}
               </a>
+            ))}
+          </div>
 
-              {siteConfig.navItems.map((item) => (
+          {siteConfig.navGroups.map((group) => (
+            <div key={group.label} className="flex flex-col gap-3">
+              <div className="text-sm font-medium text-muted-foreground">{group.label}</div>
+              {group.items.map((item) => (
                 <a
                   key={item.href}
                   href={item.href}
                   target={item.external ? "_blank" : undefined}
                   rel={item.external ? "noopener noreferrer" : undefined}
                   onClick={() => setOpen(false)}
-                  className="text-2xl font-medium"
+                  className="text-xl font-medium"
                 >
                   {item.label}
                 </a>
               ))}
             </div>
-          </div>
+          ))}
         </div>
       </PopoverContent>
     </Popover>
