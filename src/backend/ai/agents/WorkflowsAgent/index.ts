@@ -24,9 +24,8 @@
 
 import { AIChatAgent } from "@cloudflare/ai-chat";
 import { callable } from "agents";
-import { generateText } from "ai";
-import { getProvider } from "@/backend/ai/providers";
-import { getModelRegistry } from "@/backend/ai/models";
+import { convertToModelMessages, stepCountIs, streamText, tool, type UIMessage } from "ai";
+import { getChatModel } from "@/backend/ai/providers/ai-sdk";
 import type {
   WorkflowState,
   TranscribeAudioParams,
@@ -54,13 +53,10 @@ export class WorkflowsAgent extends AIChatAgent<Env> {
    *
    * @returns AI SDK message stream response
    */
-  async onChatMessage() {
-    const provider = getProvider(this.env);
-    const model = getModelRegistry(this.env).chat;
-
-    const result = await generateText({
-      model: provider(model),
-      messages: this.messages,
+  async onChatMessage(onFinish: Parameters<AIChatAgent<Env>["onChatMessage"]>[0]) {
+    const result = streamText({
+      model: getChatModel(this.env),
+      messages: await convertToModelMessages(this.messages as UIMessage[]),
       system: `You are a workflow orchestration agent that can execute long-running tasks.
 
 You can:
@@ -73,28 +69,30 @@ For long-running tasks:
 - Progress updates are streamed automatically
 - Workflows survive failures and resume automatically`,
       tools: {
-        transcribeAudio: {
+        transcribeAudio: tool({
           description:
             "Start an audio transcription workflow using Whisper. Returns workflow ID and streams progress updates.",
-          parameters: transcribeAudioSchema,
+          inputSchema: transcribeAudioSchema,
           execute: async (params: TranscribeAudioParams) => {
             return await this.startTranscriptionWorkflow(params);
           },
-        },
-        processData: {
+        }),
+        processData: tool({
           description:
             "Start a data processing workflow. Returns workflow ID and streams progress updates.",
-          parameters: processDataSchema,
+          inputSchema: processDataSchema,
           execute: async (params: ProcessDataParams) => {
             return await this.startDataProcessingWorkflow(params);
           },
-        },
+        }),
       },
+      stopWhen: stepCountIs(8),
       temperature: 0.2,
-      maxTokens: 2048,
+      maxOutputTokens: 2048,
+      onFinish,
     });
 
-    return result.toDataStreamResponse();
+    return result.toUIMessageStreamResponse();
   }
 
   /**
@@ -284,7 +282,7 @@ For long-running tasks:
    * Get status of a workflow by ID.
    */
   @callable()
-  async getWorkflowStatus(workflowId: string): Promise<WorkflowState | null> {
+  async getWorkflowProgress(workflowId: string): Promise<WorkflowState | null> {
     return this.activeWorkflows.get(workflowId) || null;
   }
 

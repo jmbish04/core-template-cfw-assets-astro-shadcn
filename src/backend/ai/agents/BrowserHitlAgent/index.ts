@@ -22,9 +22,8 @@
  */
 
 import { AIChatAgent } from "@cloudflare/ai-chat";
-import { generateText } from "ai";
-import { getProvider } from "@/backend/ai/providers";
-import { getModelRegistry } from "@/backend/ai/models";
+import { convertToModelMessages, stepCountIs, streamText, tool, type UIMessage } from "ai";
+import { getChatModel } from "@/backend/ai/providers/ai-sdk";
 import type {
   BrowserActionResult,
   BrowserAgentState,
@@ -62,13 +61,10 @@ export class BrowserHitlAgent extends AIChatAgent<Env> {
    *
    * @returns AI SDK message stream response
    */
-  async onChatMessage() {
-    const provider = getProvider(this.env);
-    const model = getModelRegistry(this.env).chat;
-
-    const result = await generateText({
-      model: provider(model),
-      messages: this.messages,
+  async onChatMessage(onFinish: Parameters<AIChatAgent<Env>["onChatMessage"]>[0]) {
+    const result = streamText({
+      model: getChatModel(this.env),
+      messages: await convertToModelMessages(this.messages as UIMessage[]),
       system: `You are a browser automation agent with human oversight.
 
 You can:
@@ -85,37 +81,39 @@ Always use tools marked with needsApproval.
 
 Be cautious and transparent about what actions you're taking.`,
       tools: {
-        takeScreenshot: {
+        takeScreenshot: tool({
           description: "Capture a screenshot of the current page or a specific URL",
-          parameters: takeScreenshotSchema,
+          inputSchema: takeScreenshotSchema,
           execute: async (params: TakeScreenshotParams) => {
             return await this.captureScreenshot(params);
           },
-        },
-        fillSecureForm: {
+        }),
+        fillSecureForm: tool({
           description:
             "Fill a form with sensitive data. ALWAYS requires human approval before execution.",
-          parameters: fillSecureFormSchema,
-          needsApproval: true, // Triggers HITL UI
+          inputSchema: fillSecureFormSchema,
+          needsApproval: true, // Triggers HITL approval UI
           execute: async (params: FillSecureFormParams) => {
             return await this.fillForm(params);
           },
-        },
-        clickElement: {
+        }),
+        clickElement: tool({
           description:
             "Click an element on the page. Requires human approval for safety.",
-          parameters: clickElementSchema,
-          needsApproval: true, // Triggers HITL UI
+          inputSchema: clickElementSchema,
+          needsApproval: true, // Triggers HITL approval UI
           execute: async (params: ClickElementParams) => {
             return await this.clickElement(params);
           },
-        },
+        }),
       },
+      stopWhen: stepCountIs(8),
       temperature: 0.1, // Low temperature for predictable automation
-      maxTokens: 2048,
+      maxOutputTokens: 2048,
+      onFinish,
     });
 
-    return result.toDataStreamResponse();
+    return result.toUIMessageStreamResponse();
   }
 
   /**

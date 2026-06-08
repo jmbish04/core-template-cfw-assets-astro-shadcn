@@ -16,7 +16,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useState, type ComponentProps } from "react";
 
 import { useAgent } from "agents/react";
 import { useAgentChat } from "@cloudflare/ai-chat/react";
@@ -58,10 +58,18 @@ export function AgentChat() {
 
   // 2. Subscribe to the broker's persisted message stream. `useAgentChat`
   //    returns an `@ai-sdk/react` Chat surface backed by the DO transport.
-  const chat = useAgentChat({ agent, initialMessages: [] });
+  //    History is rehydrated server-side from the DO's SQLite store via the
+  //    SDK's `/get-messages` endpoint — no `initialMessages` needed here.
+  const chat = useAgentChat({ agent });
 
   // 3. Adapt the AI SDK chat surface to assistant-ui's runtime.
+  //    `useAgentChat`'s return type is a structural extension of `useChat`, so
+  //    `useAISDKRuntime` consumes it directly. The cast on the resulting runtime
+  //    bridges a benign `@assistant-ui/react` vs `@assistant-ui/react-ai-sdk`
+  //    version-skew in the `AssistantRuntime` type — verified to converge at
+  //    runtime. See the assistant-ui Cloudflare Agents integration guide.
   const runtime = useAISDKRuntime(chat);
+  type RuntimeProp = ComponentProps<typeof AssistantRuntimeProvider>["runtime"];
 
   // PartySocket readyState: 0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED.
   const status =
@@ -88,7 +96,7 @@ export function AgentChat() {
       </CardHeader>
 
       <CardContent className="min-h-0 flex-1 p-0">
-        <AssistantRuntimeProvider runtime={runtime}>
+        <AssistantRuntimeProvider runtime={runtime as unknown as RuntimeProp}>
           <ThreadPrimitive.Root className="flex h-full flex-col">
             <ThreadPrimitive.Viewport className="flex-1 overflow-y-auto px-6 py-4">
               <ThreadPrimitive.Empty>

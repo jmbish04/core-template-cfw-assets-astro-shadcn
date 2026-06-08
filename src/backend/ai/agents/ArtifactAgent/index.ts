@@ -26,9 +26,8 @@
 
 import { AIChatAgent } from "@cloudflare/ai-chat";
 import { callable } from "agents";
-import { generateText } from "ai";
-import { getProvider } from "@/backend/ai/providers";
-import { getModelRegistry } from "@/backend/ai/models";
+import { convertToModelMessages, stepCountIs, streamText, tool, type UIMessage } from "ai";
+import { getChatModel } from "@/backend/ai/providers/ai-sdk";
 import type {
   CommitInfo,
   FileDiff,
@@ -68,13 +67,10 @@ export class ArtifactAgent extends AIChatAgent<Env> {
    *
    * @returns AI SDK message stream response
    */
-  async onChatMessage() {
-    const provider = getProvider(this.env);
-    const model = getModelRegistry(this.env).chat;
-
-    const result = await generateText({
-      model: provider(model),
-      messages: this.messages,
+  async onChatMessage(onFinish: Parameters<AIChatAgent<Env>["onChatMessage"]>[0]) {
+    const result = streamText({
+      model: getChatModel(this.env),
+      messages: await convertToModelMessages(this.messages as UIMessage[]),
       system: `You are a code versioning agent that can manage files in Git-native storage.
 
 You can:
@@ -86,41 +82,43 @@ You can:
 
 All changes are tracked with full Git history. Use descriptive commit messages.`,
       tools: {
-        writeFile: {
+        writeFile: tool({
           description:
             "Write or update a file in the repository with a Git commit. Creates full version history.",
-          parameters: writeFileSchema,
+          inputSchema: writeFileSchema,
           execute: async (params: WriteFileParams) => {
             return await this.writeFile(params);
           },
-        },
-        readFile: {
+        }),
+        readFile: tool({
           description: "Read a file from the repository. Can read from specific commits.",
-          parameters: readFileSchema,
+          inputSchema: readFileSchema,
           execute: async (params: ReadFileParams) => {
             return await this.readFile(params);
           },
-        },
-        getHistory: {
+        }),
+        getHistory: tool({
           description: "Get the commit history for a file, showing all changes over time.",
-          parameters: getHistorySchema,
+          inputSchema: getHistorySchema,
           execute: async (params: GetHistoryParams) => {
             return await this.getFileHistory(params);
           },
-        },
-        revertFile: {
+        }),
+        revertFile: tool({
           description: "Revert a file to a previous version by commit hash.",
-          parameters: revertSchema,
+          inputSchema: revertSchema,
           execute: async (params: RevertParams) => {
             return await this.revertFile(params);
           },
-        },
+        }),
       },
+      stopWhen: stepCountIs(8),
       temperature: 0.2,
-      maxTokens: 4096,
+      maxOutputTokens: 4096,
+      onFinish,
     });
 
-    return result.toDataStreamResponse();
+    return result.toUIMessageStreamResponse();
   }
 
   /**

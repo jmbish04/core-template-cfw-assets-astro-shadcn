@@ -20,9 +20,8 @@
  */
 
 import { AIChatAgent } from "@cloudflare/ai-chat";
-import { generateText } from "ai";
-import { getProvider } from "@/backend/ai/providers";
-import { getModelRegistry } from "@/backend/ai/models";
+import { convertToModelMessages, stepCountIs, streamText, tool, type UIMessage } from "ai";
+import { getChatModel } from "@/backend/ai/providers/ai-sdk";
 import type {
   ExecutionConfig,
   ExecutionResult,
@@ -57,13 +56,10 @@ export class CodeModeAgent extends AIChatAgent<Env> {
    *
    * @returns AI SDK message stream response
    */
-  async onChatMessage() {
-    const provider = getProvider(this.env);
-    const model = getModelRegistry(this.env).chat;
-
-    const result = await generateText({
-      model: provider(model),
-      messages: this.messages,
+  async onChatMessage(onFinish: Parameters<AIChatAgent<Env>["onChatMessage"]>[0]) {
+    const result = streamText({
+      model: getChatModel(this.env),
+      messages: await convertToModelMessages(this.messages as UIMessage[]),
       system: `You are a Code Mode agent that can write and execute TypeScript code securely on Cloudflare Workers.
 
 When the user asks you to perform a task that requires code execution:
@@ -82,24 +78,27 @@ export default {
 }
 \`\`\``,
       tools: {
-        executePlan: {
+        executePlan: tool({
           description:
             "Execute a TypeScript execution plan securely in a sandboxed V8 isolate. Use this instead of making multiple sequential tool calls. The code must be a complete Workers script with a fetch handler.",
-          parameters: executePlanSchema,
+          inputSchema: executePlanSchema,
           execute: async (params: ExecutePlanParams) => {
             return await this.executeCode({
               code: params.code,
               timeout: 30000,
               allowNetwork: false,
+              compatibilityDate: "2026-05-25",
             });
           },
-        },
+        }),
       },
+      stopWhen: stepCountIs(8),
       temperature: 0.2,
-      maxTokens: 4096,
+      maxOutputTokens: 4096,
+      onFinish,
     });
 
-    return result.toDataStreamResponse();
+    return result.toUIMessageStreamResponse();
   }
 
   /**

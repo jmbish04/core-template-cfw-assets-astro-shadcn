@@ -27,7 +27,7 @@ export type NavigateParams = z.infer<typeof navigateSchema>;
 export const fillSecureFormSchema = z.object({
   url: z.string().url().describe("Page URL containing the form"),
   selector: z.string().describe("CSS selector for the form field"),
-  payload: z.record(z.any()).describe("Form data to fill"),
+  payload: z.record(z.string(), z.any()).describe("Form data to fill"),
   submitSelector: z.string().optional().describe("CSS selector for submit button"),
 });
 

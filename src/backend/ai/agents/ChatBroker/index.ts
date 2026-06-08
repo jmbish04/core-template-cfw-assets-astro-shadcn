@@ -13,8 +13,7 @@
 import { AIChatAgent } from "@cloudflare/ai-chat";
 import { convertToModelMessages, stepCountIs, streamText, type UIMessage } from "ai";
 
-import { getProvider } from "@/backend/ai/providers";
-import { getModelRegistry } from "@/backend/ai/models";
+import { getChatModel } from "@/backend/ai/providers/ai-sdk";
 
 const SYSTEM_PROMPT = [
   "You are the in-app assistant for the Cloudflare Edge Showcase.",
@@ -43,15 +42,10 @@ export class ChatBroker extends AIChatAgent<Env> {
   }
 
   async onChatMessage(onFinish: Parameters<AIChatAgent<Env>["onChatMessage"]>[0]) {
-    const provider = getProvider(this.env) as unknown as (
-      model: unknown,
-    ) => Parameters<typeof streamText>[0]["model"];
-    const model = getModelRegistry(this.env).chat;
-
     const result = streamText({
-      model: provider(model),
+      model: getChatModel(this.env),
       system: SYSTEM_PROMPT,
-      messages: convertToModelMessages(this.messages as UIMessage[]),
+      messages: await convertToModelMessages(this.messages as UIMessage[]),
       stopWhen: stepCountIs(8),
       onFinish,
     });
