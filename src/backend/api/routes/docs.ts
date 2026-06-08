@@ -39,14 +39,43 @@ import {
   MCP_LOGS_TABLE_DESCRIPTION,
   MCP_LOGS_COLUMN_DESCRIPTIONS,
 } from "../../db/schemas/mcp-logs";
+// Domain schemas
+import {
+  PROJECTS_TABLE_DESCRIPTION,
+  PROJECTS_COLUMN_DESCRIPTIONS,
+} from "../../db/schemas/projects/projects";
+import {
+  TASKS_TABLE_DESCRIPTION,
+  TASKS_COLUMN_DESCRIPTIONS,
+} from "../../db/schemas/tasks/tasks";
+import {
+  TEAM_NOTES_TABLE_DESCRIPTION,
+  TEAM_NOTES_COLUMN_DESCRIPTIONS,
+} from "../../db/schemas/tasks/team-notes";
+import {
+  ACTIVITY_LOG_TABLE_DESCRIPTION,
+  ACTIVITY_LOG_COLUMN_DESCRIPTIONS,
+} from "../../db/schemas/stats/activity-log";
+import {
+  METRICS_DAILY_TABLE_DESCRIPTION,
+  METRICS_DAILY_COLUMN_DESCRIPTIONS,
+} from "../../db/schemas/stats/metrics-daily";
+import {
+  PREFERENCES_TABLE_DESCRIPTION,
+  PREFERENCES_COLUMN_DESCRIPTIONS,
+} from "../../db/schemas/settings/preferences";
+import {
+  WEBHOOKS_TABLE_DESCRIPTION,
+  WEBHOOKS_COLUMN_DESCRIPTIONS,
+} from "../../db/schemas/settings/webhooks";
+import {
+  NOTIFICATION_PREFS_TABLE_DESCRIPTION,
+  NOTIFICATION_PREFS_COLUMN_DESCRIPTIONS,
+} from "../../db/schemas/settings/notification-prefs";
 import {
   NOTIFICATIONS_TABLE_DESCRIPTION,
   NOTIFICATIONS_COLUMN_DESCRIPTIONS,
-} from "../../db/schemas/notifications";
-import {
-  SESSIONS_TABLE_DESCRIPTION,
-  SESSIONS_COLUMN_DESCRIPTIONS,
-} from "../../db/schemas/sessions";
+} from "../../db/schemas/notifications/notifications";
 
 // ---------------------------------------------------------------------------
 // Registry — maps D1 table name → descriptions from schema modules
@@ -62,17 +91,10 @@ type TableDocEntry = {
  * When adding a new table schema file, add its descriptions here as well.
  */
 const TABLE_DOCS: Record<string, TableDocEntry> = {
+  // Infrastructure
   global_config: {
     tableDescription: GLOBAL_CONFIG_TABLE_DESCRIPTION,
     columnDescriptions: GLOBAL_CONFIG_COLUMN_DESCRIPTIONS,
-  },
-  sessions: {
-    tableDescription: SESSIONS_TABLE_DESCRIPTION,
-    columnDescriptions: SESSIONS_COLUMN_DESCRIPTIONS,
-  },
-  notifications: {
-    tableDescription: NOTIFICATIONS_TABLE_DESCRIPTION,
-    columnDescriptions: NOTIFICATIONS_COLUMN_DESCRIPTIONS,
   },
   dashboard_metrics: {
     tableDescription: DASHBOARD_METRICS_TABLE_DESCRIPTION,
@@ -97,6 +119,46 @@ const TABLE_DOCS: Record<string, TableDocEntry> = {
   best_practices: {
     tableDescription: BEST_PRACTICES_TABLE_DESCRIPTION,
     columnDescriptions: BEST_PRACTICES_COLUMN_DESCRIPTIONS,
+  },
+  // Domain — projects & tasks
+  projects: {
+    tableDescription: PROJECTS_TABLE_DESCRIPTION,
+    columnDescriptions: PROJECTS_COLUMN_DESCRIPTIONS,
+  },
+  tasks: {
+    tableDescription: TASKS_TABLE_DESCRIPTION,
+    columnDescriptions: TASKS_COLUMN_DESCRIPTIONS,
+  },
+  team_notes: {
+    tableDescription: TEAM_NOTES_TABLE_DESCRIPTION,
+    columnDescriptions: TEAM_NOTES_COLUMN_DESCRIPTIONS,
+  },
+  // Domain — stats
+  activity_log: {
+    tableDescription: ACTIVITY_LOG_TABLE_DESCRIPTION,
+    columnDescriptions: ACTIVITY_LOG_COLUMN_DESCRIPTIONS,
+  },
+  metrics_daily: {
+    tableDescription: METRICS_DAILY_TABLE_DESCRIPTION,
+    columnDescriptions: METRICS_DAILY_COLUMN_DESCRIPTIONS,
+  },
+  // Domain — settings
+  preferences: {
+    tableDescription: PREFERENCES_TABLE_DESCRIPTION,
+    columnDescriptions: PREFERENCES_COLUMN_DESCRIPTIONS,
+  },
+  webhooks: {
+    tableDescription: WEBHOOKS_TABLE_DESCRIPTION,
+    columnDescriptions: WEBHOOKS_COLUMN_DESCRIPTIONS,
+  },
+  notification_prefs: {
+    tableDescription: NOTIFICATION_PREFS_TABLE_DESCRIPTION,
+    columnDescriptions: NOTIFICATION_PREFS_COLUMN_DESCRIPTIONS,
+  },
+  // Domain — notifications
+  notifications: {
+    tableDescription: NOTIFICATIONS_TABLE_DESCRIPTION,
+    columnDescriptions: NOTIFICATIONS_COLUMN_DESCRIPTIONS,
   },
 };
 

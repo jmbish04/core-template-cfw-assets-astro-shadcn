@@ -36,6 +36,7 @@ export default defineConfig({
         "BrowserHitlAgent",
         "WorkflowsAgent",
         "ArtifactAgent",
+        "NotificationsAgent",
       ],
     },
   }),

@@ -15,9 +15,17 @@ import { BrowserHitlAgent } from "./backend/ai/agents/BrowserHitlAgent";
 import { WorkflowsAgent } from "./backend/ai/agents/WorkflowsAgent";
 import { ArtifactAgent } from "./backend/ai/agents/ArtifactAgent";
 import { ChatBroker } from "./backend/ai/agents/ChatBroker";
+import { NotificationsAgent } from "./backend/ai/agents/NotificationsAgent";
 
 // Re-export Durable Object classes
-export { CodeModeAgent, BrowserHitlAgent, WorkflowsAgent, ArtifactAgent, ChatBroker };
+export {
+  CodeModeAgent,
+  BrowserHitlAgent,
+  WorkflowsAgent,
+  ArtifactAgent,
+  ChatBroker,
+  NotificationsAgent,
+};
 
 /**
  * Create exports function required by Astro Cloudflare adapter
@@ -65,6 +73,7 @@ export function createExports(manifest: any, _args: any) {
     WorkflowsAgent,
     ArtifactAgent,
     ChatBroker,
+    NotificationsAgent,
   };
 }
 

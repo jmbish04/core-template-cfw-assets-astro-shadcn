@@ -27,6 +27,14 @@ import { clientErrorRouter } from "./routes/client-error";
 import { adminRouter, configRouter } from "./routes/config";
 import { docsRouter } from "./routes/docs";
 import { healthRouter } from "./routes/health";
+import { activityRouter } from "./routes/activity";
+import { dashboardRouter } from "./routes/dashboard";
+import { notificationsRouter } from "./routes/notifications";
+import { projectsRouter } from "./routes/projects";
+import { settingsRouter } from "./routes/settings";
+import { tasksRouter } from "./routes/tasks";
+import { teamNotesRouter } from "./routes/team-notes";
+import { webhooksRouter } from "./routes/webhooks";
 
 // ---------------------------------------------------------------------------
 // App type — shared by all routers
@@ -104,6 +112,17 @@ app.route("/api/health", healthRouter);
 app.route("/api/config", configRouter);
 app.route("/api/admin", adminRouter);
 app.route("/api/docs", docsRouter);
+
+// Feature APIs (open — see auth note above)
+app.route("/api/projects", projectsRouter);
+app.route("/api/tasks", tasksRouter);
+app.route("/api/team-notes", teamNotesRouter);
+app.route("/api/settings", settingsRouter);
+app.route("/api/webhooks", webhooksRouter);
+app.route("/api/activity", activityRouter);
+app.route("/api/notifications", notificationsRouter);
+app.route("/api/dashboard", dashboardRouter);
+
 app.route("/api/__client-error", clientErrorRouter);
 
 // ---------------------------------------------------------------------------
