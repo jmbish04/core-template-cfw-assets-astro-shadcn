@@ -1,53 +1,31 @@
 /**
- * @fileoverview Authentication middleware
+ * @fileoverview Session-cookie authentication middleware.
+ *
+ * The `/api/auth/login` route issues a signed, HttpOnly session cookie
+ * (`createSessionCookie`). This middleware validates that cookie's HMAC
+ * signature and expiry on protected routes — no database lookup required, so
+ * there is no `sessions` table to maintain. Single-user template auth.
  */
 
 import type { Context, Next } from "hono";
 
-import { sessions } from "@db/schemas";
-import { eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/d1";
-
 import type { Variables } from "@/backend/api/index";
+import { verifySessionCookie } from "@/backend/lib/cookies";
 
-import { extractBearerToken } from "@/backend/api/lib/auth";
-
+/**
+ * Reject the request unless it carries a valid signed session cookie.
+ * On success, sets `authed = true` in the Hono context.
+ */
 export async function authMiddleware(
   c: Context<{ Bindings: Env; Variables: Variables }>,
   next: Next,
 ) {
-  const token = extractBearerToken(c.req.header("Authorization"));
+  const session = await verifySessionCookie(c.env, c.req.header("Cookie"));
 
-  if (!token) {
+  if (!session) {
     return c.json({ error: "Unauthorized" }, 401);
   }
 
-  const db = drizzle(c.env.DB);
-
-  try {
-    const sessionResult = await db
-      .select()
-      .from(sessions)
-      .where(eq(sessions.token, token))
-      .limit(1);
-
-    if (sessionResult.length === 0) {
-      return c.json({ error: "Invalid session" }, 401);
-    }
-
-    const session = sessionResult[0];
-
-    if (session.expiresAt.getTime() < Date.now()) {
-      return c.json({ error: "Session expired" }, 401);
-    }
-
-    c.set("sessionId", session.id);
-    c.set("sessionKey", session.sessionKey);
-    c.set("sessionToken", session.token);
-
-    await next();
-  } catch (error) {
-    console.error("Auth middleware error:", error);
-    return c.json({ error: "Authentication failed" }, 500);
-  }
+  c.set("authed", true);
+  await next();
 }

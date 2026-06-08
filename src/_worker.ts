@@ -26,14 +26,17 @@ export { CodeModeAgent, BrowserHitlAgent, WorkflowsAgent, ArtifactAgent, ChatBro
  * including both the Astro SSR handler and our Durable Object classes.
  */
 export function createExports(manifest: any, _args: any) {
-  const handler: ExportedHandler<Env> = {
-    async fetch(request, env, ctx) {
+  // NOTE: `request as any` at the call sites bridges the lib.dom (Hono) vs
+  // @cloudflare/workers-types (agents / ASSETS) `Request` type friction; the
+  // object is cast to `ExportedHandler<Env>` for the same reason.
+  const handler = {
+    async fetch(request: Request, env: Env, ctx: ExecutionContext) {
       const url = new URL(request.url);
 
       // Route agent WebSocket/HTTP connections via the Agents SDK router.
       // Matches /agents/:agent-name/:instance-name.
       if (url.pathname.startsWith("/agents/")) {
-        const agentResponse = await routeAgentRequest(request, env);
+        const agentResponse = await routeAgentRequest(request as any, env);
         if (agentResponse) return agentResponse;
       }
 
@@ -46,13 +49,13 @@ export function createExports(manifest: any, _args: any) {
         url.pathname === "/scaler" ||
         url.pathname === "/docs"
       ) {
-        return honoApp.fetch(request, env, ctx);
+        return honoApp.fetch(request as any, env, ctx);
       }
 
       // Delegate to Astro SSR via ASSETS binding
-      return env.ASSETS.fetch(request);
+      return env.ASSETS.fetch(request as any);
     },
-  };
+  } as unknown as ExportedHandler<Env>;
 
   return {
     default: handler,
@@ -68,8 +71,8 @@ export function createExports(manifest: any, _args: any) {
 /**
  * Default export for standalone worker usage (non-Astro)
  */
-const handler: ExportedHandler<Env> = {
-  async fetch(request, env, ctx) {
+const handler = {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext) {
     const url = new URL(request.url);
 
     // Route API and documentation endpoints to Hono
@@ -81,12 +84,12 @@ const handler: ExportedHandler<Env> = {
       url.pathname === "/scaler" ||
       url.pathname === "/docs"
     ) {
-      return honoApp.fetch(request, env, ctx);
+      return honoApp.fetch(request as any, env, ctx);
     }
 
     // Delegate to Astro SSR via ASSETS binding
-    return env.ASSETS.fetch(request);
+    return env.ASSETS.fetch(request as any);
   },
-};
+} as unknown as ExportedHandler<Env>;
 
 export default handler;

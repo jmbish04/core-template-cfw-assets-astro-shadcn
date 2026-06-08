@@ -185,7 +185,7 @@ class HealthCoordinator {
 
   private async pingAgent(descriptor: DOBindingDescriptor): Promise<CheckResult> {
     const start = Date.now();
-    const ns = (this.env as Record<string, unknown>)[descriptor.binding as string] as
+    const ns = (this.env as unknown as Record<string, unknown>)[descriptor.binding as string] as
       | DurableObjectNamespace
       | undefined;
 

@@ -32,6 +32,9 @@ import { healthRouter } from "./routes/health";
 // App type — shared by all routers
 // ---------------------------------------------------------------------------
 
+/** Request-scoped variables set by middleware (e.g. `authed` after auth). */
+export type Variables = { authed: boolean };
+
 /**
  * Hono binding types used across the API layer.
  *
@@ -40,7 +43,7 @@ import { healthRouter } from "./routes/health";
  */
 export type AppBindings = {
   Bindings: Env;
-  Variables: { authed: true };
+  Variables: Variables;
 };
 
 // ---------------------------------------------------------------------------
@@ -83,11 +86,14 @@ app.get("/api/scalar", apiReference({ url: "/api/openapi.json" }));
 app.get("/api/swagger", swaggerUI({ url: "/api/openapi.json" }));
 
 // ---------------------------------------------------------------------------
-// Auth middleware (applied to all /api/* routes except /api/auth/login)
+// Auth middleware
 // ---------------------------------------------------------------------------
-
-/** Validate the session cookie on every API request. */
-app.use("/api/*", authMiddleware);
+//
+// Only the admin surface is gated behind the signed session cookie. The
+// showcase feature APIs (projects, tasks, stats, settings, notifications,
+// dashboard) are intentionally open so the template runs end-to-end out of the
+// box. Tighten this to `/api/*` once you wire real per-user auth.
+app.use("/api/admin/*", authMiddleware);
 
 // ---------------------------------------------------------------------------
 // Domain routers
