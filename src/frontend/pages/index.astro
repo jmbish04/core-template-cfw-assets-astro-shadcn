@@ -24,6 +24,43 @@ import { siteConfig } from "@/lib/config";
       </p>
     </section>
 
+    <!-- Explore the Workspace -->
+    <section class="mb-16">
+      <div class="flex items-center justify-between mb-8">
+        <h2 class="text-2xl font-bold">Explore the Workspace</h2>
+        <a href="/dashboard">
+          <Button size="sm" className="bg-orange-600 hover:bg-orange-700">Open Dashboard</Button>
+        </a>
+      </div>
+      <p class="text-lg text-muted-foreground mb-8 max-w-3xl">
+        A real, running reference app ships with the template — D1-backed projects &amp; tasks,
+        a Workers-AI dashboard, settings, and a realtime notifications feed. Extend or delete
+        what you don&apos;t need. New here? Open the dashboard and hit <strong>Seed demo data</strong>.
+      </p>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {[
+          { href: "/dashboard", icon: "📊", title: "Admin Dashboard", desc: "KPI cards, every recharts variation, and Workers-AI insights over your live data." },
+          { href: "/projects", icon: "🗂️", title: "Projects", desc: "Searchable, filterable project list with starring and a create dialog." },
+          { href: "/tasks/board", icon: "🧩", title: "Task Board", desc: "Kanban across To Do / In Progress / In Review / Done with status updates." },
+          { href: "/tasks", icon: "✅", title: "Tasks", desc: "Filterable table with inline status & priority editing, plus task detail." },
+          { href: "/notifications", icon: "🔔", title: "Notifications", desc: "Realtime WebSocket feed backed by a NotificationsAgent Durable Object." },
+          { href: "/settings", icon: "⚙️", title: "Settings", desc: "Preferences, notification matrix, webhooks, and an activity log." },
+        ].map((item) => (
+          <a href={item.href} class="block">
+            <Card class="h-full border-zinc-800 bg-zinc-950 hover:border-orange-600 transition-colors">
+              <CardHeader>
+                <div class="text-3xl mb-2">{item.icon}</div>
+                <CardTitle class="text-base">{item.title}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CardDescription class="text-sm">{item.desc}</CardDescription>
+              </CardContent>
+            </Card>
+          </a>
+        ))}
+      </div>
+    </section>
+
     <!-- Core Principles Grid -->
     <section class="mb-16">
       <h2 class="text-2xl font-bold mb-8">Core Ecosystem Principles</h2>

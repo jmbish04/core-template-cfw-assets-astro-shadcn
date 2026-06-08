@@ -50,6 +50,14 @@ export function AdminDashboard() {
   const insights = useInsights(filters);
   const activity = useActivity(filters, 8);
 
+  // Reload every panel — used after seeding demo data.
+  function reloadAll() {
+    stats.reload();
+    charts.reload();
+    insights.reload();
+    activity.reload();
+  }
+
   return (
     <AdminDashboardChrome
       q={q}
@@ -62,6 +70,7 @@ export function AdminDashboard() {
       charts={charts}
       insights={insights}
       activity={activity}
+      onSeeded={reloadAll}
     />
   );
 }

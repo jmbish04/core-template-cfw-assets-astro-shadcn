@@ -22,6 +22,7 @@ import { ChartsGrid } from "./ChartsGrid";
 import { FilterBar } from "./FilterBar";
 import { InsightsPanel } from "./InsightsPanel";
 import { RecentActivity } from "./RecentActivity";
+import { SeedBanner } from "./SeedBanner";
 import { SectionTitle } from "./shared";
 import { StatCards } from "./StatCards";
 
@@ -36,6 +37,8 @@ export interface AdminDashboardChromeProps {
   charts: Resource<DashboardCharts>;
   insights: Resource<DashboardInsights>;
   activity: Resource<ActivityResponse>;
+  /** Called after demo data is seeded — reloads every panel. */
+  onSeeded: () => void;
 }
 
 export function AdminDashboardChrome({
@@ -49,9 +52,12 @@ export function AdminDashboardChrome({
   charts,
   insights,
   activity,
+  onSeeded,
 }: AdminDashboardChromeProps) {
   return (
     <div className="flex flex-col gap-8">
+      <SeedBanner stats={stats} onSeeded={onSeeded} />
+
       <FilterBar
         q={q}
         range={range}
