@@ -31,6 +31,7 @@ import { activityRouter } from "./routes/activity";
 import { dashboardRouter } from "./routes/dashboard";
 import { notificationsRouter } from "./routes/notifications";
 import { projectsRouter } from "./routes/projects";
+import { seedRouter } from "./routes/seed";
 import { settingsRouter } from "./routes/settings";
 import { tasksRouter } from "./routes/tasks";
 import { teamNotesRouter } from "./routes/team-notes";
@@ -122,6 +123,7 @@ app.route("/api/webhooks", webhooksRouter);
 app.route("/api/activity", activityRouter);
 app.route("/api/notifications", notificationsRouter);
 app.route("/api/dashboard", dashboardRouter);
+app.route("/api/seed", seedRouter);
 
 app.route("/api/__client-error", clientErrorRouter);
 
