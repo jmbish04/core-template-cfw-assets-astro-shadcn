@@ -8,7 +8,6 @@ export async function checkSecrets(env: Env): Promise<ModuleResult & { missing?:
     "CLOUDFLARE_ACCOUNT_ID",
     "CLOUDFLARE_WRANGLER_API_TOKEN",
     "WORKER_API_KEY",
-    "AGENTIC_WORKER_API_KEY",
     "CLOUDFLARE_AI_GATEWAY_TOKEN",
     "CF_BROWSER_RENDER_TOKEN",
     "JULES_API_KEY",

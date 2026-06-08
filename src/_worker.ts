@@ -9,9 +9,7 @@ import type { ExportedHandler } from "@cloudflare/workers-types";
 import { routeAgentRequest } from "agents";
 import { app as honoApp } from "./backend/api/index";
 
-// Import Durable Object classes
-import { OrchestratorAgent } from "./backend/ai/agents/orchestrator";
-import { GoogleDocsAgent } from "./backend/ai/agents/google-docs";
+// Import Durable Object classes (the Agents SDK showcase agents)
 import { CodeModeAgent } from "./backend/ai/agents/CodeModeAgent";
 import { BrowserHitlAgent } from "./backend/ai/agents/BrowserHitlAgent";
 import { WorkflowsAgent } from "./backend/ai/agents/WorkflowsAgent";
@@ -19,15 +17,7 @@ import { ArtifactAgent } from "./backend/ai/agents/ArtifactAgent";
 import { ChatBroker } from "./backend/ai/agents/ChatBroker";
 
 // Re-export Durable Object classes
-export {
-  OrchestratorAgent,
-  GoogleDocsAgent,
-  CodeModeAgent,
-  BrowserHitlAgent,
-  WorkflowsAgent,
-  ArtifactAgent,
-  ChatBroker,
-};
+export { CodeModeAgent, BrowserHitlAgent, WorkflowsAgent, ArtifactAgent, ChatBroker };
 
 /**
  * Create exports function required by Astro Cloudflare adapter
@@ -67,8 +57,6 @@ export function createExports(manifest: any, _args: any) {
   return {
     default: handler,
     // Export Durable Object classes
-    OrchestratorAgent,
-    GoogleDocsAgent,
     CodeModeAgent,
     BrowserHitlAgent,
     WorkflowsAgent,

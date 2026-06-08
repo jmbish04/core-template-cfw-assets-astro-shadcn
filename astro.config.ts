@@ -25,10 +25,18 @@ export default defineConfig({
         exclude: [],
       },
     },
-    // Configure worker entry point with Durable Object exports
+    // Configure worker entry point with Durable Object exports.
+    // These names must match the DO classes re-exported from `src/_worker.ts`
+    // and the `durable_objects.bindings` class names in `wrangler.jsonc`.
     workerEntryPoint: {
       path: "src/_worker.ts",
-      namedExports: ["OrchestratorAgent", "NotebookLMAgent", "GoogleDocsAgent"],
+      namedExports: [
+        "ChatBroker",
+        "CodeModeAgent",
+        "BrowserHitlAgent",
+        "WorkflowsAgent",
+        "ArtifactAgent",
+      ],
     },
   }),
   integrations: [react()],
@@ -51,7 +59,6 @@ export default defineConfig({
         "node:util",
         "agents",
         "cloudflare:workers",
-        "notebooklm-sdk",
       ],
     },
   },
