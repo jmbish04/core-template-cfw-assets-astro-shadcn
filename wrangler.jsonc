@@ -106,7 +106,6 @@
       "binding": "DB",
       "database_name": "core-template-cfw-assets-astro-shadcn",
       "database_id": "d555f8ce-77c9-4c82-be80-de95b8d9c003",
-      "preview_database_id": "d555f8ce-77c9-4c82-be80-de95b8d9c003",
       "migrations_dir": "drizzle",
     },
   ],
