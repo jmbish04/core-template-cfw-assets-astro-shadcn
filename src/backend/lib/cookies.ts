@@ -1,4 +1,4 @@
-import { getNotebookLMCookieSigningKey } from "../utils/secrets";
+import { getCookieSigningKey } from "../utils/secrets";
 import { constantTimeEqual, decodeBase64Url, encodeBase64Url, hmacSign } from "./crypto";
 
 const SESSION_COOKIE = "cr_session";
@@ -21,7 +21,7 @@ export async function createSessionCookie(
     exp: payload.exp ?? now + TWO_YEARS_SECONDS,
   };
   const encodedPayload = encodeBase64Url(JSON.stringify(session));
-  const signingKey = await getNotebookLMCookieSigningKey(env);
+  const signingKey = await getCookieSigningKey(env);
   const signature = await hmacSign(signingKey, encodedPayload);
 
   return `${SESSION_COOKIE}=${encodedPayload}.${signature}; HttpOnly; Secure; SameSite=Lax; Max-Age=${TWO_YEARS_SECONDS}; Path=/`;
@@ -43,7 +43,7 @@ export async function verifySessionCookie(
     return null;
   }
 
-  const signingKey = await getNotebookLMCookieSigningKey(env);
+  const signingKey = await getCookieSigningKey(env);
   const expectedSignature = await hmacSign(signingKey, encodedPayload);
 
   if (!constantTimeEqual(signature, expectedSignature)) {

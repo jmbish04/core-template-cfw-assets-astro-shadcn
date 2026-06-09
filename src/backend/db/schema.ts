@@ -1,22 +1,34 @@
-export * from "./schemas/roles";
-export * from "./schemas/documents";
-export * from "./schemas/threads";
-export * from "./schemas/messages";
-export * from "./schemas/emails";
+/**
+ * @fileoverview Drizzle schema barrel — single source of truth for the
+ * template's D1 tables.
+ *
+ * Generic infrastructure tables (config, health, dashboard metrics, agent
+ * human-in-the-loop proposals, MCP request logs, job-failure logging) are
+ * exported first, followed by domain tables (projects, tasks, stats,
+ * settings, notifications). Add new domain tables under
+ * `./schemas/<domain>/` and re-export them here.
+ */
+
+// ---------------------------------------------------------------------------
+// Infrastructure / generic tables
+// ---------------------------------------------------------------------------
 export * from "./schemas/global-config";
 export * from "./schemas/job-failures";
-export * from "./schemas/resume-bullets";
-export * from "./schemas/role-analyses";
-export * from "./schemas/role-bullets";
-export * from "./schemas/role-bullet-analyses";
-export * from "./schemas/role-alignment-scores";
 
 export * from "./schemas/health";
-export * from "./schemas/interview-notes";
-export * from "./schemas/interview-recordings";
-export * from "./schemas/transcription-jobs";
-export * from "./schemas/transcription-chunks";
-export * from "./schemas/companies";
-export * from "./schemas/career-memory";
-export * from "./schemas/scoring-rubrics";
-export * from "./schemas/role-insights";
+export * from "./schemas/health-checks";
+
+export * from "./schemas/best-practices";
+export * from "./schemas/hitl-proposals";
+export * from "./schemas/mcp-logs";
+
+export * from "./schemas/dashboard-metrics";
+
+// ---------------------------------------------------------------------------
+// Domain tables
+// ---------------------------------------------------------------------------
+export * from "./schemas/projects";
+export * from "./schemas/tasks";
+export * from "./schemas/stats";
+export * from "./schemas/settings";
+export * from "./schemas/notifications";

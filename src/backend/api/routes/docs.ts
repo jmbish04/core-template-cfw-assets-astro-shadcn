@@ -1,71 +1,81 @@
 /**
- * @fileoverview API routes that serve structured metadata to the /docs
- * frontend pages (schema, agents, notebooklm).
+ * @fileoverview API routes that serve structured metadata to the `/docs`
+ * frontend pages (schema + agents).
  *
  * Table and column descriptions are imported from the Drizzle schema modules
- * so that documentation stays co-located with the source of truth.
+ * so that documentation stays co-located with the source of truth. Agent
+ * metadata is sourced from each Durable Object's static `docsMetadata()` where
+ * available, falling back to inline descriptors for the showcase agents.
  */
 
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 
-import { NotebookLMAgent } from "../../ai/agents/notebooklm";
-import { OrchestratorAgent } from "../../ai/agents/orchestrator";
+import { ChatBroker } from "../../ai/agents/ChatBroker";
 import {
-  DOCUMENTS_TABLE_DESCRIPTION,
-  DOCUMENTS_COLUMN_DESCRIPTIONS,
-} from "../../db/schemas/documents";
-import { EMAILS_TABLE_DESCRIPTION, EMAILS_COLUMN_DESCRIPTIONS } from "../../db/schemas/emails";
+  BEST_PRACTICES_TABLE_DESCRIPTION,
+  BEST_PRACTICES_COLUMN_DESCRIPTIONS,
+} from "../../db/schemas/best-practices";
+import {
+  DASHBOARD_METRICS_TABLE_DESCRIPTION,
+  DASHBOARD_METRICS_COLUMN_DESCRIPTIONS,
+} from "../../db/schemas/dashboard-metrics";
 import {
   GLOBAL_CONFIG_TABLE_DESCRIPTION,
   GLOBAL_CONFIG_COLUMN_DESCRIPTIONS,
 } from "../../db/schemas/global-config";
 import {
-  INTERVIEW_NOTES_TABLE_DESCRIPTION,
-  INTERVIEW_NOTES_COLUMN_DESCRIPTIONS,
-} from "../../db/schemas/interview-notes";
+  HEALTH_CHECKS_TABLE_DESCRIPTION,
+  HEALTH_CHECKS_COLUMN_DESCRIPTIONS,
+} from "../../db/schemas/health-checks";
 import {
-  INTERVIEW_RECORDINGS_TABLE_DESCRIPTION,
-  INTERVIEW_RECORDINGS_COLUMN_DESCRIPTIONS,
-} from "../../db/schemas/interview-recordings";
+  HITL_PROPOSALS_TABLE_DESCRIPTION,
+  HITL_PROPOSALS_COLUMN_DESCRIPTIONS,
+} from "../../db/schemas/hitl-proposals";
 import {
   JOB_FAILURES_TABLE_DESCRIPTION,
   JOB_FAILURES_COLUMN_DESCRIPTIONS,
 } from "../../db/schemas/job-failures";
 import {
-  MESSAGES_TABLE_DESCRIPTION,
-  MESSAGES_COLUMN_DESCRIPTIONS,
-} from "../../db/schemas/messages";
+  MCP_LOGS_TABLE_DESCRIPTION,
+  MCP_LOGS_COLUMN_DESCRIPTIONS,
+} from "../../db/schemas/mcp-logs";
+// Domain schemas
 import {
-  RESUME_BULLETS_TABLE_DESCRIPTION,
-  RESUME_BULLETS_COLUMN_DESCRIPTIONS,
-} from "../../db/schemas/resume-bullets";
+  PROJECTS_TABLE_DESCRIPTION,
+  PROJECTS_COLUMN_DESCRIPTIONS,
+} from "../../db/schemas/projects/projects";
 import {
-  ROLE_BULLET_ANALYSES_TABLE_DESCRIPTION,
-  ROLE_BULLET_ANALYSES_COLUMN_DESCRIPTIONS,
-} from "../../db/schemas/role-bullet-analyses";
+  TASKS_TABLE_DESCRIPTION,
+  TASKS_COLUMN_DESCRIPTIONS,
+} from "../../db/schemas/tasks/tasks";
 import {
-  ROLE_BULLETS_TABLE_DESCRIPTION,
-  ROLE_BULLETS_COLUMN_DESCRIPTIONS,
-} from "../../db/schemas/role-bullets";
-// Import table & column descriptions from schema modules
+  TEAM_NOTES_TABLE_DESCRIPTION,
+  TEAM_NOTES_COLUMN_DESCRIPTIONS,
+} from "../../db/schemas/tasks/team-notes";
 import {
-  ROLE_INSIGHTS_TABLE_DESCRIPTION,
-  ROLE_INSIGHTS_COLUMN_DESCRIPTIONS,
-} from "../../db/schemas/role-insights";
-import { ROLES_TABLE_DESCRIPTION, ROLES_COLUMN_DESCRIPTIONS } from "../../db/schemas/roles";
+  ACTIVITY_LOG_TABLE_DESCRIPTION,
+  ACTIVITY_LOG_COLUMN_DESCRIPTIONS,
+} from "../../db/schemas/stats/activity-log";
 import {
-  SCORING_RUBRICS_TABLE_DESCRIPTION,
-  SCORING_RUBRICS_COLUMN_DESCRIPTIONS,
-} from "../../db/schemas/scoring-rubrics";
-import { THREADS_TABLE_DESCRIPTION, THREADS_COLUMN_DESCRIPTIONS } from "../../db/schemas/threads";
+  METRICS_DAILY_TABLE_DESCRIPTION,
+  METRICS_DAILY_COLUMN_DESCRIPTIONS,
+} from "../../db/schemas/stats/metrics-daily";
 import {
-  TRANSCRIPTION_CHUNKS_TABLE_DESCRIPTION,
-  TRANSCRIPTION_CHUNKS_COLUMN_DESCRIPTIONS,
-} from "../../db/schemas/transcription-chunks";
+  PREFERENCES_TABLE_DESCRIPTION,
+  PREFERENCES_COLUMN_DESCRIPTIONS,
+} from "../../db/schemas/settings/preferences";
 import {
-  TRANSCRIPTION_JOBS_TABLE_DESCRIPTION,
-  TRANSCRIPTION_JOBS_COLUMN_DESCRIPTIONS,
-} from "../../db/schemas/transcription-jobs";
+  WEBHOOKS_TABLE_DESCRIPTION,
+  WEBHOOKS_COLUMN_DESCRIPTIONS,
+} from "../../db/schemas/settings/webhooks";
+import {
+  NOTIFICATION_PREFS_TABLE_DESCRIPTION,
+  NOTIFICATION_PREFS_COLUMN_DESCRIPTIONS,
+} from "../../db/schemas/settings/notification-prefs";
+import {
+  NOTIFICATIONS_TABLE_DESCRIPTION,
+  NOTIFICATIONS_COLUMN_DESCRIPTIONS,
+} from "../../db/schemas/notifications/notifications";
 
 // ---------------------------------------------------------------------------
 // Registry — maps D1 table name → descriptions from schema modules
@@ -81,73 +91,126 @@ type TableDocEntry = {
  * When adding a new table schema file, add its descriptions here as well.
  */
 const TABLE_DOCS: Record<string, TableDocEntry> = {
-  roles: {
-    tableDescription: ROLES_TABLE_DESCRIPTION,
-    columnDescriptions: ROLES_COLUMN_DESCRIPTIONS,
-  },
-  documents: {
-    tableDescription: DOCUMENTS_TABLE_DESCRIPTION,
-    columnDescriptions: DOCUMENTS_COLUMN_DESCRIPTIONS,
-  },
-  threads: {
-    tableDescription: THREADS_TABLE_DESCRIPTION,
-    columnDescriptions: THREADS_COLUMN_DESCRIPTIONS,
-  },
-  messages: {
-    tableDescription: MESSAGES_TABLE_DESCRIPTION,
-    columnDescriptions: MESSAGES_COLUMN_DESCRIPTIONS,
-  },
-  emails: {
-    tableDescription: EMAILS_TABLE_DESCRIPTION,
-    columnDescriptions: EMAILS_COLUMN_DESCRIPTIONS,
-  },
+  // Infrastructure
   global_config: {
     tableDescription: GLOBAL_CONFIG_TABLE_DESCRIPTION,
     columnDescriptions: GLOBAL_CONFIG_COLUMN_DESCRIPTIONS,
+  },
+  dashboard_metrics: {
+    tableDescription: DASHBOARD_METRICS_TABLE_DESCRIPTION,
+    columnDescriptions: DASHBOARD_METRICS_COLUMN_DESCRIPTIONS,
+  },
+  health_checks: {
+    tableDescription: HEALTH_CHECKS_TABLE_DESCRIPTION,
+    columnDescriptions: HEALTH_CHECKS_COLUMN_DESCRIPTIONS,
+  },
+  hitl_proposals: {
+    tableDescription: HITL_PROPOSALS_TABLE_DESCRIPTION,
+    columnDescriptions: HITL_PROPOSALS_COLUMN_DESCRIPTIONS,
+  },
+  mcp_logs: {
+    tableDescription: MCP_LOGS_TABLE_DESCRIPTION,
+    columnDescriptions: MCP_LOGS_COLUMN_DESCRIPTIONS,
   },
   job_failures: {
     tableDescription: JOB_FAILURES_TABLE_DESCRIPTION,
     columnDescriptions: JOB_FAILURES_COLUMN_DESCRIPTIONS,
   },
-  resume_bullets: {
-    tableDescription: RESUME_BULLETS_TABLE_DESCRIPTION,
-    columnDescriptions: RESUME_BULLETS_COLUMN_DESCRIPTIONS,
+  best_practices: {
+    tableDescription: BEST_PRACTICES_TABLE_DESCRIPTION,
+    columnDescriptions: BEST_PRACTICES_COLUMN_DESCRIPTIONS,
   },
-  interview_notes: {
-    tableDescription: INTERVIEW_NOTES_TABLE_DESCRIPTION,
-    columnDescriptions: INTERVIEW_NOTES_COLUMN_DESCRIPTIONS,
+  // Domain — projects & tasks
+  projects: {
+    tableDescription: PROJECTS_TABLE_DESCRIPTION,
+    columnDescriptions: PROJECTS_COLUMN_DESCRIPTIONS,
   },
-  interview_recordings: {
-    tableDescription: INTERVIEW_RECORDINGS_TABLE_DESCRIPTION,
-    columnDescriptions: INTERVIEW_RECORDINGS_COLUMN_DESCRIPTIONS,
+  tasks: {
+    tableDescription: TASKS_TABLE_DESCRIPTION,
+    columnDescriptions: TASKS_COLUMN_DESCRIPTIONS,
   },
-  transcription_jobs: {
-    tableDescription: TRANSCRIPTION_JOBS_TABLE_DESCRIPTION,
-    columnDescriptions: TRANSCRIPTION_JOBS_COLUMN_DESCRIPTIONS,
+  team_notes: {
+    tableDescription: TEAM_NOTES_TABLE_DESCRIPTION,
+    columnDescriptions: TEAM_NOTES_COLUMN_DESCRIPTIONS,
   },
-  transcription_chunks: {
-    tableDescription: TRANSCRIPTION_CHUNKS_TABLE_DESCRIPTION,
-    columnDescriptions: TRANSCRIPTION_CHUNKS_COLUMN_DESCRIPTIONS,
+  // Domain — stats
+  activity_log: {
+    tableDescription: ACTIVITY_LOG_TABLE_DESCRIPTION,
+    columnDescriptions: ACTIVITY_LOG_COLUMN_DESCRIPTIONS,
   },
-  role_bullets: {
-    tableDescription: ROLE_BULLETS_TABLE_DESCRIPTION,
-    columnDescriptions: ROLE_BULLETS_COLUMN_DESCRIPTIONS,
+  metrics_daily: {
+    tableDescription: METRICS_DAILY_TABLE_DESCRIPTION,
+    columnDescriptions: METRICS_DAILY_COLUMN_DESCRIPTIONS,
   },
-  role_bullet_analyses: {
-    tableDescription: ROLE_BULLET_ANALYSES_TABLE_DESCRIPTION,
-    columnDescriptions: ROLE_BULLET_ANALYSES_COLUMN_DESCRIPTIONS,
+  // Domain — settings
+  preferences: {
+    tableDescription: PREFERENCES_TABLE_DESCRIPTION,
+    columnDescriptions: PREFERENCES_COLUMN_DESCRIPTIONS,
   },
-  scoring_rubrics: {
-    tableDescription: SCORING_RUBRICS_TABLE_DESCRIPTION,
-    columnDescriptions: SCORING_RUBRICS_COLUMN_DESCRIPTIONS,
+  webhooks: {
+    tableDescription: WEBHOOKS_TABLE_DESCRIPTION,
+    columnDescriptions: WEBHOOKS_COLUMN_DESCRIPTIONS,
   },
-  role_insights: {
-    tableDescription: ROLE_INSIGHTS_TABLE_DESCRIPTION,
-    columnDescriptions: ROLE_INSIGHTS_COLUMN_DESCRIPTIONS,
+  notification_prefs: {
+    tableDescription: NOTIFICATION_PREFS_TABLE_DESCRIPTION,
+    columnDescriptions: NOTIFICATION_PREFS_COLUMN_DESCRIPTIONS,
+  },
+  // Domain — notifications
+  notifications: {
+    tableDescription: NOTIFICATIONS_TABLE_DESCRIPTION,
+    columnDescriptions: NOTIFICATIONS_COLUMN_DESCRIPTIONS,
   },
 };
 
 const TABLE_NAMES = Object.keys(TABLE_DOCS);
+
+// ---------------------------------------------------------------------------
+// Agent metadata — the Agents SDK showcase agents
+// ---------------------------------------------------------------------------
+
+/**
+ * Lightweight metadata descriptors for the showcase Durable Object agents that
+ * don't (yet) expose a static `docsMetadata()`. Keeps the `/docs/agents` page
+ * populated without forcing every agent to implement the full contract.
+ */
+const SHOWCASE_AGENTS = [
+  {
+    name: "CodeModeAgent",
+    className: "CodeModeAgent",
+    description:
+      "Demonstrates server-side tool calling: the agent generates and reasons over code, exposing callable RPC methods to the frontend.",
+    docsPath: "/docs/agents/code-mode",
+    methods: [] as Array<{ name: string; description: string }>,
+    tools: [] as string[],
+  },
+  {
+    name: "BrowserHitlAgent",
+    className: "BrowserHitlAgent",
+    description:
+      "Human-in-the-loop browser automation: proposes actions, persists them as proposals, and waits for approval before continuing.",
+    docsPath: "/docs/agents/browser-hitl",
+    methods: [],
+    tools: [],
+  },
+  {
+    name: "WorkflowsAgent",
+    className: "WorkflowsAgent",
+    description:
+      "Durable, multi-step workflows that survive restarts — showcases scheduled tasks and durable execution on a Durable Object.",
+    docsPath: "/docs/agents/workflows",
+    methods: [],
+    tools: [],
+  },
+  {
+    name: "ArtifactAgent",
+    className: "ArtifactAgent",
+    description:
+      "Streams structured artifacts (documents, canvases) back to an assistant-ui surface with incremental updates.",
+    docsPath: "/docs/agents/artifacts",
+    methods: [],
+    tools: [],
+  },
+];
 
 // ---------------------------------------------------------------------------
 // Zod schemas for responses
@@ -198,13 +261,6 @@ const agentMetadataSchema = z.object({
     }),
   ),
   tools: z.array(z.string()),
-  aiModels: z.array(z.string()).optional(),
-  mcpTools: z
-    .array(z.object({ name: z.string(), description: z.string(), inputSchema: z.string() }))
-    .optional(),
-  systemPrompt: z.string().optional(),
-  stateShape: z.string().optional(),
-  scheduledTasks: z.array(z.string()).optional(),
 });
 
 const agentsResponseSchema = z.object({
@@ -284,96 +340,11 @@ docsRouter.openapi(
     },
   }),
   (async (c: any) => {
-    const agents = [OrchestratorAgent.docsMetadata(), NotebookLMAgent.docsMetadata()];
+    const agents = [
+      { ...ChatBroker.docsMetadata(), tools: [] as string[] },
+      ...SHOWCASE_AGENTS,
+    ];
 
     return c.json({ agents });
-  }) as any,
-);
-
-// ---------------------------------------------------------------------------
-// GET /api/docs/notebooklm — NotebookLM configuration & metadata
-// ---------------------------------------------------------------------------
-
-const notebookInfoSchema = z.object({
-  notebookId: z.string(),
-  notebookUrl: z.string(),
-  notebookName: z.string(),
-  chatEndpoint: z.string(),
-  mcpEndpoint: z.string(),
-  credentialSources: z.array(
-    z.object({
-      name: z.string(),
-      storage: z.string(),
-      binding: z.string(),
-    }),
-  ),
-  agentIntegrations: z.array(
-    z.object({
-      agentName: z.string(),
-      agentDocsPath: z.string(),
-      description: z.string(),
-    }),
-  ),
-});
-
-docsRouter.openapi(
-  createRoute({
-    method: "get",
-    path: "/notebooklm",
-    operationId: "docsNotebookLM",
-    responses: {
-      200: {
-        description: "NotebookLM configuration and integration metadata",
-        content: { "application/json": { schema: notebookInfoSchema } },
-      },
-    },
-  }),
-  (async (c: any) => {
-    const notebookId = c.env.CAREER_NOTEBOOKLM_ID ?? "";
-
-    return c.json({
-      notebookId,
-      notebookUrl: `https://notebooklm.google.com/notebook/${notebookId}`,
-      notebookName: "Career Knowledge Base",
-      chatEndpoint: "/api/notebook/chat",
-      mcpEndpoint: "/mcp/notebooklm",
-      credentialSources: [
-        {
-          name: "Session Cookies",
-          storage: "KV (hot-swap)",
-          binding: "ACTIVE_NOTEBOOKLM_SESSION",
-        },
-        {
-          name: "CSRF Token Cache",
-          storage: "KV (auto-managed, sliding TTL)",
-          binding: "NOTEBOOKLM_CSRF_CACHE",
-        },
-        {
-          name: "Notebook ID",
-          storage: "Env var (wrangler.jsonc)",
-          binding: "CAREER_NOTEBOOKLM_ID",
-        },
-      ],
-      agentIntegrations: [
-        {
-          agentName: "OrchestratorAgent",
-          agentDocsPath: "/docs/agents/orchestrator",
-          description:
-            "Calls consult_notebook() during resume generation and job analysis to retrieve full career context from the knowledge base.",
-        },
-        {
-          agentName: "NotebookLMAgent",
-          agentDocsPath: "/docs/agents/notebooklm",
-          description:
-            "Dedicated Durable Object providing callable RPC and WebSocket access to the knowledge base for the frontend chat and internal code.",
-        },
-        {
-          agentName: "NotebookLMMcpAgent",
-          agentDocsPath: "/docs/agents/notebooklm-mcp",
-          description:
-            "Remote MCP server exposing the knowledge base to external AI tools (Claude, Cursor) via the Model Context Protocol.",
-        },
-      ],
-    });
   }) as any,
 );

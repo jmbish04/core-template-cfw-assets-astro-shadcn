@@ -8,14 +8,10 @@ export async function checkSecrets(env: Env): Promise<ModuleResult & { missing?:
     "CLOUDFLARE_ACCOUNT_ID",
     "CLOUDFLARE_WRANGLER_API_TOKEN",
     "WORKER_API_KEY",
-    "AGENTIC_WORKER_API_KEY",
     "CLOUDFLARE_AI_GATEWAY_TOKEN",
-    "CF_BROWSER_RENDER_TOKEN",
-    "JULES_API_KEY",
     "GOOGLE_CREDS_SA_PRIVATE_KEY_PT_1",
     "GOOGLE_CREDS_SA_PRIVATE_KEY_PT_2",
     "GOOGLE_CREDS_SA_CLIENT_EMAIL",
-    "NOTEBOOKLM_AUTH_TOKEN",
   ] as const;
 
   const missing: string[] = [];
@@ -43,9 +39,6 @@ export async function checkEnvVars(env: Env): Promise<ModuleResult & { missing?:
     "MODEL_CHAT",
     "MODEL_EXTRACT",
     "MODEL_DRAFT",
-    "CAREER_NOTEBOOKLM_ID",
-    "PARENT_DRIVE_FOLDER_ID",
-    "HEALTH_CHECK_DRIVE_FOLDER_ID",
   ] as const;
 
   const missing: string[] = [];

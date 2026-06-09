@@ -13,6 +13,15 @@ export default defineConfig({
   srcDir: "./src/frontend",
   base,
   output: "server",
+  // Use the project's existing `SESSIONS` KV binding for Astro's session
+  // store. By default the adapter looks for a `SESSION` binding; pointing
+  // the driver at the explicit binding name avoids the "Invalid binding
+  // `SESSION`" warning on build and lets the auth middleware and Astro
+  // share one namespace.
+  session: {
+    driver: "cloudflare-kv-binding",
+    options: { binding: "SESSIONS" },
+  },
   adapter: cloudflare({
     imageService: "cloudflare",
     platformProxy: {
@@ -25,10 +34,19 @@ export default defineConfig({
         exclude: [],
       },
     },
-    // Configure worker entry point with Durable Object exports
+    // Configure worker entry point with Durable Object exports.
+    // These names must match the DO classes re-exported from `src/_worker.ts`
+    // and the `durable_objects.bindings` class names in `wrangler.jsonc`.
     workerEntryPoint: {
       path: "src/_worker.ts",
-      namedExports: ["OrchestratorAgent", "NotebookLMAgent", "GoogleDocsAgent"],
+      namedExports: [
+        "ChatBroker",
+        "CodeModeAgent",
+        "BrowserHitlAgent",
+        "WorkflowsAgent",
+        "ArtifactAgent",
+        "NotificationsAgent",
+      ],
     },
   }),
   integrations: [react()],
@@ -51,7 +69,6 @@ export default defineConfig({
         "node:util",
         "agents",
         "cloudflare:workers",
-        "notebooklm-sdk",
       ],
     },
   },

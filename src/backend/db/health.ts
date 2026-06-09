@@ -19,8 +19,8 @@ export async function checkD1(env: Env): Promise<ModuleResult> {
 export async function checkKV(env: Env): Promise<ModuleResult> {
   const start = Date.now();
   try {
-    if (!env.KV) throw new Error("KV binding is undefined");
-    await env.KV.get("__health_check");
+    if (!env.SESSIONS) throw new Error("KV binding is undefined");
+    await env.SESSIONS.get("__health_check");
     return { status: "ok", latencyMs: Date.now() - start };
   } catch (e) {
     return {

@@ -1,17 +1,17 @@
 /**
- * @fileoverview Hono API application — the central REST API for the Career
- * Orchestrator Worker.
+ * @fileoverview Hono API application — the central REST API for the template
+ * Worker.
  *
  * This module creates the root `OpenAPIHono` app, registers global middleware
- * (CORS, logger, error handler, session-cookie auth), and mounts all domain
- * routers under `/api/*`.  It also exposes OpenAPI documentation at:
+ * (CORS, logger, error handler, session-cookie auth), and mounts the generic
+ * template routers under `/api/*`. It also exposes OpenAPI documentation at:
  *   - `/openapi.json` — machine-readable OpenAPI 3.1 spec
  *   - `/scalar`       — interactive Scalar API reference UI
  *   - `/swagger`      — Swagger UI
  *
- * Route mount order follows a logical grouping:
- *   auth → health → roles → intake → threads → notebook → documents →
- *   emails → config → admin → docs → dashboard → client-error
+ * The chat / agent surfaces are NOT served here — they run on Durable Objects
+ * via the Agents SDK (`routeAgentRequest`) and are wired in `src/_worker.ts`.
+ * Route mount order: auth → health → config → admin → docs → client-error.
  */
 
 import { swaggerUI } from "@hono/swagger-ui";
@@ -22,37 +22,27 @@ import { logger } from "hono/logger";
 
 import { authMiddleware } from "./middleware/auth";
 import { errorHandler } from "./middleware/error";
-import { analysisRouter } from "./routes/analysis";
 import { authRouter } from "./routes/auth";
-import { bulletsRouter } from "./routes/bullets";
-import { chatRouter } from "./routes/chat";
 import { clientErrorRouter } from "./routes/client-error";
-import { companiesRouter } from "./routes/companies";
 import { adminRouter, configRouter } from "./routes/config";
-import { dashboardRouter } from "./routes/dashboard";
 import { docsRouter } from "./routes/docs";
-import { documentsRouter } from "./routes/documents";
-import { emailsRouter } from "./routes/emails";
-import { filesRouter } from "./routes/files";
 import { healthRouter } from "./routes/health";
-import { insightsRouter } from "./routes/insights";
-import { intakeRouter } from "./routes/intake";
-import { interviewNotesRouter } from "./routes/interview-notes";
-import { interviewRecordingsRouter } from "./routes/interview-recordings";
-import { memoryRouter } from "./routes/memory";
-import { notebookRouter } from "./routes/notebook";
-import { notebookSessionRouter } from "./routes/notebook-session";
-import { roleBulletsRouter } from "./routes/role-bullets";
-import { rolesRouter } from "./routes/roles";
-import { scoringRubricsRouter } from "./routes/scoring-rubrics";
-import { threadsRouter } from "./routes/threads";
-import { transcribeRouter } from "./routes/transcribe";
-import { transcriptionJobsRouter } from "./routes/transcription-jobs";
-import { ttsRouter } from "./routes/tts";
+import { activityRouter } from "./routes/activity";
+import { dashboardRouter } from "./routes/dashboard";
+import { notificationsRouter } from "./routes/notifications";
+import { projectsRouter } from "./routes/projects";
+import { seedRouter } from "./routes/seed";
+import { settingsRouter } from "./routes/settings";
+import { tasksRouter } from "./routes/tasks";
+import { teamNotesRouter } from "./routes/team-notes";
+import { webhooksRouter } from "./routes/webhooks";
 
 // ---------------------------------------------------------------------------
 // App type — shared by all routers
 // ---------------------------------------------------------------------------
+
+/** Request-scoped variables set by middleware (e.g. `authed` after auth). */
+export type Variables = { authed: boolean };
 
 /**
  * Hono binding types used across the API layer.
@@ -62,7 +52,7 @@ import { ttsRouter } from "./routes/tts";
  */
 export type AppBindings = {
   Bindings: Env;
-  Variables: { authed: true };
+  Variables: Variables;
 };
 
 // ---------------------------------------------------------------------------
@@ -72,7 +62,7 @@ export type AppBindings = {
 /** Root Hono OpenAPI app instance. */
 export const app = new OpenAPIHono<AppBindings>();
 
-/** Enable CORS for all origins (single-user app). */
+/** Enable CORS for all origins (single-user template default). */
 app.use("*", cors());
 /** Log every request method + path + status + duration. */
 app.use("*", logger());
@@ -86,12 +76,33 @@ app.onError(errorHandler);
 /** Lightweight liveness probe — returns `{ status: "ok", timestamp }`. */
 app.get("/api/ping", (c) => c.json({ status: "ok", timestamp: Date.now() }));
 
-// ---------------------------------------------------------------------------
-// Auth middleware (applied to all /api/* routes except /api/auth/login)
-// ---------------------------------------------------------------------------
+/**
+ * Public OpenAPI documentation aliases under `/api/*`.
+ *
+ * These mirror the root-mounted `/openapi.json`, `/swagger`, `/scalar`
+ * endpoints so external consumers that expect the docs to live under the
+ * API prefix can discover them. Registered before the auth middleware so
+ * they remain publicly reachable.
+ */
+app.doc("/api/openapi.json", {
+  openapi: "3.1.0",
+  info: {
+    title: "CFW Astro shadcn Agents Template",
+    version: "1.0.0",
+  },
+});
+app.get("/api/scalar", apiReference({ url: "/api/openapi.json" }));
+app.get("/api/swagger", swaggerUI({ url: "/api/openapi.json" }));
 
-/** Validate the `cr_session` cookie on every API request. */
-app.use("/api/*", authMiddleware);
+// ---------------------------------------------------------------------------
+// Auth middleware
+// ---------------------------------------------------------------------------
+//
+// Only the admin surface is gated behind the signed session cookie. The
+// showcase feature APIs (projects, tasks, stats, settings, notifications,
+// dashboard) are intentionally open so the template runs end-to-end out of the
+// box. Tighten this to `/api/*` once you wire real per-user auth.
+app.use("/api/admin/*", authMiddleware);
 
 // ---------------------------------------------------------------------------
 // Domain routers
@@ -99,31 +110,21 @@ app.use("/api/*", authMiddleware);
 
 app.route("/api/auth", authRouter);
 app.route("/api/health", healthRouter);
-app.route("/api/roles", rolesRouter);
-app.route("/api/intake", intakeRouter);
-app.route("/api/threads", threadsRouter);
-app.route("/api/notebook", notebookRouter);
-app.route("/api/notebook", notebookSessionRouter);
-app.route("/api/documents", documentsRouter);
-app.route("/api/emails", emailsRouter);
-app.route("/api/files", filesRouter);
-app.route("/api/bullets", bulletsRouter);
-app.route("/api/companies", companiesRouter);
 app.route("/api/config", configRouter);
 app.route("/api/admin", adminRouter);
-app.route("/api/chat", chatRouter);
 app.route("/api/docs", docsRouter);
+
+// Feature APIs (open — see auth note above)
+app.route("/api/projects", projectsRouter);
+app.route("/api/tasks", tasksRouter);
+app.route("/api/team-notes", teamNotesRouter);
+app.route("/api/settings", settingsRouter);
+app.route("/api/webhooks", webhooksRouter);
+app.route("/api/activity", activityRouter);
+app.route("/api/notifications", notificationsRouter);
 app.route("/api/dashboard", dashboardRouter);
-app.route("/api/tts", ttsRouter);
-app.route("/api/transcribe", transcribeRouter);
-app.route("/api/roles", analysisRouter);
-app.route("/api/roles", interviewNotesRouter);
-app.route("/api/roles", interviewRecordingsRouter);
-app.route("/api/memory", memoryRouter);
-app.route("/api/roles", roleBulletsRouter);
-app.route("/api/roles", insightsRouter);
-app.route("/api/scoring-rubrics", scoringRubricsRouter);
-app.route("/api/transcription-jobs", transcriptionJobsRouter);
+app.route("/api/seed", seedRouter);
+
 app.route("/api/__client-error", clientErrorRouter);
 
 // ---------------------------------------------------------------------------
@@ -133,7 +134,7 @@ app.route("/api/__client-error", clientErrorRouter);
 app.doc("/openapi.json", {
   openapi: "3.1.0",
   info: {
-    title: "Career Orchestrator",
+    title: "CFW Astro shadcn Agents Template",
     version: "1.0.0",
   },
 });

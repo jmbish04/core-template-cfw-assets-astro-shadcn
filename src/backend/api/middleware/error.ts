@@ -3,7 +3,7 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 
 export const errorHandler: ErrorHandler<{
   Bindings: Env;
-  Variables: { authed: true };
+  Variables: { authed: boolean };
 }> = (error, c) => {
   const status = (
     "status" in error && typeof error.status === "number" ? error.status : 500
