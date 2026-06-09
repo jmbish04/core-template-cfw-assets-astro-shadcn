@@ -42,9 +42,6 @@ export async function checkEnvVars(env: Env): Promise<ModuleResult & { missing?:
     "MODEL_CHAT",
     "MODEL_EXTRACT",
     "MODEL_DRAFT",
-    "CAREER_NOTEBOOKLM_ID",
-    "PARENT_DRIVE_FOLDER_ID",
-    "HEALTH_CHECK_DRIVE_FOLDER_ID",
   ] as const;
 
   const missing: string[] = [];

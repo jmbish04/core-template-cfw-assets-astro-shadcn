@@ -87,10 +87,7 @@
     },
   ],
   "vars": {
-    "PARENT_DRIVE_FOLDER_ID": "1jCokY9_gi3w3_qjdCX8MbnbtZrF9p52j",
-    "HEALTH_CHECK_DRIVE_FOLDER_ID": "1Sc-uzcth6LfaaDvWsTI7tCcbzL1eTwym",
     "AI_GATEWAY_ID": "default-gateway",
-    "CAREER_NOTEBOOKLM_ID": "ae2a743f-231b-4b05-ab98-683d01dd5c65",
     "MODEL_CHAT": "@cf/openai/gpt-oss-120b",
     "MODEL_EXTRACT": "@cf/openai/gpt-oss-120b",
     "MODEL_DRAFT": "@cf/openai/gpt-oss-120b",
