@@ -29,11 +29,6 @@ const defaultConfig = [
     key: "compensation_baseline",
     value: "Previous role at Google: $176,000 base salary",
   },
-  {
-    key: "notebooklm_prompt",
-    value:
-      "Based on my 13 years of performance reviews, accomplishments, and career history, what specific evidence supports my qualification for the following {{label}}s?\n\n{{itemsList}}\n\nFor each item, cite specific examples, metrics, or achievements from my career history. If there is no direct evidence, note the gap honestly.",
-  },
 ];
 
 export const configRouter = new OpenAPIHono<{ Bindings: Env }>();

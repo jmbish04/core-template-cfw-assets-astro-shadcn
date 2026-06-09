@@ -3,9 +3,9 @@
  *
  * Reads values from the Secrets Store bindings declared in `wrangler.jsonc`
  * (which expose an async `.get()`), falling back to plain env vars for local
- * development. Domain-specific helpers (Google service accounts, NotebookLM,
- * R2 access keys) were removed when this repo was slimmed to a template — add
- * your own as you wire new integrations.
+ * development. Domain-specific helpers (Google service accounts, R2 access
+ * keys, third-party integrations) were removed when this repo was slimmed to
+ * a template — add your own as you wire new integrations.
  */
 
 /**

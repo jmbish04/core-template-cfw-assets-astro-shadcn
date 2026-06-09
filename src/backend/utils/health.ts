@@ -9,12 +9,9 @@ export async function checkSecrets(env: Env): Promise<ModuleResult & { missing?:
     "CLOUDFLARE_WRANGLER_API_TOKEN",
     "WORKER_API_KEY",
     "CLOUDFLARE_AI_GATEWAY_TOKEN",
-    "CF_BROWSER_RENDER_TOKEN",
-    "JULES_API_KEY",
     "GOOGLE_CREDS_SA_PRIVATE_KEY_PT_1",
     "GOOGLE_CREDS_SA_PRIVATE_KEY_PT_2",
     "GOOGLE_CREDS_SA_CLIENT_EMAIL",
-    "NOTEBOOKLM_AUTH_TOKEN",
   ] as const;
 
   const missing: string[] = [];
