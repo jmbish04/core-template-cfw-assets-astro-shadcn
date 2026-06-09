@@ -49,6 +49,10 @@
         "class_name": "ArtifactAgent",
       },
       {
+        "name": "ORCHESTRATOR_AGENT",
+        "class_name": "OrchestratorAgent",
+      },
+      {
         "name": "CHAT_BROKER",
         "class_name": "ChatBroker",
       },
@@ -69,6 +73,7 @@
         "BrowserHitlAgent",
         "WorkflowsAgent",
         "ArtifactAgent",
+        "OrchestratorAgent",
         "ChatBroker",
         "NotificationsAgent",
       ],

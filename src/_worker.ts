@@ -28,6 +28,7 @@ import { CodeModeAgent } from "./backend/ai/agents/CodeModeAgent";
 import { BrowserHitlAgent } from "./backend/ai/agents/BrowserHitlAgent";
 import { WorkflowsAgent } from "./backend/ai/agents/WorkflowsAgent";
 import { ArtifactAgent } from "./backend/ai/agents/ArtifactAgent";
+import { OrchestratorAgent } from "./backend/ai/agents/OrchestratorAgent";
 import { ChatBroker } from "./backend/ai/agents/ChatBroker";
 import { NotificationsAgent } from "./backend/ai/agents/NotificationsAgent";
 
@@ -37,6 +38,7 @@ export {
   BrowserHitlAgent,
   WorkflowsAgent,
   ArtifactAgent,
+  OrchestratorAgent,
   ChatBroker,
   NotificationsAgent,
 };
@@ -103,6 +105,7 @@ export function createExports() {
     BrowserHitlAgent,
     WorkflowsAgent,
     ArtifactAgent,
+    OrchestratorAgent,
     ChatBroker,
     NotificationsAgent,
   };
