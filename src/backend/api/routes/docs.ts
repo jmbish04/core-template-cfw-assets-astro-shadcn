@@ -1,6 +1,6 @@
 /**
  * @fileoverview API routes that serve structured metadata to the /docs
- * frontend pages (schema, agents, notebooklm).
+ * frontend pages (schema, agents).
  *
  * Table and column descriptions are imported from the Drizzle schema modules
  * so that documentation stays co-located with the source of truth.
@@ -8,7 +8,6 @@
 
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 
-import { NotebookLMAgent } from "../../ai/agents/notebooklm";
 import { OrchestratorAgent } from "../../ai/agents/orchestrator";
 import {
   DOCUMENTS_TABLE_DESCRIPTION,
@@ -284,96 +283,8 @@ docsRouter.openapi(
     },
   }),
   (async (c: any) => {
-    const agents = [OrchestratorAgent.docsMetadata(), NotebookLMAgent.docsMetadata()];
+    const agents = [OrchestratorAgent.docsMetadata()];
 
     return c.json({ agents });
-  }) as any,
-);
-
-// ---------------------------------------------------------------------------
-// GET /api/docs/notebooklm — NotebookLM configuration & metadata
-// ---------------------------------------------------------------------------
-
-const notebookInfoSchema = z.object({
-  notebookId: z.string(),
-  notebookUrl: z.string(),
-  notebookName: z.string(),
-  chatEndpoint: z.string(),
-  mcpEndpoint: z.string(),
-  credentialSources: z.array(
-    z.object({
-      name: z.string(),
-      storage: z.string(),
-      binding: z.string(),
-    }),
-  ),
-  agentIntegrations: z.array(
-    z.object({
-      agentName: z.string(),
-      agentDocsPath: z.string(),
-      description: z.string(),
-    }),
-  ),
-});
-
-docsRouter.openapi(
-  createRoute({
-    method: "get",
-    path: "/notebooklm",
-    operationId: "docsNotebookLM",
-    responses: {
-      200: {
-        description: "NotebookLM configuration and integration metadata",
-        content: { "application/json": { schema: notebookInfoSchema } },
-      },
-    },
-  }),
-  (async (c: any) => {
-    const notebookId = c.env.CAREER_NOTEBOOKLM_ID ?? "";
-
-    return c.json({
-      notebookId,
-      notebookUrl: `https://notebooklm.google.com/notebook/${notebookId}`,
-      notebookName: "Career Knowledge Base",
-      chatEndpoint: "/api/notebook/chat",
-      mcpEndpoint: "/mcp/notebooklm",
-      credentialSources: [
-        {
-          name: "Session Cookies",
-          storage: "KV (hot-swap)",
-          binding: "ACTIVE_NOTEBOOKLM_SESSION",
-        },
-        {
-          name: "CSRF Token Cache",
-          storage: "KV (auto-managed, sliding TTL)",
-          binding: "NOTEBOOKLM_CSRF_CACHE",
-        },
-        {
-          name: "Notebook ID",
-          storage: "Env var (wrangler.jsonc)",
-          binding: "CAREER_NOTEBOOKLM_ID",
-        },
-      ],
-      agentIntegrations: [
-        {
-          agentName: "OrchestratorAgent",
-          agentDocsPath: "/docs/agents/orchestrator",
-          description:
-            "Calls consult_notebook() during resume generation and job analysis to retrieve full career context from the knowledge base.",
-        },
-        {
-          agentName: "NotebookLMAgent",
-          agentDocsPath: "/docs/agents/notebooklm",
-          description:
-            "Dedicated Durable Object providing callable RPC and WebSocket access to the knowledge base for the frontend chat and internal code.",
-        },
-        {
-          agentName: "NotebookLMMcpAgent",
-          agentDocsPath: "/docs/agents/notebooklm-mcp",
-          description:
-            "Remote MCP server exposing the knowledge base to external AI tools (Claude, Cursor) via the Model Context Protocol.",
-        },
-      ],
-    });
   }) as any,
 );
