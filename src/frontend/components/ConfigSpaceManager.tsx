@@ -31,11 +31,11 @@ import { Textarea } from "@/components/ui/textarea";
 
 const AGENTS = [
   { id: "chat_broker", label: "ChatBroker", binding: "CHAT_BROKER" },
-  { id: "orchestrator", label: "OrchestratorAgent", binding: "ORCHESTRATOR_AGENT" },
   { id: "code_mode", label: "CodeModeAgent", binding: "CODE_MODE_AGENT" },
   { id: "browser_hitl", label: "BrowserHitlAgent", binding: "BROWSER_HITL_AGENT" },
   { id: "workflows", label: "WorkflowsAgent", binding: "WORKFLOWS_AGENT" },
   { id: "artifact", label: "ArtifactAgent", binding: "ARTIFACT_AGENT" },
+  { id: "notifications", label: "NotificationsAgent", binding: "NOTIFICATIONS_AGENT" },
 ] as const;
 
 const DEFAULT_MODELS = [

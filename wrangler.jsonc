@@ -49,10 +49,6 @@
         "class_name": "ArtifactAgent",
       },
       {
-        "name": "ORCHESTRATOR_AGENT",
-        "class_name": "OrchestratorAgent",
-      },
-      {
         "name": "CHAT_BROKER",
         "class_name": "ChatBroker",
       },
@@ -66,17 +62,28 @@
     { "binding": "WORKER_LOADERS" }
   ],
   "migrations": [
+    // v1 captures the original deployed-class set so wrangler can apply
+    // an additive history. Do NOT rewrite this tag — it is immutable
+    // once a Worker has shipped under it.
     {
       "tag": "v1",
       "new_sqlite_classes": [
+        "OrchestratorAgent",
         "CodeModeAgent",
+        "GoogleDocsAgent",
         "BrowserHitlAgent",
         "WorkflowsAgent",
         "ArtifactAgent",
-        "OrchestratorAgent",
-        "ChatBroker",
-        "NotificationsAgent",
       ],
+    },
+    // v2 brings the live Worker in line with the lean template:
+    //   - retire OrchestratorAgent + GoogleDocsAgent (no longer exported)
+    //   - introduce ChatBroker (assistant-ui WebSocket broker)
+    //   - introduce NotificationsAgent (per-session realtime fanout)
+    {
+      "tag": "v2",
+      "deleted_classes": ["OrchestratorAgent", "GoogleDocsAgent"],
+      "new_sqlite_classes": ["ChatBroker", "NotificationsAgent"],
     },
   ],
   "vars": {
@@ -101,8 +108,8 @@
     {
       "binding": "DB",
       "database_name": "core-template-cfw-assets-astro-shadcn",
-      "database_id": "d126139f-6f57-49d2-bbc4-d20bbd46bbf4",
-      "preview_database_id": "d126139f-6f57-49d2-bbc4-d20bbd46bbf4",
+      "database_id": "d555f8ce-77c9-4c82-be80-de95b8d9c003",
+      "preview_database_id": "d555f8ce-77c9-4c82-be80-de95b8d9c003",
       "migrations_dir": "drizzle",
     },
   ],
