@@ -13,6 +13,15 @@ export default defineConfig({
   srcDir: "./src/frontend",
   base,
   output: "server",
+  // Use the project's existing `SESSIONS` KV binding for Astro's session
+  // store. By default the adapter looks for a `SESSION` binding; pointing
+  // the driver at the explicit binding name avoids the "Invalid binding
+  // `SESSION`" warning on build and lets the auth middleware and Astro
+  // share one namespace.
+  session: {
+    driver: "cloudflare-kv-binding",
+    options: { binding: "SESSIONS" },
+  },
   adapter: cloudflare({
     imageService: "cloudflare",
     platformProxy: {
