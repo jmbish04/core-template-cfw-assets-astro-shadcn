@@ -108,7 +108,7 @@ export type KeySelector<T> = (item: T) => PropertyKey;
  */
 export function findWhere<T extends object>(items: readonly T[], shape: Partial<T>): T | undefined {
   const keys = Object.keys(shape) as (keyof T)[];
-  return items.find((item) => keys.every((k) => item[k] === shape[k]));
+  return items.find((item) => item != null && keys.every((k) => item[k] === shape[k]));
 }
 
 /** The structural result of comparing two arrays. */
@@ -244,7 +244,7 @@ export function ensureArray<T>(value: T | readonly T[] | null | undefined): T[] 
  * deal([1, 2, 3, 4, 5], 2); // [[1, 3, 5], [2, 4]]
  */
 export function deal<T>(items: readonly T[], buckets: number): T[][] {
-  const n = Math.max(1, Math.floor(buckets));
+  const n = Number.isFinite(buckets) && buckets > 0 ? Math.floor(buckets) : 1;
   const out: T[][] = Array.from({ length: n }, () => []);
   items.forEach((item, i) => out[i % n].push(item));
   return out;
