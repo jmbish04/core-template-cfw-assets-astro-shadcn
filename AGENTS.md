@@ -35,6 +35,7 @@ This repository relies heavily on AI agents for rapid prototyping and feature ge
 14. **Import Path Aliases:** ALWAYS use tsconfig path aliases (`@/backend/*`, `@/backend/db/*`, `@/backend/ai/*`, etc.) for all backend imports. Never use relative imports (`../../foo`). Run `node scripts/migrate-imports.mjs` to convert existing relative imports. See `.agent/rules/import-paths.md` for details.
 15. **Comprehensive Documentation:** Every backend TypeScript file must have a file-level JSDoc comment explaining its purpose, key features, and usage. Every exported function/class must have JSDoc with `@param`, `@returns`, `@throws`, and `@example` tags where applicable. See `.agent/rules/docstrings.md` for standards.
 16. **Agent Meta-Maintenance:** Update `AGENTS.md` and `.agent/rules` files when you add/modify features that future agents should know about. Keep rules concise (<12,000 chars per file), avoid duplication, and resolve conflicts. See `.agent/rules/meta-maintenance.md` for guidelines.
+17. **Shared Data Toolkit:** This template ships an isomorphic data/array/object utility toolkit built on [Remeda](https://github.com/remeda/remeda). Reach for it before hand-rolling array/object plumbing. Import from `@/backend/utils/data` on the Worker side and `@/lib/data` on the frontend — both re-export the same isomorphic core at `@/shared/data-utils`. It exposes curated Remeda re-exports (`pipe`, `groupBy`, `unique`, `sortBy`, `pick`, `difference`, …), the full Remeda surface as `R`, and template helpers Remeda doesn't ship (`diffArrays`, `findWhere`, `toggleInArray`, `moveItem`, `keyBy`, `compact`, `ensureArray`, `deal`, `truncate`, `tryParseJson`). Add genuinely-shared helpers to the shared core (never duplicate per-surface). Live demo + docs at `/showcase/utilities`. See `.agent/rules/data-utilities.md`.
 
 ## Template App Surface (reference implementation)
 
@@ -63,6 +64,12 @@ no mock data.
 - **Shared frontend helpers**: `lib/api.ts` (`apiGet`/`apiSend`/`ApiError`) and
   `lib/format.ts` (`relativeTime`/`shortDate`/`compactNumber`). Charts use the
   shadcn `ui/chart.tsx` wrapper + the OKLCH `--chart-1..5` palette in `global.css`.
+- **Shared data toolkit** (isomorphic, Remeda-backed): one core at
+  `shared/data-utils.ts`, re-exported by `lib/data.ts` (frontend, `@/lib/data`)
+  and `backend/utils/data.ts` (`@/backend/utils/data`). Curated Remeda re-exports
+  + full `R` namespace + template helpers (`diffArrays`, `findWhere`,
+  `toggleInArray`, `moveItem`, `keyBy`, `compact`, `ensureArray`, `deal`,
+  `truncate`, `tryParseJson`). Live demo: `/showcase/utilities`.
 - **Seed demo data**: `POST /api/seed` (idempotent). Locally:
   `pnpm run migrate:local` then `curl -X POST http://localhost:8787/api/seed`.
 - **SSR note**: `src/_worker.ts` exports `start(manifest)` + `createExports()`;

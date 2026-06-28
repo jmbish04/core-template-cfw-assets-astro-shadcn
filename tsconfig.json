@@ -9,6 +9,7 @@
     "types": ["@cloudflare/workers-types", "./worker-configuration.d.ts", "node"],
     "paths": {
       "@/*": ["src/frontend/*", "src/backend/*"],
+      "@/shared/*": ["src/shared/*"],
       "@/backend/*": ["src/backend/*"],
       "@/backend/db/*": ["src/backend/db/*"],
       "@/backend/ai/*": ["src/backend/ai/*"],
