@@ -254,7 +254,14 @@ inboxRouter.openapi(
     }
 
     const rows = buildSeedMessages();
-    await db.insert(emailMessages).values(rows);
+    // Insert in chunks: each row binds ~14 columns, and D1/SQLite caps a single
+    // statement at 100 bound variables. A one-shot insert of all rows
+    // (~13 × 14 = 182 params) throws "too many SQL variables", so chunk to keep
+    // every statement well under the limit (6 × 14 = 84).
+    const CHUNK_SIZE = 6;
+    for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+      await db.insert(emailMessages).values(rows.slice(i, i + CHUNK_SIZE));
+    }
     return c.json({ seeded: true, message: "Seeded demo inbox.", count: rows.length });
   },
 );
