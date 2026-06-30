@@ -244,6 +244,7 @@ export function TaskList({ initialProjectId }: TaskListProps) {
                   aria-label={`Open task ${task.title}`}
                   onClick={() => openPreview(task)}
                   onKeyDown={(e) => {
+                    if (e.target !== e.currentTarget) return;
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
                       openPreview(task);
