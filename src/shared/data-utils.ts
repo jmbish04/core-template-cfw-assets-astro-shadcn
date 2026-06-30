@@ -200,11 +200,14 @@ export function moveItem<T>(items: readonly T[], from: number, to: number): T[] 
  * @example
  * keyBy(users, (u) => u.id); // { "1": user1, "2": user2 }
  */
-export function keyBy<T>(items: readonly T[], keyFn: KeySelector<T>): Record<PropertyKey, T> {
-  const out: Record<PropertyKey, T> = {};
-  for (const item of items) out[keyFn(item)] = item;
-  return out;
-}
+
+// Remove the custom keyBy implementation as it is now re-exported directly from Remeda
+
+// export function keyBy<T>(items: readonly T[], keyFn: KeySelector<T>): Record<PropertyKey, T> {
+//   const out: Record<PropertyKey, T> = {};
+//   for (const item of items) out[keyFn(item)] = item;
+//   return out;
+// }
 
 /**
  * Drop `null` and `undefined` from an array, narrowing the element type. Other
@@ -215,9 +218,12 @@ export function keyBy<T>(items: readonly T[], keyFn: KeySelector<T>): Record<Pro
  * @example
  * compact([1, null, 2, undefined, 0]); // [1, 2, 0]
  */
-export function compact<T>(items: readonly (T | null | undefined)[]): T[] {
-  return items.filter((item): item is T => item !== null && item !== undefined);
-}
+
+// Remove the custom compact implementation as it is now re-exported directly from Remeda.
+
+// export function compact<T>(items: readonly (T | null | undefined)[]): T[] {
+//   return items.filter((item): item is T => item !== null && item !== undefined);
+// }
 
 /**
  * Wrap a value in an array unless it already is one. `null`/`undefined` become
