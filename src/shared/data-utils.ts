@@ -58,6 +58,8 @@ export {
   unique,
   uniqueBy,
   groupBy,
+  keyBy,
+  compact,
   partition,
   chunk,
   difference,
