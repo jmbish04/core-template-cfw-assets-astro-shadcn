@@ -101,6 +101,7 @@ export function Inbox() {
       } catch {
         // Non-fatal: revert the read flag, leave the badge optimistic-safe.
         setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, read: false } : m)));
+        if (msg.folder === "inbox") setUnread((u) => u + 1);
       }
     },
     [],
