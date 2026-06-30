@@ -33,6 +33,7 @@ export function ProjectCard({ project, onToggleStar, onOpen, starPending }: Proj
       aria-label={`Open project ${project.name}`}
       onClick={() => onOpen(project)}
       onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return;
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           onOpen(project);
