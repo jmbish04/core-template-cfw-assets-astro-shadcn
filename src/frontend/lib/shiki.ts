@@ -148,7 +148,7 @@ export async function highlightCode(code: string, lang: string | undefined): Pro
   const highlighter = await getHighlighter();
   const language = normalizeLanguage(lang);
   return highlighter.codeToHtml(code, {
-    lang: language === "text" ? "ts" : language,
+    lang: language,
     theme: SHIKI_THEME,
     // Strip Shiki's inline background so our shell's `bg-card` shows through.
     colorReplacements: { "#0d1117": "transparent" },
