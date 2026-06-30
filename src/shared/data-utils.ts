@@ -108,7 +108,7 @@ export type KeySelector<T> = (item: T) => PropertyKey;
  */
 export function findWhere<T extends object>(items: readonly T[], shape: Partial<T>): T | undefined {
   const keys = Object.keys(shape) as (keyof T)[];
-  return items.find((item) => item != null && keys.every((k) => item[k] === shape[k]));
+  return items.find((item) => item && keys.every((k) => item[k] === shape[k]));
 }
 
 /** The structural result of comparing two arrays. */
