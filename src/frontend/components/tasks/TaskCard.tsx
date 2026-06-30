@@ -41,6 +41,7 @@ export function TaskCard({ task, onMove, onDragStart, onOpen, pending }: TaskCar
       aria-label={`Open task ${task.title}`}
       onClick={() => onOpen(task)}
       onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return;
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           onOpen(task);
