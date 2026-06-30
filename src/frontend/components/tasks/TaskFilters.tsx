@@ -88,7 +88,10 @@ export interface TaskFiltersProps {
 
 export function TaskFilters({ value, onChange, onClear }: TaskFiltersProps) {
   const { options: projectOptions } = useProjects();
-  const { assignees, labels } = useTaskFacets();
+  const { assignees, labels, error } = useTaskFacets();
+  if (error) {
+    console.error("Failed to load task facets:", error);
+  }
 
   const projectFacet = projectFacetOptions(projectOptions);
   const assigneeFacet = assigneeFacetOptions(assignees);
