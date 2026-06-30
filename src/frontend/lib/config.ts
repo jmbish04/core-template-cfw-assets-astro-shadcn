@@ -58,6 +58,7 @@ export const siteConfig: SiteConfig = {
       label: "Agents",
       items: [
         { href: "/chat", label: "Chat" },
+        { href: "/assistant", label: "Assistant" },
         { href: "/showcase/code-mode", label: "Code Mode" },
         { href: "/showcase/browser-hitl", label: "Browser HITL" },
         { href: "/showcase/multi-agent", label: "Multi-Agent" },
