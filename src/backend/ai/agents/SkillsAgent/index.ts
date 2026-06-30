@@ -73,7 +73,7 @@ function safeCalc(expression: string): number {
     throw new Error("Expression contains unsupported characters.");
   }
   // Shunting-yard to RPN, then evaluate — no Function/eval.
-  const tokens = expression.match(/\d+\.?\d*|[+\-*/()]/g);
+  const tokens = expression.match(/\d+\.?\d*|\.\d+|[+\-*/()]/g);
   if (!tokens) throw new Error("Empty expression.");
   const prec: Record<string, number> = { "+": 1, "-": 1, "*": 2, "/": 2 };
   const out: string[] = [];
