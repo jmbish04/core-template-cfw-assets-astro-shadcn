@@ -69,6 +69,7 @@ export const siteConfig: SiteConfig = {
       items: [
         { href: "/notifications", label: "Notifications" },
         { href: "/settings", label: "Settings" },
+        { href: "/showcase/utilities", label: "Data Utilities" },
         { href: "/playbook", label: "Playbook" },
         { href: "/openapi.json", label: "OpenAPI" },
         { href: "/swagger", label: "Swagger" },
