@@ -36,6 +36,7 @@ import { seedRouter } from "./routes/seed";
 import { settingsRouter } from "./routes/settings";
 import { tasksRouter } from "./routes/tasks";
 import { teamNotesRouter } from "./routes/team-notes";
+import { threadsRouter } from "./routes/threads";
 import { webhooksRouter } from "./routes/webhooks";
 
 // ---------------------------------------------------------------------------
@@ -119,6 +120,7 @@ app.route("/api/docs", docsRouter);
 app.route("/api/projects", projectsRouter);
 app.route("/api/tasks", tasksRouter);
 app.route("/api/team-notes", teamNotesRouter);
+app.route("/api/threads", threadsRouter);
 app.route("/api/settings", settingsRouter);
 app.route("/api/webhooks", webhooksRouter);
 app.route("/api/activity", activityRouter);

@@ -42,7 +42,9 @@ import { cn } from "@/lib/utils";
 import { ToolCallCard } from "@/components/showcase/ToolCallCard";
 
 import { MarkdownText } from "./MarkdownText";
-import { AssistantToolUIs } from "./tools";
+import { AssistantToolUIs } from "./generative";
+import { FollowUpSuggestions } from "./FollowUpSuggestions";
+import { ModelPicker } from "./ModelPicker";
 
 /** Connection status for the optional header badge. */
 export type ThreadStatus = "connecting" | "connected" | "disconnected";
@@ -57,11 +59,11 @@ const DEFAULT_WELCOME_SUGGESTIONS = [
   "What can you help me build on Cloudflare?",
 ];
 
-/** Default follow-up prompts shown beneath the latest assistant reply. */
+/** Fallback follow-up prompts used until the model returns dynamic ones. */
 const DEFAULT_FOLLOWUP_SUGGESTIONS = [
   "Show that as a metric card",
+  "Chart it for me",
   "Turn this into a task draft",
-  "Give me a code snippet",
 ];
 
 /** Markdown renderer for assistant text parts. */
@@ -163,11 +165,15 @@ export function Thread({
       {/* Register generative-UI tool renderers (renders nothing visible). */}
       <AssistantToolUIs />
 
-      {status ? (
-        <div className="flex items-center justify-end gap-2 px-4 py-2">
+      {/* Header: per-thread Workers AI model picker + optional connection status. */}
+      <div className="flex items-center justify-between gap-2 border-b border-border/30 px-4 py-2">
+        <ModelPicker />
+        {status ? (
           <Badge variant={status === "connected" ? "default" : "outline"}>{status}</Badge>
-        </div>
-      ) : null}
+        ) : (
+          <span />
+        )}
+      </div>
 
       <ThreadPrimitive.Viewport className="relative flex-1 overflow-y-auto px-4 py-4">
         <ThreadPrimitive.Empty>
@@ -193,16 +199,11 @@ export function Thread({
           }}
         />
 
-        {/* Follow-up suggestions: visible only when the thread has messages and
-            is not mid-run. `If` with `empty={false}` + `running={false}`. */}
+        {/* Dynamic follow-up suggestions: fetched from the model after each
+            completed assistant reply, with a static fallback. Visible only when
+            the thread has messages and is not mid-run. */}
         <ThreadPrimitive.If empty={false} running={false}>
-          {followUpSuggestions.length > 0 ? (
-            <div className="mt-1 flex flex-wrap gap-2 px-1">
-              {followUpSuggestions.map((prompt) => (
-                <SuggestionChip key={prompt} prompt={prompt} />
-              ))}
-            </div>
-          ) : null}
+          <FollowUpSuggestions fallback={followUpSuggestions} />
         </ThreadPrimitive.If>
       </ThreadPrimitive.Viewport>
 

@@ -33,3 +33,4 @@ export * from "./schemas/stats";
 export * from "./schemas/settings";
 export * from "./schemas/notifications";
 export * from "./schemas/inbox";
+export * from "./schemas/chat";

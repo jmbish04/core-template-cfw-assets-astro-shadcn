@@ -1,30 +1,24 @@
 /**
  * @fileoverview Multi-thread assistant-ui runtime wired to the ChatBroker DO.
  *
- * ## Path shipped: REAL per-thread Cloudflare Agent
+ * ## Path shipped: persistent thread index + REAL per-thread Cloudflare Agent
  *
- * We use `useRemoteThreadListRuntime({ adapter: InMemoryThreadListAdapter, runtimeHook })`.
- * The thread LIST (create / switch / archive / delete / titles) lives in memory
- * on the client via `InMemoryThreadListAdapter`. The MESSAGES for each thread
- * live server-side: `runtimeHook` connects the *currently active* thread to its
- * own `ChatBroker` Durable Object instance.
+ * We use `useRemoteThreadListRuntime({ adapter: threadListAdapter, runtimeHook })`.
+ * The thread INDEX (list / create / rename / archive / delete / titles) is
+ * PERSISTED in the `chat_threads` D1 table via the {@link threadListAdapter}
+ * (backed by `/api/threads`). The MESSAGES for each thread live server-side:
+ * `runtimeHook` connects the *currently active* thread to its own `ChatBroker`
+ * Durable Object instance. The adapter's `remoteId` IS both the D1 row id and
+ * the DO `name`, so metadata and message log stay linked.
  *
  * The key mechanic: `useRemoteThreadListRuntime` renders `runtimeHook` once per
  * active thread, each inside a `ThreadListItemRuntimeProvider`. So inside the
- * hook we read the active thread's stable local id via
- * `useThreadListItem((s) => s.id)` and pass it as the `name` to
- * `useAgent({ agent: "chat-broker", name: threadId })`. Because each distinct
- * `name` is a distinct DO instance (keyed by `idFromName`), each thread is a
- * distinct, server-persisted conversation. Switching threads in the list
+ * hook we read the active thread's stable id via `useThreadListItem((s) => s.id)`
+ * and pass it as the `name` to `useAgent({ agent: "chat-broker", name: threadId })`.
+ * Because each distinct `name` is a distinct DO instance (keyed by `idFromName`),
+ * each thread is a distinct, server-persisted conversation. Switching threads
  * remounts the hook with a different id → reconnects to that DO → its history
- * rehydrates. (Verified against the 0.12.28 `RemoteThreadListHookInstanceManager`
- * which wraps each active thread's `runtimeHook` in a `ThreadListItemRuntimeProvider`.)
- *
- * No backend changes were needed for multi-thread: the ChatBroker already keys
- * persistence by `name`. The InMemoryThreadListAdapter is intentionally
- * client-side — the thread list is ephemeral per browser session, while the
- * conversations themselves are durable. (A future enhancement could persist the
- * list via a custom `RemoteThreadListAdapter` backed by a DO; out of scope here.)
+ * rehydrates. The thread list itself survives reloads because it lives in D1.
  *
  * Browser-only: consumers mount `client:only="react"`.
  */
@@ -38,12 +32,13 @@ import { useAgentChat } from "@cloudflare/ai-chat/react";
 
 import {
   AssistantRuntimeProvider,
-  InMemoryThreadListAdapter,
   useRemoteThreadListRuntime,
   useThreadListItem,
   type AssistantRuntime,
 } from "@assistant-ui/react";
 import { useAISDKRuntime } from "@assistant-ui/react-ai-sdk";
+
+import { threadListAdapter } from "./threadListAdapter";
 
 /**
  * Per-thread runtime hook. Called once per active thread by
@@ -77,7 +72,7 @@ function useChatBrokerThreadRuntime(): AssistantRuntime {
 export function MultiThreadRuntimeProvider({ children }: PropsWithChildren) {
   const runtime = useRemoteThreadListRuntime({
     runtimeHook: useChatBrokerThreadRuntime,
-    adapter: new InMemoryThreadListAdapter(),
+    adapter: threadListAdapter,
   });
 
   return <AssistantRuntimeProvider runtime={runtime}>{children}</AssistantRuntimeProvider>;

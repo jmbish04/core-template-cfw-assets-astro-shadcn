@@ -20,20 +20,25 @@
 import { createWorkersAI } from "workers-ai-provider";
 import type { LanguageModel } from "ai";
 
-/** Default Workers AI chat model when `MODEL_CHAT` is not set in the env. */
-const DEFAULT_CHAT_MODEL = "@cf/openai/gpt-oss-120b";
+import { asChatModelId, DEFAULT_CHAT_MODEL_ID } from "@/backend/ai/models/chat-models";
 
 /**
  * Resolve the AI SDK `LanguageModel` used by the chat showcase agents.
  *
- * Uses the `MODEL_CHAT` Worker var (declared in `wrangler.jsonc`) so the model
- * can be changed without code edits, falling back to a sane Workers AI default.
+ * Model resolution order (first match wins):
+ *   1. An explicit `modelId` argument — but ONLY if it is a known chat model id
+ *      (validated against `CHAT_MODEL_OPTIONS`). Untrusted values (e.g. a
+ *      per-thread `chat_threads.model`) are filtered, so a bad value can never
+ *      reach the provider.
+ *   2. The `MODEL_CHAT` Worker var (declared in `wrangler.jsonc`).
+ *   3. The built-in default (`DEFAULT_CHAT_MODEL_ID`).
  *
  * @param env - Worker bindings (needs the `AI` Workers AI binding).
+ * @param modelId - Optional per-thread model id selected via the model picker.
  * @returns An AI SDK `LanguageModel` ready to pass to `streamText`/`generateText`.
  */
-export function getChatModel(env: Env): LanguageModel {
+export function getChatModel(env: Env, modelId?: string | null): LanguageModel {
   const workersai = createWorkersAI({ binding: env.AI });
-  const modelId = (env.MODEL_CHAT ?? DEFAULT_CHAT_MODEL) as Parameters<typeof workersai>[0];
-  return workersai(modelId);
+  const resolved = asChatModelId(modelId) ?? env.MODEL_CHAT ?? DEFAULT_CHAT_MODEL_ID;
+  return workersai(resolved as Parameters<typeof workersai>[0]);
 }

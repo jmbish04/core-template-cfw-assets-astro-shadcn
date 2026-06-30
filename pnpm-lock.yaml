@@ -77,6 +77,9 @@ importers:
       ai:
         specifier: ^6.0.174
         version: 6.0.191(zod@4.4.3)
+      assistant-stream:
+        specifier: ^0.3.15
+        version: 0.3.15
       astro:
         specifier: ^5.18.1
         version: 5.18.1(@types/node@24.12.4)(aws4fetch@1.0.20)(jiti@2.7.0)(lightningcss@1.32.0)(rollup@4.60.4)(tsx@4.22.3)(typescript@5.9.3)(yaml@2.9.0)
@@ -98,6 +101,9 @@ importers:
       lucide-react:
         specifier: ^0.575.0
         version: 0.575.0(react@19.2.6)
+      mind-elixir:
+        specifier: 5.13.0
+        version: 5.13.0
       platejs:
         specifier: 53.2.4
         version: 53.2.4(@types/react@19.2.15)(immer@11.1.8)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(scheduler@0.27.0)(use-sync-external-store@1.6.0(react@19.2.6))
@@ -5032,6 +5038,9 @@ packages:
   mimic-function@5.0.1:
     resolution: {integrity: sha512-VP79XUPxV2CigYP3jWwAUFSku2aKqBH7uTAapFWCBqutsbmDo96KY5o8uh6U+/YSIn5OxJnXp73beVkpqMIGhA==}
     engines: {node: '>=18'}
+
+  mind-elixir@5.13.0:
+    resolution: {integrity: sha512-ilvXVwrMmBclwyA+46nIrqOZot4Rv7arxInJwbK4XL83qMoPFb7AbwSYJIsMUSjJ+XPxMYYZ2SoMuT06eWAMRQ==}
 
   miniflare@4.20260114.0:
     resolution: {integrity: sha512-QwHT7S6XqGdQxIvql1uirH/7/i3zDEt0B/YBXTYzMfJtVCR4+ue3KPkU+Bl0zMxvpgkvjh9+eCHhJbKEqya70A==}
@@ -11031,6 +11040,8 @@ snapshots:
   mimic-fn@2.1.0: {}
 
   mimic-function@5.0.1: {}
+
+  mind-elixir@5.13.0: {}
 
   miniflare@4.20260114.0:
     dependencies:
