@@ -1,0 +1,32 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import { Badge } from "@/components/ui/badge";
+import { McpPanel } from "@/components/showcase/McpPanel";
+---
+
+<BaseLayout
+  title="MCP Tools"
+  description="Live MCP-style tool registry and execution via the mcp-agent"
+>
+  <div class="container mx-auto max-w-7xl px-4 py-12">
+    <!-- Explainer header (trimmed doc) -->
+    <header class="mb-8">
+      <div class="mb-3 flex items-center gap-3">
+        <h1 class="text-3xl font-bold tracking-tight">MCP Tools</h1>
+        <Badge variant="outline">mcp-agent</Badge>
+      </div>
+      <p class="max-w-2xl text-sm text-muted-foreground">
+        The Model Context Protocol exposes a typed catalog of tools an agent can
+        call. This page reads the live registry from the agent&rsquo;s
+        <code class="text-primary">listTools()</code> RPC, lets you invoke any tool
+        directly through <code class="text-primary">callTool(name, input)</code>, and
+        runs a chat where the model picks tools (<code class="text-primary">echo</code>,
+        <code class="text-primary">currentTime</code>,
+        <code class="text-primary">dbCount</code>) on its own.
+      </p>
+    </header>
+
+    <!-- Live interactive panel (browser-only agents stack) -->
+    <McpPanel client:only="react" />
+  </div>
+</BaseLayout>

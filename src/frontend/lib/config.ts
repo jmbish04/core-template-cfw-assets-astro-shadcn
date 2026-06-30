@@ -50,6 +50,7 @@ export const siteConfig: SiteConfig = {
         { href: "/tasks/board", label: "Task Board" },
         { href: "/tasks", label: "Tasks" },
         { href: "/notes", label: "Notes" },
+        { href: "/inbox", label: "Inbox" },
         { href: "/analytics", label: "Analytics" },
       ],
     },
@@ -62,6 +63,9 @@ export const siteConfig: SiteConfig = {
         { href: "/showcase/multi-agent", label: "Multi-Agent" },
         { href: "/showcase/workflows", label: "Workflows" },
         { href: "/showcase/artifacts", label: "Artifacts" },
+        { href: "/showcase/mcp", label: "MCP Tools" },
+        { href: "/showcase/thinking", label: "Thinking" },
+        { href: "/showcase/skills", label: "Skills" },
       ],
     },
     {
@@ -69,7 +73,9 @@ export const siteConfig: SiteConfig = {
       items: [
         { href: "/notifications", label: "Notifications" },
         { href: "/settings", label: "Settings" },
+        { href: "/showcase/features", label: "Platform Features" },
         { href: "/showcase/utilities", label: "Data Utilities" },
+        { href: "/docs", label: "Documentation" },
         { href: "/playbook", label: "Playbook" },
         { href: "/openapi.json", label: "OpenAPI" },
         { href: "/swagger", label: "Swagger" },

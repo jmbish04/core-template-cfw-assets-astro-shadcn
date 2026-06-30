@@ -27,6 +27,7 @@ import { clientErrorRouter } from "./routes/client-error";
 import { adminRouter, configRouter } from "./routes/config";
 import { docsRouter } from "./routes/docs";
 import { healthRouter } from "./routes/health";
+import { inboxRouter } from "./routes/inbox";
 import { activityRouter } from "./routes/activity";
 import { dashboardRouter } from "./routes/dashboard";
 import { notificationsRouter } from "./routes/notifications";
@@ -123,6 +124,7 @@ app.route("/api/webhooks", webhooksRouter);
 app.route("/api/activity", activityRouter);
 app.route("/api/notifications", notificationsRouter);
 app.route("/api/dashboard", dashboardRouter);
+app.route("/api/inbox", inboxRouter);
 app.route("/api/seed", seedRouter);
 
 app.route("/api/__client-error", clientErrorRouter);

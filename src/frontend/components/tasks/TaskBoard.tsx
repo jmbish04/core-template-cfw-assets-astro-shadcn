@@ -22,6 +22,8 @@ import { cn } from "@/lib/utils";
 import { EmptyState, ErrorState } from "./Shared";
 import { TaskCard } from "./TaskCard";
 import { TaskDialog } from "./TaskDialog";
+import { TaskPreviewDialog } from "./TaskPreviewDialog";
+import { useProjects } from "./useProjects";
 import {
   BOARD_STATUSES,
   STATUS_LABELS,
@@ -38,6 +40,12 @@ export function TaskBoard() {
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<TaskStatus | null>(null);
   const draggingRef = useRef<Task | null>(null);
+
+  // Preview modal state.
+  const [previewTask, setPreviewTask] = useState<Task | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+
+  const { nameById } = useProjects();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -105,6 +113,26 @@ export function TaskBoard() {
     setColumns((prev) =>
       prev.map((col) => (col.status === task.status ? { ...col, tasks: [task, ...col.tasks] } : col)),
     );
+  }, []);
+
+  const openPreview = useCallback((task: Task) => {
+    setPreviewTask(task);
+    setPreviewOpen(true);
+  }, []);
+
+  // Reconcile an edited task back into the board. If its status changed, move
+  // it to the correct column; otherwise replace it in place.
+  const handleUpdated = useCallback((updated: Task) => {
+    setPreviewTask(updated);
+    setColumns((prev) => {
+      const without = prev.map((col) => ({
+        ...col,
+        tasks: col.tasks.filter((t) => t.id !== updated.id),
+      }));
+      return without.map((col) =>
+        col.status === updated.status ? { ...col, tasks: [updated, ...col.tasks] } : col,
+      );
+    });
   }, []);
 
   return (
@@ -192,6 +220,7 @@ export function TaskBoard() {
                       task={task}
                       pending={pendingId === task.id}
                       onMove={handleAdjacentMove}
+                      onOpen={openPreview}
                       onDragStart={(t) => {
                         draggingRef.current = t;
                       }}
@@ -214,6 +243,14 @@ export function TaskBoard() {
           ))}
         </div>
       )}
+
+      <TaskPreviewDialog
+        task={previewTask}
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        projectName={previewTask?.projectId ? nameById.get(previewTask.projectId) : null}
+        onSaved={handleUpdated}
+      />
     </div>
   );
 }

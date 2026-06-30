@@ -28,6 +28,7 @@ import { convertToModelMessages, stepCountIs, streamText, tool, type UIMessage }
 import { getChatModel } from "@/backend/ai/providers/ai-sdk";
 import type {
   WorkflowState,
+  WorkflowsSyncState,
   TranscribeAudioParams,
   ProcessDataParams,
   ProgressUpdate,
@@ -35,9 +36,17 @@ import type {
 import { transcribeAudioSchema, processDataSchema } from "./types";
 
 /**
- * WorkflowsAgent - Orchestrates durable multi-step workflows
+ * WorkflowsAgent - Orchestrates durable multi-step workflows.
+ *
+ * The step *work* is simulated (labeled in the system prompt and tool output),
+ * but the **progress mechanism is real**: every step transition and progress
+ * event flows through `this.setState(...)`, which the Agents SDK broadcasts to
+ * all connected WebSocket clients. A subscribed UI watches steps advance live.
  */
-export class WorkflowsAgent extends AIChatAgent<Env> {
+export class WorkflowsAgent extends AIChatAgent<Env, WorkflowsSyncState> {
+  /** Synced initial state — clients see this immediately on connect. */
+  initialState: WorkflowsSyncState = { activeWorkflow: null, lastProgress: null };
+
   private activeWorkflows: Map<string, WorkflowState> = new Map();
 
   /**
@@ -230,10 +239,70 @@ For long-running tasks:
     this.activeWorkflows.set(workflowId, workflow);
     await this.saveWorkflow(workflow);
 
+    // Drive the steps so progress is observable over synced state.
+    this.executeDataProcessingWorkflow(workflowId, params).catch((error) => {
+      console.error(`Workflow ${workflowId} failed:`, error);
+    });
+
     return {
       workflowId,
       status: "started",
     };
+  }
+
+  /**
+   * Execute the data-processing workflow, advancing each step and broadcasting
+   * progress. The transformations are simulated work (labeled), but every step
+   * transition is real synced state.
+   */
+  private async executeDataProcessingWorkflow(
+    workflowId: string,
+    params: ProcessDataParams,
+  ): Promise<void> {
+    const workflow = this.activeWorkflows.get(workflowId);
+    if (!workflow) return;
+
+    try {
+      workflow.status = "running";
+      await this.saveWorkflow(workflow);
+
+      await this.executeStep(workflow, "download", async () => {
+        await this.reportProgress({ step: "download", percent: 15, message: "Fetching data" });
+        await this.sleep(400);
+      });
+      await this.executeStep(workflow, "parse", async () => {
+        await this.reportProgress({
+          step: "parse",
+          percent: 40,
+          message: `Parsing ${params.format.toUpperCase()}`,
+        });
+        await this.sleep(400);
+      });
+      await this.executeStep(workflow, "transform", async () => {
+        const n = params.transformations?.length ?? 0;
+        await this.reportProgress({
+          step: "transform",
+          percent: 70,
+          message: `Applying ${n} transformation${n === 1 ? "" : "s"}`,
+        });
+        await this.sleep(400);
+      });
+      await this.executeStep(workflow, "save", async () => {
+        await this.reportProgress({ step: "save", percent: 95, message: "Saving results" });
+        await this.sleep(300);
+      });
+
+      workflow.status = "completed";
+      workflow.overallProgress = 100;
+      workflow.endTime = Date.now();
+      await this.saveWorkflow(workflow);
+      await this.reportProgress({ step: "complete", percent: 100 });
+    } catch (error) {
+      workflow.status = "failed";
+      workflow.error = error instanceof Error ? error.message : String(error);
+      await this.saveWorkflow(workflow);
+      throw error;
+    }
   }
 
   /**
@@ -266,16 +335,14 @@ For long-running tasks:
   }
 
   /**
-   * Report progress to connected clients via WebSocket.
+   * Report a progress event to every connected client.
+   *
+   * This is the REAL progress mechanism: it writes `lastProgress` into synced
+   * state, which the Agents SDK broadcasts over WebSocket to all subscribers.
+   * The frontend renders this as a live progress bar / step ticker.
    */
   private async reportProgress(update: ProgressUpdate): Promise<void> {
-    // Note: In production, this would broadcast to WebSocket connections
-    // this.broadcast({
-    //   type: "progress",
-    //   data: update
-    // });
-
-    console.log(`Progress: ${update.step} - ${update.percent}%`);
+    this.setState({ ...this.state, lastProgress: update });
   }
 
   /**
@@ -308,6 +375,9 @@ For long-running tasks:
       INSERT OR REPLACE INTO workflows (workflow_id, state, updated_at)
       VALUES (${workflow.workflowId}, ${JSON.stringify(workflow)}, ${timestamp})
     `;
+    // Broadcast the latest workflow snapshot to all connected clients so the UI
+    // sees each step transition (pending → running → completed) in real time.
+    this.setState({ ...this.state, activeWorkflow: { ...workflow, steps: [...workflow.steps] } });
   }
 
   /**

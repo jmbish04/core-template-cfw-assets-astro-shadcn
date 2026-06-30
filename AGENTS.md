@@ -43,12 +43,32 @@ This template ships a real, running app so new projects inherit working patterns
 (extend or delete the pieces you don't need). All of it is wired to D1 via Hono;
 no mock data.
 
+- **CRITICAL — Agents SDK islands must mount `client:only="react"`, never `client:load`.**
+  Any React island using `useAgent`/`useAgentChat`/assistant-ui (the
+  agents/PartySocket stack) is browser-only. `client:load` server-renders it
+  first, and `useAgent`'s `useMemo` hits a null React dispatcher in the SSR
+  worker → `Cannot read properties of null (reading 'useMemo')`, which fails the
+  whole route. This was the original "chat not working" bug. Plain fetch-based
+  islands (inbox, dashboard, tasks) may use `client:load`. Note: the `ai` binding
+  is remote-only, so `wrangler.jsonc` sets `"ai": { "binding": "AI", "remote": true }`.
 - **Pages** (Astro SSR + React islands, Monolith dark theme):
-  - `/dashboard` — admin dashboard: KPI stat cards, a Workers-AI insights panel,
-    and the full recharts suite (area / donut / bar / horizontal-bar / throughput)
+  - `/dashboard` — admin dashboard: radial-gauge KPIs + grouped-bar, interactive
+    donut, and polished time-series recharts (all OKLCH palette via `ui/chart.tsx`)
     with search + range + status filters. Components under `components/dashboard/`.
-  - `/projects`, `/tasks/board` (kanban), `/tasks` (filterable table), `/tasks/[id]`
-    (detail + progress), `/notes`, `/analytics`. Components under `components/tasks/`.
+  - `/projects`, `/tasks/board` (kanban), `/tasks` (table with **faceted
+    multi-select chip filters** — `components/tasks/FacetFilter.tsx`), `/tasks/[id]`.
+    Task/kanban/project cards open preview modals. Components under `components/tasks/`.
+  - `/notes` — **PlateJS** rich-text editor (`components/notes/`); bodies persist as
+    a versioned `{v,format:"plate",value}` JSON envelope in the team-notes `body`
+    column, with legacy plain-text fallback.
+  - `/inbox` — two-pane inbox backed by Cloudflare **Email Routing**: the Worker
+    `email()` handler (`backend/email/inbound.ts`) stores inbound mail in the
+    `email_messages` D1 table; UI under `components/inbox/`, API at `/api/inbox`.
+  - `/chat` + `/showcase/{code-mode,browser-hitl,multi-agent,workflows,artifacts,
+    mcp,thinking,skills,features}` — every Agents page mounts a LIVE interactive
+    island (`components/showcase/`) wired to its Durable Object, not a static doc.
+  - `/docs` (docs home, bound to `/api/docs/*`) + `/playbook` — documentation using
+    the Shiki-backed `ui/code-block.tsx` (kibo-ui-style, base-ui, copy + tabs).
   - `/settings/{preferences,notifications,webhooks,activity,advanced}` (shared
     sub-nav) and `/notifications` (realtime). Components under `components/settings/`.
 - **Schemas** live in `db/schemas/{projects,tasks,stats,settings,notifications}/`
@@ -57,6 +77,14 @@ no mock data.
   notifications,dashboard}` — CRUD + `?q=` search + filters + pagination. The
   dashboard exposes `/stats`, `/charts`, `/insights` (Workers AI via
   `ai/providers/ai-sdk.ts#getChatModel`).
+- **Agents (Durable Objects, all bound + functional)**: `ChatBroker` (assistant-ui
+  chat), `OrchestratorAgent` + `ResearcherAgent` + `CoderAgent` (real `getAgentByName`
+  RPC delegation), `CodeModeAgent` (executes via `WORKER_LOADERS`), `WorkflowsAgent`
+  (live progress via `setState`), `BrowserHitlAgent` (`MYBROWSER`; HITL approval gate),
+  `McpAgent` (tool catalog + `callTool`), `ThinkingAgent` (streams reasoning then text),
+  `SkillsAgent` (skills registry), `ArtifactAgent` (SQLite versioning), `NotificationsAgent`.
+  Invoke via RPC (`getAgentByName`) or `@callable` + client `agent.call` — NEVER
+  `stub.fetch`. Migrations are additive (v1→v3); never rewrite a shipped tag.
 - **Realtime**: the `NotificationsAgent` Durable Object (`NOTIFICATIONS_AGENT`,
   instance `"global"`) syncs notification state over WebSocket. The client island
   is `components/NotificationsFeed.tsx` (`useAgent` + `onStateUpdate`); REST

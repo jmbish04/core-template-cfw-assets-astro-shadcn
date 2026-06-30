@@ -19,13 +19,27 @@ export interface ProjectCardProps {
   project: Project;
   /** Toggle the star; receives the project id. Optimistic at the parent. */
   onToggleStar: (project: Project) => void;
+  /** Open the project preview modal. */
+  onOpen: (project: Project) => void;
   /** Whether a star request is currently in flight for this project. */
   starPending?: boolean;
 }
 
-export function ProjectCard({ project, onToggleStar, starPending }: ProjectCardProps) {
+export function ProjectCard({ project, onToggleStar, onOpen, starPending }: ProjectCardProps) {
   return (
-    <Card className="transition-colors hover:bg-card/80">
+    <Card
+      role="button"
+      tabIndex={0}
+      aria-label={`Open project ${project.name}`}
+      onClick={() => onOpen(project)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen(project);
+        }
+      }}
+      className="cursor-pointer transition-colors hover:bg-card/80"
+    >
       <CardContent className="flex flex-col gap-4">
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2.5">
@@ -34,12 +48,7 @@ export function ProjectCard({ project, onToggleStar, starPending }: ProjectCardP
               className="size-3 shrink-0 rounded-full ring-1 ring-foreground/10"
               style={{ backgroundColor: project.color }}
             />
-            <a
-              href={`/tasks?projectId=${encodeURIComponent(project.id)}`}
-              className="truncate text-sm font-medium hover:underline"
-            >
-              {project.name}
-            </a>
+            <span className="truncate text-sm font-medium">{project.name}</span>
           </div>
           <Button
             size="icon-sm"
@@ -47,7 +56,10 @@ export function ProjectCard({ project, onToggleStar, starPending }: ProjectCardP
             aria-label={project.starred ? "Unstar project" : "Star project"}
             aria-pressed={project.starred}
             disabled={starPending}
-            onClick={() => onToggleStar(project)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleStar(project);
+            }}
           >
             <StarIcon
               className={cn(

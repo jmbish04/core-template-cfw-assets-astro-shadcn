@@ -23,6 +23,7 @@ import { EmptyState, ErrorState } from "./Shared";
 import { FilterSelect } from "./FilterSelect";
 import { ProjectCard } from "./ProjectCard";
 import { ProjectDialog } from "./ProjectDialog";
+import { ProjectPreviewDialog } from "./ProjectPreviewDialog";
 import { PROJECT_STATUS_LABELS, type ListEnvelope, type Project } from "./types";
 
 const STATUS_OPTIONS = (Object.keys(PROJECT_STATUS_LABELS) as (keyof typeof PROJECT_STATUS_LABELS)[]).map(
@@ -54,6 +55,10 @@ export function ProjectList() {
   const [sort, setSort] = useState<string>("updatedAt");
   const [view, setView] = useState<"grid" | "list">("grid");
   const [pendingStarId, setPendingStarId] = useState<string | null>(null);
+
+  // Preview modal state.
+  const [previewProject, setPreviewProject] = useState<Project | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   // Debounce the free-text search so we don't hammer the API per keystroke.
   useEffect(() => {
@@ -118,6 +123,17 @@ export function ProjectList() {
   const handleCreated = useCallback((project: Project) => {
     setProjects((prev) => [project, ...prev]);
     setTotal((t) => t + 1);
+  }, []);
+
+  const openPreview = useCallback((project: Project) => {
+    setPreviewProject(project);
+    setPreviewOpen(true);
+  }, []);
+
+  // Replace an edited project in place and keep the preview in sync.
+  const handleUpdated = useCallback((project: Project) => {
+    setProjects((prev) => prev.map((p) => (p.id === project.id ? project : p)));
+    setPreviewProject(project);
   }, []);
 
   const hasFilters = Boolean(debouncedQ || status || starred);
@@ -241,12 +257,20 @@ export function ProjectList() {
                 key={project.id}
                 project={project}
                 onToggleStar={toggleStar}
+                onOpen={openPreview}
                 starPending={pendingStarId === project.id}
               />
             ))}
           </div>
         </>
       )}
+
+      <ProjectPreviewDialog
+        project={previewProject}
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        onSaved={handleUpdated}
+      />
     </div>
   );
 }

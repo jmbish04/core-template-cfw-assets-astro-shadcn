@@ -74,6 +74,18 @@ export interface ProgressUpdate {
 }
 
 /**
+ * Server-authoritative state synced to every connected WebSocket client via
+ * `setState`. A subscribed UI watches `activeWorkflow` advance step-by-step in
+ * real time, plus the latest discrete progress event.
+ */
+export interface WorkflowsSyncState {
+  /** The workflow currently executing (or last executed), or null on cold start. */
+  activeWorkflow: WorkflowState | null;
+  /** The most recent progress event emitted by the running workflow. */
+  lastProgress: ProgressUpdate | null;
+}
+
+/**
  * Workflow result
  */
 export interface WorkflowResult {

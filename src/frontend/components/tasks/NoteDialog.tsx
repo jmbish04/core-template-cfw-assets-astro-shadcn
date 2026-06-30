@@ -1,7 +1,13 @@
 /**
  * @fileoverview NoteDialog — create/edit a team note. POSTs `/api/team-notes`
  * or PATCHes `/api/team-notes/{id}`. Supports an optional project association,
- * a pinned toggle, author, title, and body. Surfaced via a `trigger` element.
+ * a pinned toggle, author, title, and a PlateJS rich-text body.
+ *
+ * The body is edited with the `PlateEditor` island and persisted as a string in
+ * the existing `body` column: a JSON-encoded Plate envelope (see
+ * `components/notes/plate-value`). Legacy plain-text bodies are loaded
+ * transparently. We re-mount the editor per open via a `key` so each edit
+ * session seeds from the correct note. Surfaced via a `trigger` element.
  */
 
 import { useEffect, useState, type ReactElement } from "react";
@@ -19,7 +25,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -28,6 +33,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { apiSend, ApiError } from "@/lib/api";
+import { PlateEditor, bodyToSnippet } from "@/components/notes";
 
 import { ErrorState } from "./Shared";
 import { useProjects } from "./useProjects";
@@ -67,7 +73,9 @@ export function NoteDialog({ trigger, note, onSaved }: NoteDialogProps) {
       setError("Title is required.");
       return;
     }
-    if (!body.trim()) {
+    // `body` holds the serialized Plate envelope; validate against its
+    // extracted plain text so an empty rich-text document is still rejected.
+    if (!bodyToSnippet(body).trim()) {
       setError("Body is required.");
       return;
     }
@@ -75,7 +83,7 @@ export function NoteDialog({ trigger, note, onSaved }: NoteDialogProps) {
     setError(null);
     const payload = {
       title: title.trim(),
-      body: body.trim(),
+      body,
       author: author.trim() || "you",
       projectId: projectId || null,
       pinned,
@@ -118,12 +126,18 @@ export function NoteDialog({ trigger, note, onSaved }: NoteDialogProps) {
 
           <div className="grid gap-2">
             <Label htmlFor="note-body">Body</Label>
-            <Textarea
+            {/*
+             * Re-mount the editor whenever the dialog opens or the target note
+             * changes (`key`) so `PlateEditor` re-seeds from the correct body.
+             * PlateJS is browser-only; the whole TeamNotes island is mounted
+             * `client:only="react"`, so this never runs during SSR.
+             */}
+            <PlateEditor
+              key={`${note?.id ?? "new"}:${open}`}
               id="note-body"
               value={body}
-              onChange={(e) => setBody(e.target.value)}
-              placeholder="Write the note (markdown or plain text)…"
-              rows={6}
+              onChange={setBody}
+              placeholder="Write the note…"
             />
           </div>
 

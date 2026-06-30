@@ -1,15 +1,22 @@
 /**
- * @fileoverview Stat-card row for the Admin Dashboard.
+ * @fileoverview KPI row for the Admin Dashboard — gauges + numeric stat cards.
  *
- * Renders six KPI cards derived from `GET /api/dashboard/stats`:
- *   Total Projects · Active Projects · Total Tasks · Completed Tasks ·
- *   Completion Rate · Overdue Tasks.
+ * Upgraded to a real product-dashboard hierarchy (mirroring the shadcn
+ * "gauges" + "dashboards/home" blocks) in the Monolith dark system:
  *
- * Each card shows a label, a big compact number, a small contextual subtext,
- * and a lucide icon. While the stats request is in flight the whole row is
- * replaced with matching skeletons; on failure an inline error (with retry)
- * spans the row. Monolith styling: `bg-card` + `ring-1 ring-border/40`, never
- * a traditional 1px border.
+ *   ┌ Completion Rate ┐┌ Active Ratio ┐┌ ── numeric KPI grid (2×2) ── ┐
+ *   │  RadialGauge    ││  RadialGauge ││ Total Projects · Total Tasks │
+ *   │  (completion %) ││  (active %)  ││ Completed Tasks · Overdue    │
+ *   └─────────────────┘└──────────────┘└──────────────────────────────┘
+ *
+ * Every value is derived from REAL `GET /api/dashboard/stats` fields — the two
+ * gauges visualise the two genuine *ratio* metrics the API exposes (completion
+ * rate, and active-vs-total project share). The four numeric cards each carry a
+ * coloured icon chip and a contextual subtext. No mock data, no `window.alert`.
+ *
+ * Monolith styling: `bg-card` surfaces with `ring-1 ring-border/40` (never a
+ * traditional 1px border). LOADING swaps the whole row for matching skeletons;
+ * ERROR surfaces inline with a retry.
  */
 
 "use client";
@@ -19,8 +26,7 @@ import {
   CheckCircle2,
   FolderKanban,
   ListTodo,
-  Target,
-  Zap,
+  type LucideIcon,
 } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -28,84 +34,193 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { compactNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
+import { RadialGauge } from "./RadialGauge";
 import { InlineError } from "./shared";
 import type { DashboardStats } from "./types";
 import type { Resource } from "./useDashboardData";
 
+// ---------------------------------------------------------------------------
+// Numeric KPI definitions (the non-ratio metrics)
+// ---------------------------------------------------------------------------
+
 interface StatDef {
   key: string;
   label: string;
-  icon: typeof Target;
+  icon: LucideIcon;
   value: (s: DashboardStats) => string;
   subtext: (s: DashboardStats) => string;
-  /** Optional accent for the icon chip (drawn from the chart palette). */
-  accent?: string;
+  /** Accent drawn from the chart palette. */
+  accent: string;
+  /** Whether the subtext should render in the destructive tone when alerting. */
+  alert?: (s: DashboardStats) => boolean;
 }
 
-const STAT_DEFS: StatDef[] = [
+const NUMERIC_STATS: StatDef[] = [
   {
     key: "totalProjects",
-    label: "Total Projects",
+    label: "Projects",
     icon: FolderKanban,
     value: (s) => compactNumber(s.totalProjects),
     subtext: (s) => `${compactNumber(s.activeProjects)} active`,
     accent: "var(--chart-1)",
   },
   {
-    key: "activeProjects",
-    label: "Active Projects",
-    icon: Zap,
-    value: (s) => compactNumber(s.activeProjects),
-    subtext: (s) =>
-      s.totalProjects > 0
-        ? `${Math.round((s.activeProjects / s.totalProjects) * 100)}% of portfolio`
-        : "no projects yet",
-    accent: "var(--chart-2)",
-  },
-  {
     key: "totalTasks",
     label: "Total Tasks",
     icon: ListTodo,
     value: (s) => compactNumber(s.totalTasks),
-    subtext: (s) => `${compactNumber(s.completedTasks)} completed`,
+    subtext: (s) =>
+      `${compactNumber(Math.max(s.totalTasks - s.completedTasks, 0))} open`,
     accent: "var(--chart-3)",
   },
   {
     key: "completedTasks",
-    label: "Completed Tasks",
+    label: "Completed",
     icon: CheckCircle2,
     value: (s) => compactNumber(s.completedTasks),
     subtext: (s) =>
-      `${compactNumber(Math.max(s.totalTasks - s.completedTasks, 0))} remaining`,
+      s.unreadNotifications > 0
+        ? `${compactNumber(s.unreadNotifications)} unread alerts`
+        : "inbox clear",
     accent: "var(--chart-5)",
   },
   {
-    key: "completionRatePct",
-    label: "Completion Rate",
-    icon: Target,
-    value: (s) => `${s.completionRatePct}%`,
-    subtext: (s) => `${compactNumber(s.completedTasks)} / ${compactNumber(s.totalTasks)} tasks`,
-    accent: "var(--chart-2)",
-  },
-  {
     key: "overdueTasks",
-    label: "Overdue Tasks",
+    label: "Overdue",
     icon: AlertTriangle,
     value: (s) => compactNumber(s.overdueTasks),
-    subtext: (s) =>
-      s.overdueTasks > 0 ? "needs attention" : "all on schedule",
+    subtext: (s) => (s.overdueTasks > 0 ? "needs attention" : "all on schedule"),
     accent: "var(--chart-4)",
+    alert: (s) => s.overdueTasks > 0,
   },
 ];
 
-/** Grid wrapper: 1 col on mobile → 2 → 3 → 6 across breakpoints. */
-function CardGrid({ children }: { children: React.ReactNode }) {
+// ---------------------------------------------------------------------------
+// Gauge cards
+// ---------------------------------------------------------------------------
+
+/** A hero gauge card wrapping a {@link RadialGauge} with a title + footnote. */
+function GaugeCard({
+  title,
+  footnote,
+  value,
+  centerLabel,
+  caption,
+  color,
+}: {
+  title: string;
+  footnote: string;
+  value: number;
+  centerLabel?: string;
+  caption?: string;
+  color: string;
+}) {
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-      {children}
+    <Card className="flex flex-col">
+      <CardContent className="flex flex-1 flex-col items-center gap-2 p-5">
+        <div className="flex w-full items-center justify-between">
+          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            {title}
+          </span>
+          <span
+            className="size-2 rounded-full"
+            style={{ backgroundColor: color }}
+            aria-hidden
+          />
+        </div>
+        <RadialGauge
+          value={value}
+          centerLabel={centerLabel}
+          caption={caption}
+          color={color}
+        />
+        <span className="text-center text-xs text-muted-foreground">{footnote}</span>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Numeric card
+// ---------------------------------------------------------------------------
+
+function NumericCard({ def, data }: { def: StatDef; data: DashboardStats }) {
+  const Icon = def.icon;
+  const isAlert = def.alert?.(data) ?? false;
+  return (
+    <Card className="transition-colors hover:bg-card/80">
+      <CardContent className="flex flex-col gap-2.5 p-4">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            {def.label}
+          </span>
+          <span
+            className="flex size-7 items-center justify-center rounded-md ring-1 ring-border/40"
+            style={{
+              backgroundColor: `color-mix(in oklch, ${def.accent} 14%, transparent)`,
+            }}
+          >
+            <Icon className="size-3.5" style={{ color: def.accent }} aria-hidden />
+          </span>
+        </div>
+        <span className="text-2xl font-semibold tabular-nums tracking-tight text-foreground">
+          {def.value(data)}
+        </span>
+        <span
+          className={cn(
+            "text-xs",
+            isAlert ? "text-destructive" : "text-muted-foreground",
+          )}
+        >
+          {def.subtext(data)}
+        </span>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Skeleton row
+// ---------------------------------------------------------------------------
+
+function LoadingRow() {
+  return (
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
+      <Card className="lg:col-span-1">
+        <CardContent className="flex flex-col items-center gap-4 p-5">
+          <Skeleton className="h-3 w-24 self-start" />
+          <Skeleton className="aspect-square w-[160px] rounded-full" />
+          <Skeleton className="h-3 w-28" />
+        </CardContent>
+      </Card>
+      <Card className="lg:col-span-1">
+        <CardContent className="flex flex-col items-center gap-4 p-5">
+          <Skeleton className="h-3 w-24 self-start" />
+          <Skeleton className="aspect-square w-[160px] rounded-full" />
+          <Skeleton className="h-3 w-28" />
+        </CardContent>
+      </Card>
+      <div className="grid grid-cols-2 gap-4 lg:col-span-2">
+        {NUMERIC_STATS.map((d) => (
+          <Card key={d.key}>
+            <CardContent className="flex flex-col gap-3 p-4">
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-3 w-16" />
+                <Skeleton className="size-7 rounded-md" />
+              </div>
+              <Skeleton className="h-7 w-14" />
+              <Skeleton className="h-3 w-20" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Public component
+// ---------------------------------------------------------------------------
 
 export function StatCards({ resource }: { resource: Resource<DashboardStats> }) {
   const { data, loading, error, reload } = resource;
@@ -115,64 +230,46 @@ export function StatCards({ resource }: { resource: Resource<DashboardStats> }) 
   }
 
   if (loading && !data) {
-    return (
-      <CardGrid>
-        {STAT_DEFS.map((d) => (
-          <Card key={d.key}>
-            <CardContent className="flex flex-col gap-3 p-5">
-              <div className="flex items-center justify-between">
-                <Skeleton className="h-3 w-20" />
-                <Skeleton className="size-8 rounded-md" />
-              </div>
-              <Skeleton className="h-8 w-16" />
-              <Skeleton className="h-3 w-24" />
-            </CardContent>
-          </Card>
-        ))}
-      </CardGrid>
-    );
+    return <LoadingRow />;
   }
 
   if (!data) return null;
 
+  // Both gauges visualise genuine ratio fields from /api/dashboard/stats.
+  const activeRatio =
+    data.totalProjects > 0
+      ? Math.round((data.activeProjects / data.totalProjects) * 100)
+      : 0;
+
   return (
-    <CardGrid>
-      {STAT_DEFS.map((d) => {
-        const Icon = d.icon;
-        const isAlert = d.key === "overdueTasks" && data.overdueTasks > 0;
-        return (
-          <Card key={d.key} className="transition-colors hover:bg-card/80">
-            <CardContent className="flex flex-col gap-3 p-5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  {d.label}
-                </span>
-                <span
-                  className="flex size-8 items-center justify-center rounded-md ring-1 ring-border/40"
-                  style={{ backgroundColor: `color-mix(in oklch, ${d.accent} 14%, transparent)` }}
-                >
-                  <Icon
-                    className="size-4"
-                    style={{ color: d.accent }}
-                    aria-hidden
-                  />
-                </span>
-              </div>
-              <span className="text-3xl font-semibold tabular-nums tracking-tight text-foreground">
-                {d.value(data)}
-              </span>
-              <span
-                className={cn(
-                  "text-xs",
-                  isAlert ? "text-destructive" : "text-muted-foreground",
-                )}
-              >
-                {d.subtext(data)}
-              </span>
-            </CardContent>
-          </Card>
-        );
-      })}
-    </CardGrid>
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
+      <div className="lg:col-span-1">
+        <GaugeCard
+          title="Completion Rate"
+          footnote={`${compactNumber(data.completedTasks)} of ${compactNumber(data.totalTasks)} tasks done`}
+          value={data.completionRatePct}
+          centerLabel={`${data.completionRatePct}%`}
+          caption="complete"
+          color="var(--chart-2)"
+        />
+      </div>
+
+      <div className="lg:col-span-1">
+        <GaugeCard
+          title="Active Projects"
+          footnote={`${compactNumber(data.activeProjects)} of ${compactNumber(data.totalProjects)} projects active`}
+          value={activeRatio}
+          centerLabel={compactNumber(data.activeProjects)}
+          caption={`of ${compactNumber(data.totalProjects)}`}
+          color="var(--chart-1)"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:col-span-2">
+        {NUMERIC_STATS.map((def) => (
+          <NumericCard key={def.key} def={def} data={data} />
+        ))}
+      </div>
+    </div>
   );
 }

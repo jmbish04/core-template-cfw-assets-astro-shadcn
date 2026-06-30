@@ -22,6 +22,7 @@
  */
 
 import { AIChatAgent } from "@cloudflare/ai-chat";
+import { callable } from "agents";
 import { convertToModelMessages, stepCountIs, streamText, tool, type UIMessage } from "ai";
 import { getChatModel } from "@/backend/ai/providers/ai-sdk";
 import type {
@@ -117,6 +118,42 @@ Be cautious and transparent about what actions you're taking.`,
   }
 
   /**
+   * Return the audited action log (newest first) so a non-chat UI can observe
+   * the human-in-the-loop approval lifecycle: which actions ran, which were
+   * approved, and their outcomes.
+   */
+  @callable()
+  async getActionLog(): Promise<
+    Array<{ action: string; url: string; status: string; error: string | null; timestamp: string }>
+  > {
+    const rows = await this.sql<{
+      action: string;
+      url: string;
+      status: string;
+      error: string | null;
+      timestamp: string;
+    }>`
+      SELECT action, url, status, error, timestamp
+      FROM action_log
+      ORDER BY id DESC
+      LIMIT 100
+    `;
+    return rows.map((r) => ({
+      action: r.action,
+      url: r.url,
+      status: r.status,
+      error: r.error,
+      timestamp: r.timestamp,
+    }));
+  }
+
+  /** Return live approval counters for the HITL dashboard. */
+  @callable()
+  async getApprovalStats(): Promise<BrowserAgentState> {
+    return this.agentState;
+  }
+
+  /**
    * Capture a screenshot using Browser Rendering API.
    *
    * @param params - Screenshot parameters
@@ -125,26 +162,33 @@ Be cautious and transparent about what actions you're taking.`,
   private async captureScreenshot(
     params: TakeScreenshotParams,
   ): Promise<BrowserActionResult> {
+    const target = params.url || "current";
     try {
-      // Note: In production, this would use Cloudflare Browser Rendering
-      // const browser = await this.env.MYBROWSER.launch();
-      // const page = await browser.newPage();
-      // await page.goto(params.url || this.agentState.activeSessionUrl);
-      // const screenshot = await page.screenshot({ fullPage: params.fullPage });
-      // await browser.close();
+      // Cloudflare Browser Rendering (`env.MYBROWSER`) requires the
+      // `@cloudflare/puppeteer` driver, which is not installed in this template.
+      // Rather than emit a fake base64 blob, we generate a REAL, observable
+      // placeholder artifact (an SVG "screenshot card" data URL) that encodes
+      // the requested URL + capture time, and clearly label it as SIMULATED.
+      // The moment `@cloudflare/puppeteer` is added, swap this block for:
+      //   const browser = await puppeteer.launch(this.env.MYBROWSER);
+      //   const page = await browser.newPage();
+      //   await page.goto(target);
+      //   const buf = await page.screenshot({ fullPage: params.fullPage });
+      //   const screenshot = `data:image/png;base64,${buf.toString("base64")}`;
+      const screenshot = this.renderSimulatedScreenshot(target, params.fullPage);
 
       this.agentState.totalActions++;
       await this.saveAgentState();
-      await this.logAction("screenshot", params.url || "current", "success");
+      await this.logAction("screenshot", target, "success");
 
       return {
         status: "success",
-        message: `Screenshot captured${params.fullPage ? " (full page)" : ""}`,
+        message: `[SIMULATED] Screenshot of ${target}${params.fullPage ? " (full page)" : ""}. Install @cloudflare/puppeteer + the MYBROWSER binding for live capture.`,
         url: params.url,
-        screenshot: "base64_placeholder", // Would be actual base64 data
+        screenshot,
       };
     } catch (error) {
-      await this.logAction("screenshot", params.url || "current", "error", String(error));
+      await this.logAction("screenshot", target, "error", String(error));
 
       return {
         status: "error",
@@ -152,6 +196,31 @@ Be cautious and transparent about what actions you're taking.`,
         error: error instanceof Error ? error.message : String(error),
       };
     }
+  }
+
+  /**
+   * Produce a real, renderable SVG data-URL standing in for a live screenshot.
+   * This is genuinely observable in the UI (it renders as an image) and is
+   * explicitly labeled SIMULATED so it is never mistaken for real capture.
+   *
+   * @param target - The URL the screenshot represents.
+   * @param fullPage - Whether a full-page capture was requested.
+   */
+  private renderSimulatedScreenshot(target: string, fullPage?: boolean): string {
+    const ts = new Date().toISOString();
+    const safe = target.replace(/[<&>]/g, " ").slice(0, 64);
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="${fullPage ? 800 : 400}">
+  <rect width="100%" height="100%" fill="#0b0d12"/>
+  <rect x="0" y="0" width="100%" height="48" fill="#161a22"/>
+  <circle cx="20" cy="24" r="6" fill="#ff5f57"/>
+  <circle cx="40" cy="24" r="6" fill="#febc2e"/>
+  <circle cx="60" cy="24" r="6" fill="#28c840"/>
+  <text x="90" y="29" fill="#7d8590" font-family="monospace" font-size="13">${safe}</text>
+  <text x="24" y="110" fill="#e6edf3" font-family="monospace" font-size="20">SIMULATED SCREENSHOT</text>
+  <text x="24" y="140" fill="#7d8590" font-family="monospace" font-size="13">${ts}</text>
+  <text x="24" y="170" fill="#7d8590" font-family="monospace" font-size="13">${fullPage ? "full page" : "viewport"}</text>
+</svg>`;
+    return `data:image/svg+xml;base64,${btoa(svg)}`;
   }
 
   /**

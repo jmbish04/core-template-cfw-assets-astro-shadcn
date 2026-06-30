@@ -21,11 +21,13 @@ export interface TaskCardProps {
   onMove: (task: Task, direction: -1 | 1) => void;
   /** Begin an HTML5 drag for this task. */
   onDragStart: (task: Task) => void;
+  /** Open the task preview modal. */
+  onOpen: (task: Task) => void;
   /** Whether a move/patch is currently in flight for this card. */
   pending?: boolean;
 }
 
-export function TaskCard({ task, onMove, onDragStart, pending }: TaskCardProps) {
+export function TaskCard({ task, onMove, onDragStart, onOpen, pending }: TaskCardProps) {
   const colIndex = BOARD_STATUSES.indexOf(task.status as TaskStatus);
   const canMoveLeft = colIndex > 0;
   const canMoveRight = colIndex < BOARD_STATUSES.length - 1;
@@ -34,24 +36,29 @@ export function TaskCard({ task, onMove, onDragStart, pending }: TaskCardProps) 
     <Card
       size="sm"
       draggable
+      role="button"
+      tabIndex={0}
+      aria-label={`Open task ${task.title}`}
+      onClick={() => onOpen(task)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen(task);
+        }
+      }}
       onDragStart={(e) => {
         e.dataTransfer.effectAllowed = "move";
         e.dataTransfer.setData("text/plain", task.id);
         onDragStart(task);
       }}
       className={
-        "cursor-grab transition-opacity active:cursor-grabbing " +
+        "cursor-grab transition-[opacity,background-color] hover:bg-card/80 active:cursor-grabbing " +
         (pending ? "opacity-60" : "")
       }
     >
       <CardContent className="flex flex-col gap-2.5">
         <div className="flex items-start justify-between gap-2">
-          <a
-            href={`/tasks/${task.id}`}
-            className="line-clamp-2 text-sm font-medium hover:underline"
-          >
-            {task.title}
-          </a>
+          <span className="line-clamp-2 text-sm font-medium">{task.title}</span>
           <PriorityBadge priority={task.priority} className="shrink-0" />
         </div>
 
@@ -77,7 +84,10 @@ export function TaskCard({ task, onMove, onDragStart, pending }: TaskCardProps) 
             variant="ghost"
             aria-label="Move to previous column"
             disabled={!canMoveLeft || pending}
-            onClick={() => onMove(task, -1)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onMove(task, -1);
+            }}
           >
             <ChevronLeftIcon className="size-3.5" />
           </Button>
@@ -86,7 +96,10 @@ export function TaskCard({ task, onMove, onDragStart, pending }: TaskCardProps) 
             variant="ghost"
             aria-label="Move to next column"
             disabled={!canMoveRight || pending}
-            onClick={() => onMove(task, 1)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onMove(task, 1);
+            }}
           >
             <ChevronRightIcon className="size-3.5" />
           </Button>

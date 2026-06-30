@@ -1,43 +1,56 @@
 /**
- * @fileoverview Type definitions for OrchestratorAgent
+ * @fileoverview Type definitions for OrchestratorAgent.
  *
- * Provides type-safe interfaces and Zod schemas for the Multi-Agent Orchestrator,
- * including sub-agent spawn configurations, state synchronization, and task routing.
+ * The orchestrator delegates work to specialist sub-agents (ResearcherAgent,
+ * CoderAgent) over real RPC. These types describe the tool input, the result
+ * shape returned to the model, and the persisted orchestration state.
  */
 
 import { z } from "zod";
 
 /**
- * Configuration for spawning a child sub-agent task
+ * Input schema for the `spawnTask` tool the model invokes to delegate work.
+ *
+ * `agentType` selects the specialist:
+ * - `"research"` → {@link ResearcherAgent} (`RESEARCHER_AGENT`)
+ * - `"code"`     → {@link CoderAgent} (`CODER_AGENT`)
  */
 export const spawnTaskSchema = z.object({
   agentType: z
-    .enum(["code", "browse", "workflow", "artifact"])
-    .describe("Target agent type to delegate the task to"),
-  task: z.string().describe("Human-readable task description to route to the sub-agent"),
-  context: z
-    .record(z.unknown())
-    .optional()
-    .describe("Optional context payload forwarded to the sub-agent"),
+    .enum(["research", "code"])
+    .describe("Which specialist sub-agent should handle the task."),
+  task: z
+    .string()
+    .min(1)
+    .describe("The concrete task to delegate to the specialist sub-agent."),
 });
 
 export type SpawnTaskParams = z.infer<typeof spawnTaskSchema>;
 
 /**
- * Result returned from a delegated sub-agent task
+ * Result of a delegated task, returned to the model (and surfaced in the UI as
+ * a tool result). Carries the specialist's *real* output.
  */
 export interface SubAgentResult {
-  agentType: string;
+  /** Which specialist handled the task. */
+  agentType: SpawnTaskParams["agentType"];
+  /** The DO instance name the work was routed to. */
+  instance: string;
+  /** Unique id of this delegation (assigned by the specialist). */
   taskId: string;
-  status: "pending" | "running" | "completed" | "failed";
+  /** Terminal status of the delegated work. */
+  status: "completed" | "failed";
+  /** The specialist's real output (present on success). */
   output?: string;
+  /** Error message (present on failure). */
   error?: string;
-  startedAt: string;
-  completedAt?: string;
+  /** Wall-clock duration of the delegated call, in milliseconds. */
+  durationMs: number;
 }
 
 /**
- * Internal orchestration state persisted in embedded SQLite
+ * Orchestration counters persisted in the orchestrator's embedded SQLite and
+ * mirrored into synced state for live observation by a subscribed client.
  */
 export interface OrchestratorState {
   activeTasks: number;

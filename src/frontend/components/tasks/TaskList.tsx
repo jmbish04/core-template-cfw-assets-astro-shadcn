@@ -3,9 +3,13 @@
  * Renders a filterable, server-sorted `<Table>` of tasks from `GET /api/tasks`.
  *
  * Features:
- *   - TaskFilters bar (search, status, priority, project, assignee, label, sort)
+ *   - Faceted, multi-select TaskFilters bar (search, status[], priority[],
+ *     project[], assignee[], label[], sort). Multi-values are serialized as
+ *     comma-separated query params (e.g. `?status=todo,in_review`).
  *   - Inline status + priority editing via Select → `PATCH /api/tasks/{id}`
- *   - Row title links to `/tasks/{id}` for the detail view
+ *   - Clicking a row opens a fast preview MODAL (TaskPreviewDialog) with an
+ *     "Open full page" link to `/tasks/{id}`. Action controls inside the row
+ *     (status/priority selects) stopPropagation so they don't open the modal.
  *   - "New task" Dialog (TaskDialog) → `POST /api/tasks`
  *
  * The initial `projectId` filter can be seeded from the URL (`?projectId=`) so
@@ -35,11 +39,18 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { apiGet, apiSend, ApiError } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import { shortDate, relativeTime } from "@/lib/format";
 
 import { AssigneeAvatar, EmptyState, ErrorState, LabelChips } from "./Shared";
 import { TaskDialog } from "./TaskDialog";
-import { TaskFilters, type TaskQuery } from "./TaskFilters";
+import { TaskPreviewDialog } from "./TaskPreviewDialog";
+import {
+  TaskFilters,
+  activeFilterCount,
+  emptyTaskQuery,
+  type TaskQuery,
+} from "./TaskFilters";
 import { useProjects } from "./useProjects";
 import {
   BOARD_STATUSES,
@@ -58,14 +69,8 @@ export interface TaskListProps {
   initialProjectId?: string;
 }
 
-const EMPTY_QUERY = (projectId?: string): TaskQuery => ({
-  q: "",
-  sort: "createdAt",
-  projectId: projectId || undefined,
-});
-
 export function TaskList({ initialProjectId }: TaskListProps) {
-  const [query, setQuery] = useState<TaskQuery>(() => EMPTY_QUERY(initialProjectId));
+  const [query, setQuery] = useState<TaskQuery>(() => emptyTaskQuery(initialProjectId));
   const [debouncedQ, setDebouncedQ] = useState("");
   const [tasks, setTasks] = useState<Task[]>([]);
   const [total, setTotal] = useState(0);
@@ -73,12 +78,23 @@ export function TaskList({ initialProjectId }: TaskListProps) {
   const [error, setError] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
 
+  // Preview modal state.
+  const [previewTask, setPreviewTask] = useState<Task | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+
   const { nameById } = useProjects();
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(query.q), 300);
     return () => clearTimeout(t);
   }, [query.q]);
+
+  // Stable CSV keys so the load callback only re-fires when selections change.
+  const statusKey = query.status.join(",");
+  const priorityKey = query.priority.join(",");
+  const projectKey = query.projectId.join(",");
+  const assigneeKey = query.assignee.join(",");
+  const labelKey = query.label.join(",");
 
   const reqId = useRef(0);
   const load = useCallback(async () => {
@@ -88,11 +104,11 @@ export function TaskList({ initialProjectId }: TaskListProps) {
     try {
       const res = await apiGet<ListEnvelope<Task>>("tasks", {
         q: debouncedQ || undefined,
-        status: query.status,
-        priority: query.priority,
-        projectId: query.projectId,
-        assignee: query.assignee,
-        label: query.label,
+        status: statusKey || undefined,
+        priority: priorityKey || undefined,
+        projectId: projectKey || undefined,
+        assignee: assigneeKey || undefined,
+        label: labelKey || undefined,
         sort: query.sort,
         limit: 100,
       });
@@ -105,7 +121,7 @@ export function TaskList({ initialProjectId }: TaskListProps) {
     } finally {
       if (id === reqId.current) setLoading(false);
     }
-  }, [debouncedQ, query.status, query.priority, query.projectId, query.assignee, query.label, query.sort]);
+  }, [debouncedQ, statusKey, priorityKey, projectKey, assigneeKey, labelKey, query.sort]);
 
   useEffect(() => {
     void load();
@@ -133,22 +149,25 @@ export function TaskList({ initialProjectId }: TaskListProps) {
     setTotal((t) => t + 1);
   }, []);
 
+  // Apply an edit from the preview modal back into the list.
+  const handleUpdated = useCallback((task: Task) => {
+    setTasks((prev) => prev.map((t) => (t.id === task.id ? task : t)));
+    setPreviewTask(task);
+  }, []);
+
   const onChange = useCallback((patch: Partial<TaskQuery>) => {
     setQuery((q) => ({ ...q, ...patch }));
   }, []);
 
-  const onClear = useCallback(() => setQuery(EMPTY_QUERY()), []);
+  const onClear = useCallback(() => setQuery(emptyTaskQuery()), []);
+
+  const openPreview = useCallback((task: Task) => {
+    setPreviewTask(task);
+    setPreviewOpen(true);
+  }, []);
 
   const hasFilters = useMemo(
-    () =>
-      Boolean(
-        debouncedQ ||
-          query.status ||
-          query.priority ||
-          query.projectId ||
-          query.assignee ||
-          query.label,
-      ),
+    () => activeFilterCount({ ...query, q: debouncedQ }) > 0,
     [debouncedQ, query],
   );
 
@@ -160,7 +179,7 @@ export function TaskList({ initialProjectId }: TaskListProps) {
         </div>
         <TaskDialog
           onSaved={handleCreated}
-          defaultProjectId={query.projectId}
+          defaultProjectId={query.projectId[0]}
           trigger={
             <Button>
               <PlusIcon className="size-4" />
@@ -215,17 +234,27 @@ export function TaskList({ initialProjectId }: TaskListProps) {
             </TableHeader>
             <TableBody>
               {tasks.map((task) => (
-                <TableRow key={task.id} className="border-border/40">
+                <TableRow
+                  key={task.id}
+                  className={cn(
+                    "cursor-pointer border-border/40 transition-colors hover:bg-muted/40",
+                  )}
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`Open task ${task.title}`}
+                  onClick={() => openPreview(task)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      openPreview(task);
+                    }
+                  }}
+                >
                   <TableCell className="max-w-[22rem]">
-                    <a
-                      href={`/tasks/${task.id}`}
-                      className="font-medium hover:underline"
-                    >
-                      {task.title}
-                    </a>
+                    <span className="font-medium">{task.title}</span>
                     <LabelChips labels={task.labels} max={3} className="mt-1" />
                   </TableCell>
-                  <TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
                     <Select
                       value={task.status}
                       onValueChange={(v) => patchField(task, { status: v as TaskStatus })}
@@ -242,7 +271,7 @@ export function TaskList({ initialProjectId }: TaskListProps) {
                       </SelectContent>
                     </Select>
                   </TableCell>
-                  <TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
                     <Select
                       value={task.priority}
                       onValueChange={(v) => patchField(task, { priority: v as TaskPriority })}
@@ -287,6 +316,14 @@ export function TaskList({ initialProjectId }: TaskListProps) {
           Showing {tasks.length} of {total} {total === 1 ? "task" : "tasks"}
         </p>
       ) : null}
+
+      <TaskPreviewDialog
+        task={previewTask}
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        projectName={previewTask?.projectId ? nameById.get(previewTask.projectId) : null}
+        onSaved={handleUpdated}
+      />
     </div>
   );
 }

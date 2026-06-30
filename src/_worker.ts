@@ -14,6 +14,12 @@
  *                          falls through to the `ASSETS` binding for static
  *                          files). This is the piece a naive `env.ASSETS.fetch`
  *                          custom entry forgets — without it, SSR pages 404.
+ *
+ * In addition to `fetch`, the handler exports `email(message, env, ctx)` —
+ * Cloudflare Email Routing's inbound entry point. It parses + stores received
+ * mail in D1 for the `/inbox` showcase (see `backend/email/inbound.ts`). The
+ * handler is attached to BOTH the object returned by `createExports().default`
+ * (what the Astro adapter re-exports) AND the standalone default export.
  */
 
 import { App } from "astro/app";
@@ -22,6 +28,7 @@ import type { ExportedHandler } from "@cloudflare/workers-types";
 import { routeAgentRequest } from "agents";
 
 import { app as honoApp } from "./backend/api/index";
+import { handleInboundEmail } from "./backend/email/inbound";
 
 // Import Durable Object classes (the Agents SDK showcase + realtime agents)
 import { CodeModeAgent } from "./backend/ai/agents/CodeModeAgent";
@@ -29,18 +36,30 @@ import { BrowserHitlAgent } from "./backend/ai/agents/BrowserHitlAgent";
 import { WorkflowsAgent } from "./backend/ai/agents/WorkflowsAgent";
 import { ArtifactAgent } from "./backend/ai/agents/ArtifactAgent";
 import { OrchestratorAgent } from "./backend/ai/agents/OrchestratorAgent";
+import { ResearcherAgent } from "./backend/ai/agents/ResearcherAgent";
+import { CoderAgent } from "./backend/ai/agents/CoderAgent";
 import { ChatBroker } from "./backend/ai/agents/ChatBroker";
 import { NotificationsAgent } from "./backend/ai/agents/NotificationsAgent";
+import { McpAgent } from "./backend/ai/agents/McpAgent";
+import { ThinkingAgent } from "./backend/ai/agents/ThinkingAgent";
+import { SkillsAgent } from "./backend/ai/agents/SkillsAgent";
 
-// Re-export Durable Object classes
+// Re-export Durable Object classes (Pattern B: the @astrojs/cloudflare adapter
+// re-exports these alongside the default handler so Cloudflare resolves every
+// DO binding declared in wrangler.jsonc).
 export {
   CodeModeAgent,
   BrowserHitlAgent,
   WorkflowsAgent,
   ArtifactAgent,
   OrchestratorAgent,
+  ResearcherAgent,
+  CoderAgent,
   ChatBroker,
   NotificationsAgent,
+  McpAgent,
+  ThinkingAgent,
+  SkillsAgent,
 };
 
 /** True for paths the Hono API owns (REST + OpenAPI doc surfaces). */
@@ -50,9 +69,11 @@ function isApiPath(pathname: string): boolean {
     pathname === "/openapi.json" ||
     pathname === "/swagger" ||
     pathname === "/scalar" ||
-    pathname === "/scaler" ||
-    pathname === "/docs"
+    pathname === "/scaler"
   );
+  // NOTE: `/docs` is intentionally NOT an API path — it is served as an Astro
+  // SSR page (`src/frontend/pages/docs/index.astro`). The docs metadata API is
+  // mounted at `/api/docs/*`, which is covered by the `/api/` prefix above.
 }
 
 // Astro SSR app + manifest, populated by `start()` before the first request.
@@ -97,6 +118,13 @@ export function createExports() {
       }
       return env.ASSETS.fetch(request as any);
     },
+
+    // Cloudflare Email Routing inbound handler. Invoked when a routing rule
+    // targets this Worker (configured in the dashboard / via `wrangler email
+    // routing`). Parses + stores the email in D1 for the `/inbox` showcase.
+    async email(message: any, env: Env, ctx: ExecutionContext) {
+      await handleInboundEmail(message, env, ctx);
+    },
   } as unknown as ExportedHandler<Env>;
 
   return {
@@ -106,8 +134,13 @@ export function createExports() {
     WorkflowsAgent,
     ArtifactAgent,
     OrchestratorAgent,
+    ResearcherAgent,
+    CoderAgent,
     ChatBroker,
     NotificationsAgent,
+    McpAgent,
+    ThinkingAgent,
+    SkillsAgent,
   };
 }
 
@@ -127,6 +160,12 @@ const handler = {
       return honoApp.fetch(request as any, env, ctx);
     }
     return env.ASSETS.fetch(request as any);
+  },
+
+  // Email Routing inbound handler (mirrors the one on `createExports().default`)
+  // so this module is a valid standalone Worker target for a routing rule too.
+  async email(message: any, env: Env, ctx: ExecutionContext) {
+    await handleInboundEmail(message, env, ctx);
   },
 } as unknown as ExportedHandler<Env>;
 
