@@ -30,8 +30,9 @@ const templateHelpers: { name: string; desc: string }[] = [
   { name: "diffArrays(prev, next, keyFn?)", desc: "Compute { added, removed, common } between two arrays." },
   { name: "toggleInArray(items, value, keyFn?)", desc: "Immutably add-if-absent / remove-if-present." },
   { name: "moveItem(items, from, to)", desc: "Reorder for drag-and-drop, with clamped indices." },
-  { name: "keyBy(items, keyFn)", desc: "Index an array into a record keyed by a selector." },
-  { name: "compact(items)", desc: "Drop null/undefined while keeping other falsy values." },
+// Remove keyBy and compact from the template-specific helpers list as they are now re-exported directly from Remeda.
+//  { name: "keyBy(items, keyFn)", desc: "Index an array into a record keyed by a selector." },
+//  { name: "compact(items)", desc: "Drop null/undefined while keeping other falsy values." },
   { name: "ensureArray(value)", desc: "Normalize 'one or many' inputs into an array." },
   { name: "deal(items, buckets)", desc: "Round-robin an array into N evenly-sized buckets." },
   { name: "truncate(text, max, ellipsis?)", desc: "Length-capped string truncation with an ellipsis." },
