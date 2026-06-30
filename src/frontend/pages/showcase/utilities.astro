@@ -13,9 +13,6 @@ const remedaExports: { name: string; desc: string }[] = [
   { name: "pipe / piped", desc: "Left-to-right function composition with lazy evaluation." },
   { name: "unique / uniqueBy", desc: "Dedupe arrays by value or by a key selector." },
   { name: "groupBy", desc: "Bucket a list into a record of arrays by key." },
-// Move keyBy and compact to the curated Remeda re-exports list since they are now re-exported directly from Remeda.
-  { name: "keyBy", desc: "Index an array into a record keyed by a selector." },
-  { name: "compact", desc: "Drop null/undefined while keeping other falsy values." },
   { name: "partition", desc: "Split into [pass, fail] by a predicate." },
   { name: "chunk", desc: "Break an array into fixed-size slices." },
   { name: "difference / intersection", desc: "Set algebra over arrays." },
@@ -33,9 +30,8 @@ const templateHelpers: { name: string; desc: string }[] = [
   { name: "diffArrays(prev, next, keyFn?)", desc: "Compute { added, removed, common } between two arrays." },
   { name: "toggleInArray(items, value, keyFn?)", desc: "Immutably add-if-absent / remove-if-present." },
   { name: "moveItem(items, from, to)", desc: "Reorder for drag-and-drop, with clamped indices." },
-// Remove keyBy and compact from the template-specific helpers list as they are now re-exported directly from Remeda.
-//  { name: "keyBy(items, keyFn)", desc: "Index an array into a record keyed by a selector." },
-//  { name: "compact(items)", desc: "Drop null/undefined while keeping other falsy values." },
+  { name: "keyBy(items, keyFn)", desc: "Index an array into a record keyed by a selector." },
+  { name: "compact(items)", desc: "Drop null/undefined while keeping other falsy values." },
   { name: "ensureArray(value)", desc: "Normalize 'one or many' inputs into an array." },
   { name: "deal(items, buckets)", desc: "Round-robin an array into N evenly-sized buckets." },
   { name: "truncate(text, max, ellipsis?)", desc: "Length-capped string truncation with an ellipsis." },

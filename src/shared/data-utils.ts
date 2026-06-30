@@ -58,8 +58,6 @@ export {
   unique,
   uniqueBy,
   groupBy,
-  keyBy,
-  compact,
   partition,
   chunk,
   difference,
@@ -110,7 +108,7 @@ export type KeySelector<T> = (item: T) => PropertyKey;
  */
 export function findWhere<T extends object>(items: readonly T[], shape: Partial<T>): T | undefined {
   const keys = Object.keys(shape) as (keyof T)[];
-  return items.find((item) => item && keys.every((k) => item[k] === shape[k]));
+  return items.find((item) => item != null && keys.every((k) => item[k] === shape[k]));
 }
 
 /** The structural result of comparing two arrays. */
@@ -200,14 +198,11 @@ export function moveItem<T>(items: readonly T[], from: number, to: number): T[] 
  * @example
  * keyBy(users, (u) => u.id); // { "1": user1, "2": user2 }
  */
-
-// Remove the custom keyBy implementation as it is now re-exported directly from Remeda
-
-// export function keyBy<T>(items: readonly T[], keyFn: KeySelector<T>): Record<PropertyKey, T> {
-//   const out: Record<PropertyKey, T> = {};
-//   for (const item of items) out[keyFn(item)] = item;
-//   return out;
-// }
+export function keyBy<T>(items: readonly T[], keyFn: KeySelector<T>): Record<PropertyKey, T> {
+  const out: Record<PropertyKey, T> = {};
+  for (const item of items) out[keyFn(item)] = item;
+  return out;
+}
 
 /**
  * Drop `null` and `undefined` from an array, narrowing the element type. Other
@@ -218,12 +213,9 @@ export function moveItem<T>(items: readonly T[], from: number, to: number): T[] 
  * @example
  * compact([1, null, 2, undefined, 0]); // [1, 2, 0]
  */
-
-// Remove the custom compact implementation as it is now re-exported directly from Remeda.
-
-// export function compact<T>(items: readonly (T | null | undefined)[]): T[] {
-//   return items.filter((item): item is T => item !== null && item !== undefined);
-// }
+export function compact<T>(items: readonly (T | null | undefined)[]): T[] {
+  return items.filter((item): item is T => item !== null && item !== undefined);
+}
 
 /**
  * Wrap a value in an array unless it already is one. `null`/`undefined` become
