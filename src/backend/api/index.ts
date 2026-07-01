@@ -35,6 +35,7 @@ import { projectsRouter } from "./routes/projects";
 import { seedRouter } from "./routes/seed";
 import { settingsRouter } from "./routes/settings";
 import { taskDetailRouter } from "./routes/task-detail";
+import { taskHierarchyRouter } from "./routes/task-hierarchy";
 import { tasksRouter } from "./routes/tasks";
 import { teamNotesRouter } from "./routes/team-notes";
 import { threadsRouter } from "./routes/threads";
@@ -123,6 +124,8 @@ app.route("/api/tasks", tasksRouter);
 // Comments / Subtasks / Attachments for a single task — mounted alongside
 // tasksRouter under the same base; its paths are all `/{id}/…` sub-resources.
 app.route("/api/tasks", taskDetailRouter);
+// Parent/child (subtask) navigation — GET /{id}/children, GET /{id}/ancestors.
+app.route("/api/tasks", taskHierarchyRouter);
 app.route("/api/team-notes", teamNotesRouter);
 app.route("/api/threads", threadsRouter);
 app.route("/api/settings", settingsRouter);

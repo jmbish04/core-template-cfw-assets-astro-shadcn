@@ -175,7 +175,11 @@ export function TaskDialog({
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
               <Label>Status</Label>
-              <Select value={status} onValueChange={(v) => setStatus(v as TaskStatus)}>
+              <Select
+                value={status}
+                onValueChange={(v) => setStatus(v as TaskStatus)}
+                items={STATUS_LABELS}
+              >
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
@@ -191,7 +195,11 @@ export function TaskDialog({
 
             <div className="grid gap-2">
               <Label>Priority</Label>
-              <Select value={priority} onValueChange={(v) => setPriority(v as TaskPriority)}>
+              <Select
+                value={priority}
+                onValueChange={(v) => setPriority(v as TaskPriority)}
+                items={PRIORITY_LABELS}
+              >
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
@@ -210,6 +218,10 @@ export function TaskDialog({
               <Select
                 value={projectId || "__none__"}
                 onValueChange={(v) => setProjectId(v === "__none__" ? "" : String(v))}
+                items={{
+                  __none__: "No project",
+                  ...Object.fromEntries(projectOptions.map((o) => [o.value, o.label])),
+                }}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="No project" />

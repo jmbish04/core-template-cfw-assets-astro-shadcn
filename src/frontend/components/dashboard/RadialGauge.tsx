@@ -1,86 +1,122 @@
 /**
- * @fileoverview RadialGauge — a recharts `RadialBarChart` KPI gauge.
+ * @fileoverview RadialGauge — a shadcn "radial chart with text" KPI gauge.
  *
- * Replicates the shadcn "gauges" chart block in the Monolith dark system: a
- * single 270° radial arc that fills proportionally to a 0–100 percentage, with
- * a bold value rendered in the polar center and an optional caption beneath it.
+ * A faithful repurpose of the shadcn `ChartRadialText` block into the Monolith
+ * dark system: a single `RadialBarChart` whose arc sweeps from `startAngle={0}`
+ * to an `endAngle` that is *driven by the real metric*, with a bold value and a
+ * caption rendered dead-center via a `PolarRadiusAxis` `<Label>`.
+ *
+ * ── endAngle mapping ──────────────────────────────────────────────────────
+ * The gauge is proportional to `value / max` (both supplied by the caller from
+ * REAL `/api/dashboard/stats` fields). The fraction is clamped to [0, 1] then
+ * mapped onto a full 360° sweep:
+ *
+ *     fraction = clamp(value / max, 0, 1)
+ *     endAngle = fraction * 360        // 0 → empty ring, 360 → full ring
+ *
+ * So a 72% completion rate (value=72, max=100) sweeps to 259.2° and the center
+ * reads "72%". A 3-of-4 active-project ratio (value=3, max=4) sweeps to 270°.
+ * The displayed center number is percentage-based by default (`fraction*100`),
+ * overridable via `centerLabel` for count-style gauges.
  *
  * Design rules honoured:
  *   - recharts ONLY, wrapped in `<ChartContainer>` (no Chart.js/Plotly/etc.).
- *   - Track + value colours come from the OKLCH `--chart-1..5` palette.
- *   - Center text is forced to `hsl(var(--foreground))` for high contrast.
+ *   - The filled arc colour comes from the OKLCH `--chart-1..5` palette, routed
+ *     through the ChartConfig `--color-<key>` variable so it themes correctly.
+ *   - Center text is forced to `fill-foreground` / `fill-muted-foreground`.
  *   - No 1px borders; the gauge lives inside a `bg-card` / ring-based shell.
  *
- * The gauge is purely presentational — callers pass an already-computed
- * percentage derived from REAL `/api/dashboard/stats` fields (e.g. completion
- * rate, active-project ratio). No data is fabricated here.
+ * The gauge is purely presentational — no data is fabricated here.
  */
 
 "use client";
 
 import { useMemo } from "react";
 import {
-  PolarAngleAxis,
+  Label,
   PolarGrid,
+  PolarRadiusAxis,
   RadialBar,
   RadialBarChart,
-  Label as RechartsLabel,
 } from "recharts";
 
 import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
 
 export interface RadialGaugeProps {
-  /** 0–100 value the arc fills to. Clamped defensively. */
+  /** The real metric numerator (e.g. completed tasks, active projects, 0–100 %). */
   value: number;
-  /** Big text shown in the gauge center (defaults to `${value}%`). */
-  centerLabel?: string;
-  /** Small caption under the big center text (e.g. "of tasks done"). */
+  /** The metric denominator the arc fills against. Defaults to 100 (percentage). */
+  max?: number;
+  /** Human label for the series (drives the ChartConfig / tooltip label). */
+  label?: string;
+  /** Small caption under the big center number (e.g. "Completion rate"). */
   caption?: string;
-  /** Palette colour for the filled arc. Defaults to `--chart-1`. */
-  color?: string;
-  /** Tailwind sizing for the chart box. */
+  /**
+   * Palette key selecting the arc colour: `chart-1`…`chart-5`. Routed through
+   * `var(--color-<chartKey>)` so it inherits the OKLCH Monolith palette.
+   */
+  chartKey?: "chart-1" | "chart-2" | "chart-3" | "chart-4" | "chart-5";
+  /**
+   * Override for the big center text. Defaults to the rounded percentage of
+   * `value / max` (e.g. "72%"). Pass a count string for count-style gauges.
+   */
+  centerLabel?: string;
+  /** Tailwind sizing for the chart box (matches the shadcn reference default). */
   className?: string;
 }
 
-const GAUGE_CONFIG: ChartConfig = {
-  value: { label: "Value" },
-};
-
 /**
- * A 270° radial gauge with a bold center value. The background ring is the
- * muted track; the foreground arc fills to `value` percent.
+ * A radial-text gauge. The arc length reflects `value / max`; the center shows
+ * the metric (percentage by default) above an optional caption.
  */
 export function RadialGauge({
   value,
-  centerLabel,
+  max = 100,
+  label = "Value",
   caption,
-  color = "var(--chart-1)",
-  className = "mx-auto aspect-square w-full max-w-[180px]",
+  chartKey = "chart-1",
+  centerLabel,
+  className = "mx-auto aspect-square max-h-[250px]",
 }: RadialGaugeProps) {
-  const pct = useMemo(() => Math.max(0, Math.min(100, value)), [value]);
-  const data = useMemo(() => [{ name: "value", value: pct, fill: color }], [pct, color]);
-  const display = centerLabel ?? `${Math.round(pct)}%`;
+  const fraction = useMemo(() => {
+    const denom = max === 0 ? 1 : max;
+    return Math.max(0, Math.min(1, value / denom));
+  }, [value, max]);
+
+  // endAngle is driven by the REAL metric: 0 → 360 as fraction goes 0 → 1.
+  const endAngle = useMemo(() => fraction * 360, [fraction]);
+
+  const config = useMemo<ChartConfig>(
+    () => ({ value: { label, color: `var(--${chartKey})` } }),
+    [label, chartKey],
+  );
+
+  const data = useMemo(
+    () => [{ name: label, value, fill: "var(--color-value)" }],
+    [label, value],
+  );
+
+  const display = centerLabel ?? `${Math.round(fraction * 100)}%`;
 
   return (
-    <ChartContainer config={GAUGE_CONFIG} className={className}>
+    <ChartContainer config={config} className={className}>
       <RadialBarChart
         data={data}
-        startAngle={225}
-        endAngle={-45}
-        innerRadius="72%"
-        outerRadius="100%"
-        barSize={14}
+        startAngle={0}
+        endAngle={endAngle}
+        innerRadius={80}
+        outerRadius={90}
       >
-        {/* Hidden axis pins the 0–100 domain so the arc length maps to `pct`. */}
-        <PolarAngleAxis type="number" domain={[0, 100]} tick={false} axisLine={false} />
-        <PolarGrid gridType="circle" radialLines={false} stroke="none" />
-        <RadialBar
-          dataKey="value"
-          background={{ fill: "hsl(var(--muted))" }}
-          cornerRadius={999}
-          isAnimationActive
-        >
-          <RechartsLabel
+        <PolarGrid
+          gridType="circle"
+          radialLines={false}
+          stroke="none"
+          className="first:fill-muted last:fill-background"
+          polarRadius={[86, 74]}
+        />
+        <RadialBar dataKey="value" background cornerRadius={10} />
+        <PolarRadiusAxis tick={false} tickLine={false} axisLine={false}>
+          <Label
             content={({ viewBox }) => {
               if (!viewBox || !("cx" in viewBox)) return null;
               const { cx, cy } = viewBox as { cx: number; cy: number };
@@ -88,13 +124,13 @@ export function RadialGauge({
                 <text x={cx} y={cy} textAnchor="middle" dominantBaseline="middle">
                   <tspan
                     x={cx}
-                    y={caption ? cy - 4 : cy}
-                    className="fill-foreground text-[1.6rem] font-semibold tabular-nums"
+                    y={caption ? cy : cy}
+                    className="fill-foreground text-4xl font-bold"
                   >
                     {display}
                   </tspan>
                   {caption ? (
-                    <tspan x={cx} y={cy + 18} className="fill-muted-foreground text-[0.7rem]">
+                    <tspan x={cx} y={cy + 24} className="fill-muted-foreground">
                       {caption}
                     </tspan>
                   ) : null}
@@ -102,7 +138,7 @@ export function RadialGauge({
               );
             }}
           />
-        </RadialBar>
+        </PolarRadiusAxis>
       </RadialBarChart>
     </ChartContainer>
   );

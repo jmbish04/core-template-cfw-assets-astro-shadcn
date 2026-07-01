@@ -8,8 +8,12 @@
  *
  * Mount this router at `/api/tasks` in `api/index.ts`.
  *
+ * Parent/child (subtask) navigation — `GET /{id}/children`,
+ * `GET /{id}/ancestors` — lives in the sibling `task-hierarchy.ts` router,
+ * which also owns the cycle-guard helper reused by POST/PATCH here.
+ *
  * Route inventory:
- *   GET    /        – list tasks (q, status, priority, projectId, assignee, label, sort, limit, offset)
+ *   GET    /        – list tasks (q, status, priority, projectId, parentId, assignee, label, sort, limit, offset)
  *   GET    /board   – tasks grouped into kanban columns {todo, in_progress, in_review, done}
  *   POST   /        – create task
  *   GET    /{id}    – get task by id
@@ -18,10 +22,18 @@
  */
 
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
-import { and, asc, desc, eq, inArray, like, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, like, or, sql } from "drizzle-orm";
 
 import { getDb } from "../../db";
 import { insertTaskSchema, selectTaskSchema, tasks } from "../../db/schema";
+import { cycleGuard } from "./task-hierarchy";
+
+/**
+ * Sentinel values a caller may pass for `?parentId=` to request only top-level
+ * tasks (those with a NULL parentId). Any of these, case-insensitive, is
+ * treated as "no parent".
+ */
+const TOP_LEVEL_SENTINELS = new Set(["null", "__none__", "none"]);
 
 // ---------------------------------------------------------------------------
 // Shared schemas
@@ -80,6 +92,15 @@ const taskListQuerySchema = z.object({
   projectId: multiValueQuery.openapi({
     description: "Filter to one or more projects (comma-separated or repeated).",
   }),
+  parentId: z
+    .string()
+    .optional()
+    .openapi({
+      description:
+        "Filter by parent task. Pass a task id to list that task's direct " +
+        "children, or `null` / `__none__` / `none` to list only top-level " +
+        "tasks (those with no parent). Omit for no parent filtering.",
+    }),
   assignee: multiValueQuery.openapi({
     description: "Filter by one or more assignee display names (comma-separated or repeated).",
   }),
@@ -163,6 +184,7 @@ tasksRouter.openapi(
       status: statusRaw,
       priority: priorityRaw,
       projectId: projectIdRaw,
+      parentId: parentIdRaw,
       assignee: assigneeRaw,
       label: labelRaw,
       sort,
@@ -187,6 +209,15 @@ tasksRouter.openapi(
     if (statuses.length > 0) conditions.push(inArray(tasks.status, statuses));
     if (priorities.length > 0) conditions.push(inArray(tasks.priority, priorities));
     if (projectIds.length > 0) conditions.push(inArray(tasks.projectId, projectIds));
+    // parentId: a task id lists that task's direct children; a top-level
+    // sentinel (`null` / `__none__` / `none`) lists only tasks with no parent.
+    if (parentIdRaw !== undefined && parentIdRaw !== "") {
+      conditions.push(
+        TOP_LEVEL_SENTINELS.has(parentIdRaw.toLowerCase())
+          ? isNull(tasks.parentId)
+          : eq(tasks.parentId, parentIdRaw),
+      );
+    }
     if (assignees.length > 0) conditions.push(inArray(tasks.assignee, assignees));
     // Labels are stored as a JSON array — match tasks containing ANY label via OR of LIKEs.
     if (labels.length > 0) {
@@ -281,11 +312,25 @@ tasksRouter.openapi(
         description: "Created task.",
         content: { "application/json": { schema: selectTaskSchema } },
       },
+      400: {
+        description: "Invalid parentId (references a task that does not exist).",
+        content: { "application/json": { schema: notFoundSchema } },
+      },
     },
   }),
   async (c) => {
     const body = c.req.valid("json");
     const db = getDb(c.env);
+    // A brand-new row has no id yet, so it cannot be its own ancestor — the
+    // only failure mode on create is a parentId that does not exist. We reuse
+    // getIdAndParent via cycleGuard by passing a throwaway id that can never
+    // collide with the proposed parent.
+    if (body.parentId) {
+      const reason = await cycleGuard(c.env, crypto.randomUUID(), body.parentId);
+      if (reason === "missing_parent") {
+        return c.json({ error: "parentId references a task that does not exist." }, 400);
+      }
+    }
     const [row] = await db
       .insert(tasks)
       .values({ ...body, createdAt: new Date(), updatedAt: new Date() })
@@ -348,6 +393,11 @@ tasksRouter.openapi(
         description: "Updated task.",
         content: { "application/json": { schema: selectTaskSchema } },
       },
+      400: {
+        description:
+          "Invalid parentId — the proposed parent is the task itself, does not exist, or is a descendant (would create a cycle).",
+        content: { "application/json": { schema: notFoundSchema } },
+      },
       404: {
         description: "Not found.",
         content: { "application/json": { schema: notFoundSchema } },
@@ -358,6 +408,26 @@ tasksRouter.openapi(
     const { id } = c.req.valid("param");
     const body = c.req.valid("json");
     const db = getDb(c.env);
+
+    // Guard parentId changes against cycles. `parentId: null` (unlink) is always
+    // safe and skips the guard; a non-null value must not be the task itself, a
+    // missing task, or a descendant of the task.
+    if ("parentId" in body && body.parentId) {
+      const reason = await cycleGuard(c.env, id, body.parentId);
+      if (reason === "self") {
+        return c.json({ error: "A task cannot be its own parent." }, 400);
+      }
+      if (reason === "missing_parent") {
+        return c.json({ error: "parentId references a task that does not exist." }, 400);
+      }
+      if (reason === "cycle") {
+        return c.json(
+          { error: "parentId would create a cycle (the proposed parent is a descendant)." },
+          400,
+        );
+      }
+    }
+
     const [row] = await db
       .update(tasks)
       .set({ ...body, updatedAt: new Date() })

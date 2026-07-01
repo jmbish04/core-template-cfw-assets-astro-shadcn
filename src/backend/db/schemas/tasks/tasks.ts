@@ -1,3 +1,4 @@
+import type { AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 
@@ -9,12 +10,14 @@ import { projects } from "../projects/projects";
 
 /** Human-readable description of the `tasks` table for the documentation UI. */
 export const TASKS_TABLE_DESCRIPTION =
-  "Individual work items scoped to a project. Supports status, priority, assignee, labels, due dates, progress tracking, and drag-drop position ordering.";
+  "Individual work items scoped to a project. Supports status, priority, assignee, labels, due dates, progress tracking, drag-drop position ordering, and self-referential parent/child (subtask) nesting via parent_id.";
 
 /** Per-column descriptions surfaced in the documentation schema viewer. */
 export const TASKS_COLUMN_DESCRIPTIONS: Record<string, string> = {
   id: "UUID primary key, generated via crypto.randomUUID().",
   project_id: "Foreign key into projects.id — null means inbox / unassigned.",
+  parent_id:
+    "Self-referential FK into tasks.id — null means a top-level task; non-null makes this task a child (subtask) of the referenced task. On parent delete the child is orphaned (set null), not cascaded.",
   title: "Short task headline.",
   description: "Optional longer body describing the task.",
   status: "Workflow state: todo, in_progress, in_review, or done.",
@@ -38,6 +41,15 @@ export const tasks = sqliteTable("tasks", {
     .$defaultFn(() => crypto.randomUUID()),
   projectId: text("project_id").references(() => projects.id, {
     onDelete: "cascade",
+  }),
+  /**
+   * Self-referential parent task id. `null` marks a top-level task; a non-null
+   * value makes this row a child (subtask) of the referenced task. On parent
+   * deletion the child is orphaned (`set null`) rather than cascade-deleted, so
+   * removing a parent never silently destroys its subtasks.
+   */
+  parentId: text("parent_id").references((): AnySQLiteColumn => tasks.id, {
+    onDelete: "set null",
   }),
   title: text("title").notNull(),
   description: text("description"),

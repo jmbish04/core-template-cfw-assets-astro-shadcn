@@ -93,7 +93,7 @@ function toDateInput(value: Task["dueDate"]): string {
 }
 
 export function TaskDetailSidebar({ task, saving, onPatch }: TaskDetailSidebarProps) {
-  const { options: projectOptions, nameById } = useProjects();
+  const { options: projectOptions } = useProjects();
 
   const [editingDue, setEditingDue] = useState(false);
   const [dueDraft, setDueDraft] = useState("");
@@ -152,15 +152,13 @@ export function TaskDetailSidebar({ task, saving, onPatch }: TaskDetailSidebarPr
           <Select
             value={task.projectId ?? NO_PROJECT}
             onValueChange={(v) => onPatch({ projectId: v === NO_PROJECT ? null : String(v) })}
+            items={{
+              [NO_PROJECT]: "No project",
+              ...Object.fromEntries(projectOptions.map((o) => [o.value, o.label])),
+            }}
           >
             <SelectTrigger size="sm" className="w-full" disabled={saving}>
-              <SelectValue>
-                {(value: unknown) => {
-                  const id = value == null ? null : String(value);
-                  if (!id || id === NO_PROJECT) return "No project";
-                  return nameById.get(id) ?? "No project";
-                }}
-              </SelectValue>
+              <SelectValue placeholder="No project" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={NO_PROJECT}>No project</SelectItem>

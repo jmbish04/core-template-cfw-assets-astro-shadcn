@@ -99,21 +99,31 @@ const NUMERIC_STATS: StatDef[] = [
 // Gauge cards
 // ---------------------------------------------------------------------------
 
+/** Palette keys accepted by {@link RadialGauge}. */
+type ChartKey = "chart-1" | "chart-2" | "chart-3" | "chart-4" | "chart-5";
+
+/** Resolve a `chart-N` key to its raw CSS variable for the header accent dot. */
+const chartVar = (key: ChartKey) => `var(--${key})`;
+
 /** A hero gauge card wrapping a {@link RadialGauge} with a title + footnote. */
 function GaugeCard({
   title,
   footnote,
   value,
+  max,
+  label,
   centerLabel,
   caption,
-  color,
+  chartKey,
 }: {
   title: string;
   footnote: string;
   value: number;
+  max: number;
+  label: string;
   centerLabel?: string;
   caption?: string;
-  color: string;
+  chartKey: ChartKey;
 }) {
   return (
     <Card className="flex flex-col">
@@ -124,15 +134,17 @@ function GaugeCard({
           </span>
           <span
             className="size-2 rounded-full"
-            style={{ backgroundColor: color }}
+            style={{ backgroundColor: chartVar(chartKey) }}
             aria-hidden
           />
         </div>
         <RadialGauge
           value={value}
+          max={max}
+          label={label}
           centerLabel={centerLabel}
           caption={caption}
-          color={color}
+          chartKey={chartKey}
         />
         <span className="text-center text-xs text-muted-foreground">{footnote}</span>
       </CardContent>
@@ -236,7 +248,9 @@ export function StatCards({ resource }: { resource: Resource<DashboardStats> }) 
   if (!data) return null;
 
   // Both gauges visualise genuine ratio fields from /api/dashboard/stats.
-  const activeRatio =
+  // The active-project ratio arc fills against the real project total, so its
+  // endAngle sweeps to (activeProjects / totalProjects) * 360°.
+  const activeRatioPct =
     data.totalProjects > 0
       ? Math.round((data.activeProjects / data.totalProjects) * 100)
       : 0;
@@ -248,9 +262,11 @@ export function StatCards({ resource }: { resource: Resource<DashboardStats> }) 
           title="Completion Rate"
           footnote={`${compactNumber(data.completedTasks)} of ${compactNumber(data.totalTasks)} tasks done`}
           value={data.completionRatePct}
+          max={100}
+          label="Completion rate"
           centerLabel={`${data.completionRatePct}%`}
-          caption="complete"
-          color="var(--chart-2)"
+          caption="Completion rate"
+          chartKey="chart-2"
         />
       </div>
 
@@ -258,10 +274,12 @@ export function StatCards({ resource }: { resource: Resource<DashboardStats> }) 
         <GaugeCard
           title="Active Projects"
           footnote={`${compactNumber(data.activeProjects)} of ${compactNumber(data.totalProjects)} projects active`}
-          value={activeRatio}
-          centerLabel={compactNumber(data.activeProjects)}
-          caption={`of ${compactNumber(data.totalProjects)}`}
-          color="var(--chart-1)"
+          value={data.activeProjects}
+          max={Math.max(data.totalProjects, 1)}
+          label="Active projects"
+          centerLabel={`${activeRatioPct}%`}
+          caption="Active ratio"
+          chartKey="chart-1"
         />
       </div>
 
