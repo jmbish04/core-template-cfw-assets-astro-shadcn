@@ -22,7 +22,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { RichTextComposer } from "@/components/ui/rich-text-composer";
 import {
   Select,
   SelectContent,
@@ -162,12 +162,12 @@ export function TaskDialog({
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="task-desc">Description</Label>
-            <Textarea
-              id="task-desc"
+            <Label>Description</Label>
+            <RichTextComposer
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Optional details, acceptance criteria, links…"
+              onChange={setDescription}
+              disabled={saving}
+              placeholder="Optional details, acceptance criteria, links… (Markdown)"
               rows={3}
             />
           </div>

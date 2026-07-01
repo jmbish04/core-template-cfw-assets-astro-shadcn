@@ -91,34 +91,33 @@ export interface FacetFilterProps {
 // FacetTrigger — the outline trigger with count badge + selection chips
 // ---------------------------------------------------------------------------
 
-interface FacetTriggerProps {
+interface FacetTriggerContentProps {
   label: string;
   /** The options matching the current selection, in selection-stable order. */
   selected: FacetOption[];
-  className?: string;
 }
 
 /** Max value chips rendered inline before collapsing into a "+N" chip. */
 const MAX_CHIPS = 2;
 
 /**
- * The outline trigger button. Dashed with a "+" glyph when empty; solid with a
- * count badge and up to {@link MAX_CHIPS} value chips (plus a "+N" overflow
- * chip) when active.
+ * The INNER content of the facet trigger (icon + label + count badge + value
+ * chips). This is rendered as the CHILDREN of a {@link Button} that is itself
+ * the Base-UI `PopoverTrigger` `render` target — mirroring the working
+ * "Add filter" trigger. It deliberately does NOT wrap its own `<Button>`:
+ * Base-UI injects the trigger props (onClick, `aria-haspopup`, ref) into the
+ * `render` element, and only a real forwarding element (our Base-UI `Button`)
+ * propagates them to the DOM. A custom wrapper component here would swallow
+ * those props and leave the trigger dead (the original bug).
  */
-function FacetTrigger({ label, selected, className }: FacetTriggerProps) {
+function FacetTriggerContent({ label, selected }: FacetTriggerContentProps) {
   const count = selected.length;
   const active = count > 0;
   const chips = selected.slice(0, MAX_CHIPS);
   const overflow = count - chips.length;
 
   return (
-    <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      className={cn("h-8 gap-1.5 border-dashed", active && "border-solid", className)}
-    >
+    <>
       <PlusCircleIcon className="size-3.5 text-muted-foreground" />
       <span>{label}</span>
       {active ? (
@@ -148,7 +147,7 @@ function FacetTrigger({ label, selected, className }: FacetTriggerProps) {
           </span>
         </>
       ) : null}
-    </Button>
+    </>
   );
 }
 
@@ -263,7 +262,18 @@ export function FacetFilter({
     >
       <PopoverTrigger
         render={
-          <FacetTrigger label={label} selected={selectedOptions} className={className} />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className={cn(
+              "h-8 gap-1.5 border-dashed",
+              selectedOptions.length > 0 && "border-solid",
+              className,
+            )}
+          >
+            <FacetTriggerContent label={label} selected={selectedOptions} />
+          </Button>
         }
       />
       <PopoverContent align="start" className="w-64 gap-0 p-0">

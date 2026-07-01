@@ -41,8 +41,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Markdown } from "@/components/ui/markdown";
+import { RichTextComposer } from "@/components/ui/rich-text-composer";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Textarea } from "@/components/ui/textarea";
 import { apiGet, apiSend, ApiError } from "@/lib/api";
 
 import { ErrorState } from "./Shared";
@@ -270,11 +271,13 @@ export function TaskDetail({ id }: TaskDetailProps) {
             <CardContent>
               {editingDesc ? (
                 <div className="flex flex-col gap-2">
-                  <Textarea
+                  <RichTextComposer
                     value={descDraft}
-                    onChange={(e) => setDescDraft(e.target.value)}
+                    onChange={setDescDraft}
                     rows={5}
                     autoFocus
+                    disabled={saving}
+                    placeholder="Describe this task in Markdown…"
                   />
                   <div className="flex gap-2">
                     <Button
@@ -293,9 +296,7 @@ export function TaskDetail({ id }: TaskDetailProps) {
                   </div>
                 </div>
               ) : task.description ? (
-                <p className="text-sm whitespace-pre-wrap text-muted-foreground">
-                  {task.description}
-                </p>
+                <Markdown>{task.description}</Markdown>
               ) : (
                 <p className="text-sm italic text-muted-foreground/60">No description</p>
               )}

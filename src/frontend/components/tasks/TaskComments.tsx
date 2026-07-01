@@ -15,9 +15,9 @@ import { useCallback, useEffect, useState } from "react";
 import { MessageSquareIcon } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
+import { Markdown } from "@/components/ui/markdown";
+import { RichTextComposer } from "@/components/ui/rich-text-composer";
 import { apiGet, apiSend, ApiError } from "@/lib/api";
 import { relativeTime } from "@/lib/format";
 
@@ -83,13 +83,6 @@ export function TaskComments({ taskId }: TaskCommentsProps) {
     }
   }, [draft, sending, taskId]);
 
-  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-      e.preventDefault();
-      void send();
-    }
-  };
-
   return (
     <Card>
       <CardHeader>
@@ -126,8 +119,8 @@ export function TaskComments({ taskId }: TaskCommentsProps) {
                       {relativeTime(comment.createdAt)}
                     </span>
                   </div>
-                  <div className="rounded-lg bg-muted/30 px-3 py-2 text-sm whitespace-pre-wrap">
-                    {comment.body}
+                  <div className="rounded-lg bg-muted/30 px-3 py-2">
+                    <Markdown>{comment.body}</Markdown>
                   </div>
                 </div>
               </li>
@@ -136,20 +129,16 @@ export function TaskComments({ taskId }: TaskCommentsProps) {
         )}
 
         {/* Composer */}
-        <div className="flex flex-col gap-2">
-          <Textarea
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={onKeyDown}
-            rows={3}
-            placeholder="Write a comment…  (⌘/Ctrl + Enter to send)"
-          />
-          <div className="flex items-center justify-end">
-            <Button size="sm" disabled={sending || !draft.trim()} onClick={() => void send()}>
-              {sending ? "Posting…" : "Comment"}
-            </Button>
-          </div>
-        </div>
+        <RichTextComposer
+          value={draft}
+          onChange={setDraft}
+          rows={3}
+          placeholder="Write a comment…"
+          onSubmit={() => void send()}
+          submitLabel="Comment"
+          submitting={sending}
+          submitDisabled={!draft.trim()}
+        />
       </CardContent>
     </Card>
   );
