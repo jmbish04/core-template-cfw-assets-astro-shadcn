@@ -9,11 +9,10 @@
  *               priority + title + owner (assignee avatar initials + name, or
  *               "Unassigned"). Clicking a row opens the {@link TaskPreviewDialog}
  *               quick-look, which offers "Open full page" → `/tasks/{childId}`.
- *   Header    → "Tasks {done}/{total} completed" + a progress bar derived from
- *               the children (done = child.status === "done"). When there are no
- *               children the bar falls back to the task's own `progress` and a
- *               manual −/+10 stepper + presets is shown so completion is still
- *               settable.
+ *   Header    → a plain "{done}/{total} completed" tally derived from the
+ *               children (done = child.status === "done"). NO progress bar and NO
+ *               steppers live here — the task's completion % and its editor now
+ *               live solely in the ProgressCard on the viewport's right column.
  *   Add-exist → {@link SubtaskLinker}: debounce typeahead over `GET /api/tasks?q`
  *               + id-paste, each linking via `PATCH /api/tasks/{id}
  *               {parentId:currentId}` then refetching children. Self / existing
@@ -23,27 +22,20 @@
  *               `parentId = currentId`; the POST creates a pre-linked child and
  *               we refetch on save.
  *   Unlink    → per-row remove affordance → `PATCH {parentId:null}` then refetch.
- *   Gauge     → a {@link RadialGauge} renders the completion % (children done/
- *               total, or `task.progress` when childless) with a "Complete"
- *               caption.
  *
  * Because completion is derived from the children's statuses, we surface
- * `onProgressChange(progress)` so the parent viewport (board / table / sidebar)
- * stays in sync without a full refetch.
+ * `onProgressChange(progress)` so the parent viewport (board / table / sidebar /
+ * ProgressCard) stays in sync without a full refetch.
  */
 
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ListTreeIcon, MinusIcon, PlusIcon, Unlink2Icon } from "lucide-react";
+import { ListTreeIcon, PlusIcon, Unlink2Icon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import { Separator } from "@/components/ui/separator";
 import { apiGet, apiSend, ApiError } from "@/lib/api";
-
-import { RadialGauge } from "@/components/dashboard/RadialGauge";
 
 import { AssigneeAvatar, ErrorState } from "./Shared";
 import { PriorityBadge } from "./PriorityBadge";
@@ -52,14 +44,6 @@ import { SubtaskLinker } from "./SubtaskLinker";
 import { TaskDialog } from "./TaskDialog";
 import { TaskPreviewDialog } from "./TaskPreviewDialog";
 import type { Task } from "./types";
-
-/** Quick-set progress presets for the childless manual fallback. */
-const PROGRESS_PRESETS = [0, 25, 50, 75, 100];
-
-/** Clamp an arbitrary number into the inclusive 0–100 progress range. */
-function clampProgress(n: number): number {
-  return Math.max(0, Math.min(100, Math.round(n)));
-}
 
 /** Derive the 0–100 completion percentage from a set of child tasks. */
 function deriveProgress(children: Task[]): number {
@@ -72,31 +56,23 @@ export interface TaskSubtasksProps {
   /** The current (parent) task id. */
   taskId: string;
   /**
-   * The task's own `progress` (0–100). Used ONLY as the fallback bar + gauge +
-   * manual control target when the task has zero children.
+   * The task's own `progress` (0–100). Used ONLY as a read-only fallback for the
+   * header tally when the task has zero children (completion is otherwise derived
+   * from the children's statuses). The progress EDITOR lives in the ProgressCard.
    */
   taskProgress: number;
-  /** True while a parent PATCH is in flight (disables the manual controls). */
-  saving?: boolean;
   /**
    * Called with the newly-derived 0–100 completion percentage whenever the
    * child set changes, so the parent can keep `task.progress` in sync.
    */
   onProgressChange?: (progress: number) => void;
-  /**
-   * PATCH the task's `progress` directly. Invoked only by the manual fallback
-   * shown when there are zero children.
-   */
-  onSetProgress?: (progress: number) => void;
 }
 
 /** Subtasks (child-tasks) card for a single task. */
 export function TaskSubtasks({
   taskId,
   taskProgress,
-  saving = false,
   onProgressChange,
-  onSetProgress,
 }: TaskSubtasksProps) {
   const [children, setChildren] = useState<Task[]>([]);
   const [ancestorIds, setAncestorIds] = useState<string[]>([]);
@@ -175,61 +151,6 @@ export function TaskSubtasks({
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {error ? <ErrorState message={error} onRetry={load} /> : null}
-
-        {/* Completion: progress bar + radial gauge side-by-side (gauge stacks
-            below the bar on narrow viewports). */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-          <div className="flex flex-1 flex-col gap-2">
-            <Progress value={completion} />
-            {/* Manual progress fallback — only when there are no children. */}
-            {!hasChildren && onSetProgress ? (
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  size="icon-sm"
-                  variant="outline"
-                  aria-label="Decrease progress by 10"
-                  disabled={saving || taskProgress <= 0}
-                  onClick={() => onSetProgress(clampProgress(taskProgress - 10))}
-                >
-                  <MinusIcon className="size-4" />
-                </Button>
-                <Button
-                  size="icon-sm"
-                  variant="outline"
-                  aria-label="Increase progress by 10"
-                  disabled={saving || taskProgress >= 100}
-                  onClick={() => onSetProgress(clampProgress(taskProgress + 10))}
-                >
-                  <PlusIcon className="size-4" />
-                </Button>
-                <Separator orientation="vertical" className="mx-1 h-6 bg-border/40" />
-                {PROGRESS_PRESETS.map((p) => (
-                  <Button
-                    key={p}
-                    size="sm"
-                    variant={taskProgress === p ? "secondary" : "ghost"}
-                    disabled={saving}
-                    onClick={() => onSetProgress(p)}
-                  >
-                    {p}%
-                  </Button>
-                ))}
-              </div>
-            ) : null}
-          </div>
-          <div className="w-full max-w-[150px] shrink-0 self-center sm:w-[150px]">
-            <RadialGauge
-              value={completion}
-              max={100}
-              label="Completion"
-              caption="Complete"
-              chartKey="chart-2"
-              className="mx-auto aspect-square max-h-[150px]"
-            />
-          </div>
-        </div>
-
-        <Separator className="bg-border/40" />
 
         {/* Child list. Clicking a row opens the quick-look preview. */}
         {loading ? (

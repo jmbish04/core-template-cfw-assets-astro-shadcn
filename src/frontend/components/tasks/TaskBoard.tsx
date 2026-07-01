@@ -1,7 +1,7 @@
 /**
  * @fileoverview TaskBoard — the `/tasks/board` island (hextaui "task-board").
  * Loads `GET /api/tasks/board` (server returns `{ columns: [...] }`) and renders
- * four kanban columns: To Do / In Progress / In Review / Done.
+ * four kanban columns: Not Started / In Progress / In Review / Done.
  *
  * Moving a card — via HTML5 drag-drop onto a column, or via the per-card
  * Move buttons — issues `PATCH /api/tasks/{id}` with the new `status`. Updates
@@ -168,7 +168,7 @@ export function TaskBoard() {
         <EmptyState
           icon={<PlusIcon />}
           title="No tasks on the board"
-          description="Create your first task to populate the To Do column."
+          description="Create your first task to populate the Not Started column."
           action={
             <TaskDialog
               onSaved={handleCreated}

@@ -35,7 +35,7 @@ export const BOARD_STATUSES: readonly TaskStatus[] = [
 
 /** Human labels for each status, matching the server's `COLUMN_LABELS`. */
 export const STATUS_LABELS: Record<TaskStatus, string> = {
-  todo: "To Do",
+  todo: "Not Started",
   in_progress: "In Progress",
   in_review: "In Review",
   done: "Done",

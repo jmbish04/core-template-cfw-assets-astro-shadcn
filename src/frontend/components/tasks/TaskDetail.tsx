@@ -48,6 +48,7 @@ import { apiGet, apiSend, ApiError } from "@/lib/api";
 
 import { ErrorState } from "./Shared";
 import { PriorityBadge } from "./PriorityBadge";
+import { ProgressCard } from "./ProgressCard";
 import { TaskBreadcrumbs } from "./TaskBreadcrumbs";
 import { TaskStatusBadge } from "./StatusBadge";
 import { TaskAttachments } from "./TaskAttachments";
@@ -104,16 +105,27 @@ export function TaskDetail({ id }: TaskDetailProps) {
     void load();
   }, [load]);
 
-  /** Patch a set of fields, optimistically updating local state. */
+  /**
+   * Patch a set of fields, optimistically updating local state.
+   *
+   * Completion coupling: moving a task to the `"done"` status implies 100%
+   * completion, so when the incoming patch sets `status: "done"` (and progress
+   * isn't already being set / already 100) we merge `progress: 100` into the same
+   * PATCH. This keeps the ProgressCard radial and the status badge in agreement.
+   */
   const patch = useCallback(
     async (body: Partial<Task>) => {
       if (!task) return;
+      const effective: Partial<Task> =
+        body.status === "done" && body.progress == null && task.progress < 100
+          ? { ...body, progress: 100 }
+          : body;
       const prev = task;
       setSaving(true);
       setError(null);
-      setTask({ ...task, ...body });
+      setTask({ ...task, ...effective });
       try {
-        const updated = await apiSend<Task>("PATCH", `tasks/${task.id}`, body);
+        const updated = await apiSend<Task>("PATCH", `tasks/${task.id}`, effective);
         setTask(updated);
       } catch (e) {
         setTask(prev);
@@ -318,21 +330,18 @@ export function TaskDetail({ id }: TaskDetailProps) {
             </CardContent>
           </Card>
 
-          {/* "Subtasks" card — child tasks now OWN completion: a
-              "{done}/{total} completed" header, a progress bar + radial gauge
-              derived from the children's statuses, the child list (click →
-              preview → viewport), an add-existing typeahead, and a create flow.
-              Completion mirrors back so the board/table/sidebar stay in sync.
-              For childless tasks a manual progress control (onSetProgress →
-              PATCH) is shown as a fallback so completion is still settable. */}
+          {/* "Subtasks" card — child tasks drive derived completion: a plain
+              "{done}/{total} completed" header, the child list (click → preview
+              → viewport), an add-existing typeahead, and a create flow. The
+              progress gauge + editor now live solely in the ProgressCard (right
+              column). Derived completion still mirrors back so the board / table
+              / sidebar / ProgressCard stay in sync. */}
           <TaskSubtasks
             taskId={task.id}
             taskProgress={task.progress}
-            saving={saving}
             onProgressChange={(progress) =>
               setTask((prev) => (prev ? { ...prev, progress } : prev))
             }
-            onSetProgress={(progress) => patch({ progress })}
           />
 
           {/* Comments — real thread + composer. */}
@@ -342,8 +351,14 @@ export function TaskDetail({ id }: TaskDetailProps) {
           <TaskAttachments taskId={task.id} />
         </div>
 
-        {/* Sidebar (above the main column on mobile). */}
+        {/* Sidebar (above the main column on mobile). ProgressCard sits FIRST,
+            directly above the Properties card. */}
         <div className="order-1 flex flex-col gap-6 lg:order-2">
+          <ProgressCard
+            progress={task.progress}
+            saving={saving}
+            onSetProgress={(progress) => patch({ progress })}
+          />
           <TaskDetailSidebar task={task} saving={saving} onPatch={patch} />
         </div>
       </div>

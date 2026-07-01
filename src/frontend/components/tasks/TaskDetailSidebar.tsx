@@ -99,6 +99,8 @@ export function TaskDetailSidebar({ task, saving, onPatch }: TaskDetailSidebarPr
   const [dueDraft, setDueDraft] = useState("");
   const [editingLabels, setEditingLabels] = useState(false);
   const [labelsDraft, setLabelsDraft] = useState("");
+  const [editingAssignee, setEditingAssignee] = useState(false);
+  const [assigneeDraft, setAssigneeDraft] = useState("");
 
   return (
     <Card>
@@ -131,18 +133,61 @@ export function TaskDetailSidebar({ task, saving, onPatch }: TaskDetailSidebarPr
 
         <PropertyRow label="Assignees">
           {/* One row per assignee (single today; layout shape kept for future
-              multi-assignee). Avatar = initials(name); the label is the full
-              display name — never a duplicated initials token. */}
-          <div className="flex flex-col gap-1.5">
-            {task.assignee ? (
-              <div className="flex items-center gap-2">
-                <AssigneeAvatar name={task.assignee} />
-                <span className="truncate text-sm">{task.assignee}</span>
-              </div>
-            ) : (
-              <span className="text-muted-foreground">Unassigned</span>
-            )}
-          </div>
+              multi-assignee). Editable inline via the same pencil-toggle pattern
+              as Due date / Labels: the text input is seeded with `task.assignee`;
+              saving PATCHes `{ assignee: <value or null> }`. Display returns to an
+              avatar (initials) + full display name, or "Unassigned". */}
+          {editingAssignee ? (
+            <div className="flex items-center gap-1">
+              <Input
+                value={assigneeDraft}
+                onChange={(e) => setAssigneeDraft(e.target.value)}
+                placeholder="Assignee name"
+                className="h-8"
+                autoFocus
+              />
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                aria-label="Save assignee"
+                disabled={saving}
+                onClick={() => {
+                  const next = assigneeDraft.trim();
+                  onPatch({ assignee: next ? next : null });
+                  setEditingAssignee(false);
+                }}
+              >
+                <CheckIcon className="size-4" />
+              </Button>
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                aria-label="Cancel"
+                onClick={() => setEditingAssignee(false)}
+              >
+                <XIcon className="size-4" />
+              </Button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-left transition-colors hover:bg-muted"
+              onClick={() => {
+                setAssigneeDraft(task.assignee ?? "");
+                setEditingAssignee(true);
+              }}
+            >
+              {task.assignee ? (
+                <>
+                  <AssigneeAvatar name={task.assignee} />
+                  <span className="truncate text-sm">{task.assignee}</span>
+                </>
+              ) : (
+                <span className="text-muted-foreground">Unassigned</span>
+              )}
+              <PencilIcon className="ml-auto size-3 shrink-0 opacity-60" />
+            </button>
+          )}
         </PropertyRow>
 
         <PropertyRow label="Project">
