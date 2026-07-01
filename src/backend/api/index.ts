@@ -34,6 +34,7 @@ import { notificationsRouter } from "./routes/notifications";
 import { projectsRouter } from "./routes/projects";
 import { seedRouter } from "./routes/seed";
 import { settingsRouter } from "./routes/settings";
+import { taskDetailRouter } from "./routes/task-detail";
 import { tasksRouter } from "./routes/tasks";
 import { teamNotesRouter } from "./routes/team-notes";
 import { threadsRouter } from "./routes/threads";
@@ -119,6 +120,9 @@ app.route("/api/docs", docsRouter);
 // Feature APIs (open — see auth note above)
 app.route("/api/projects", projectsRouter);
 app.route("/api/tasks", tasksRouter);
+// Comments / Subtasks / Attachments for a single task — mounted alongside
+// tasksRouter under the same base; its paths are all `/{id}/…` sub-resources.
+app.route("/api/tasks", taskDetailRouter);
 app.route("/api/team-notes", teamNotesRouter);
 app.route("/api/threads", threadsRouter);
 app.route("/api/settings", settingsRouter);

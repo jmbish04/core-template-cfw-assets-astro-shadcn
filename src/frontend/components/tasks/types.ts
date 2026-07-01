@@ -90,6 +90,36 @@ export interface Task {
   updatedAt: string | number;
 }
 
+/** A comment in a task's discussion thread (`GET /api/tasks/{id}/comments`). */
+export interface TaskComment {
+  id: string;
+  taskId: string;
+  author: string;
+  body: string;
+  createdAt: string | number;
+}
+
+/** A checklist item on a task (`GET /api/tasks/{id}/subtasks`). */
+export interface TaskSubtask {
+  id: string;
+  taskId: string;
+  title: string;
+  done: boolean;
+  position: number;
+  createdAt: string | number;
+}
+
+/** File-attachment metadata for a task (`GET /api/tasks/{id}/attachments`). */
+export interface TaskAttachment {
+  id: string;
+  taskId: string;
+  filename: string;
+  size: number | null;
+  contentType: string | null;
+  r2Key: string;
+  createdAt: string | number;
+}
+
 export interface TeamNote {
   id: string;
   projectId: string | null;

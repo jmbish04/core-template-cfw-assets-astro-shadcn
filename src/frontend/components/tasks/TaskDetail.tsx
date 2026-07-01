@@ -10,9 +10,10 @@
  *   Left column  → (1) Description card (editable, PATCH). (2) Completion card:
  *                  a "{progress}% complete" label + thin progress bar + a
  *                  −/+10 stepper and quick presets (real `task.progress`).
- *                  (3) Comments + (4) Subtasks + (5) Attachments render as
- *                  honest empty states — these have no backing API in this
- *                  slice, so no data is fabricated (see the report note).
+ *                  (3) Subtasks (checklist backed by /api/tasks/{id}/subtasks,
+ *                  toggles re-derive task.progress) + (4) Comments (thread +
+ *                  composer) + (5) Attachments (R2-backed upload/stream) — all
+ *                  fully backed by their own API routes.
  *   Right column → {@link TaskDetailSidebar} Properties card (status, priority,
  *                  assignees, project, started, due date, labels).
  *   Delete       → AlertDialog → `DELETE /api/tasks/{id}` (never window.confirm).
@@ -24,14 +25,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import {
-  ArrowLeftIcon,
-  MessageSquareIcon,
-  PaperclipIcon,
-  PencilIcon,
-  ListChecksIcon,
-  Trash2Icon,
-} from "lucide-react";
+import { ArrowLeftIcon, PencilIcon, Trash2Icon } from "lucide-react";
 
 import {
   AlertDialog,
@@ -54,8 +48,11 @@ import { apiGet, apiSend, ApiError } from "@/lib/api";
 import { ErrorState } from "./Shared";
 import { PriorityBadge } from "./PriorityBadge";
 import { TaskStatusBadge } from "./StatusBadge";
+import { TaskAttachments } from "./TaskAttachments";
+import { TaskComments } from "./TaskComments";
 import { TaskDetailSidebar } from "./TaskDetailSidebar";
-import { CompletionCard, SectionPlaceholder } from "./TaskDetailSections";
+import { CompletionCard } from "./TaskDetailSections";
+import { TaskSubtasks } from "./TaskSubtasks";
 import { type Task } from "./types";
 
 export interface TaskDetailProps {
@@ -309,22 +306,20 @@ export function TaskDetail({ id }: TaskDetailProps) {
           {/* Completion (real task.progress). */}
           <CompletionCard task={task} saving={saving} onPatch={patch} />
 
-          {/* Sections with no backing API in this slice → honest empty states. */}
-          <SectionPlaceholder
-            icon={<ListChecksIcon />}
-            title="Subtasks"
-            body="Break this task into a checklist. Subtasks aren’t available yet."
+          {/* Subtasks — toggling a subtask re-derives task.progress on the
+              server; mirror that locally so the Completion card stays in sync. */}
+          <TaskSubtasks
+            taskId={task.id}
+            onProgressChange={(progress) =>
+              setTask((prev) => (prev ? { ...prev, progress } : prev))
+            }
           />
-          <SectionPlaceholder
-            icon={<MessageSquareIcon />}
-            title="Comments"
-            body="Discussion threads aren’t available yet for this task."
-          />
-          <SectionPlaceholder
-            icon={<PaperclipIcon />}
-            title="Attachments"
-            body="File attachments aren’t available yet for this task."
-          />
+
+          {/* Comments — real thread + composer. */}
+          <TaskComments taskId={task.id} />
+
+          {/* Attachments — real list + R2-backed uploader. */}
+          <TaskAttachments taskId={task.id} />
         </div>
 
         {/* Sidebar (above the main column on mobile). */}

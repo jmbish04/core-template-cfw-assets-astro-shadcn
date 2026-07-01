@@ -1,13 +1,12 @@
 /**
- * @fileoverview TaskDetailSections — the left-column building blocks of the task
- * viewport that aren't the description: the real-data "Completion" card (backed
- * by `task.progress`) and the honest empty-state cards for capabilities that
- * have no backing API in this slice (Subtasks, Comments, Attachments).
+ * @fileoverview TaskDetailSections — the real-data "Completion" card for the
+ * task viewport, backed by `task.progress`.
  *
  * Split out of {@link TaskDetail} purely to keep every island under the 400-line
- * cap. These are presentational; all mutations route back through the parent's
- * `onPatch`. We never fabricate rows — the project bans mock data, so the
- * unbacked sections advertise the capability behind a disabled affordance.
+ * cap. Presentational; all mutations route back through the parent's `onPatch`.
+ * The Subtasks, Comments, and Attachments sections now have their own fully
+ * backed components ({@link TaskSubtasks}, {@link TaskComments},
+ * {@link TaskAttachments}).
  */
 
 "use client";
@@ -83,38 +82,6 @@ export function CompletionCard({ task, saving, onPatch }: CompletionCardProps) {
               {p}%
             </Button>
           ))}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-export interface SectionPlaceholderProps {
-  icon: React.ReactNode;
-  title: string;
-  body: string;
-}
-
-/**
- * A clean, honest empty-state card for a viewport section that has no backing
- * API yet. We never fabricate rows — the project bans mock data — so these
- * sections advertise the capability and stay disabled until a real endpoint
- * exists.
- */
-export function SectionPlaceholder({ icon, title, body }: SectionPlaceholderProps) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-sm">{title}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="flex flex-col items-center gap-2 rounded-lg bg-muted/20 px-4 py-8 text-center">
-          <div className="text-muted-foreground [&>svg]:size-6">{icon}</div>
-          <p className="max-w-xs text-xs text-muted-foreground">{body}</p>
-          <Button size="sm" variant="outline" disabled>
-            <PlusIcon className="size-4" />
-            Coming soon
-          </Button>
         </div>
       </CardContent>
     </Card>
