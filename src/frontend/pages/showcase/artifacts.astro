@@ -2,53 +2,9 @@
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
----
+import { CodeBlock } from "@/components/ui/code-block";
 
-<BaseLayout title="Memory & Artifacts" description="Git-native versioned storage with diff viewing">
-  <div class="container mx-auto px-4 py-12 max-w-7xl">
-
-    <section class="mb-12">
-      <div class="flex items-center gap-3 mb-4">
-        <span class="text-5xl">📂</span>
-        <div>
-          <h1 class="text-4xl font-bold tracking-tight">Memory & Artifacts</h1>
-          <p class="text-muted-foreground mt-2">Git-native versioned storage with assistant-ui Diff Viewer</p>
-        </div>
-      </div>
-    </section>
-
-    <section class="mb-12">
-      <Card class="border-zinc-800 bg-zinc-950">
-        <CardHeader>
-          <CardTitle>Showcase Overview</CardTitle>
-        </CardHeader>
-        <CardContent class="space-y-4">
-          <p class="text-sm text-muted-foreground">
-            Memory & Artifacts integrates a comparative viewport panel wrapping up a styled code revision viewer tracking custom state snapshots (<code class="text-orange-400">originalCode</code> vs <code class="text-orange-400">updatedCode</code>) with Git-compatible versioning.
-          </p>
-          <div class="flex flex-wrap gap-2">
-            <Badge className="bg-green-950 text-green-400 border-green-800">Artifacts</Badge>
-            <Badge className="bg-blue-950 text-blue-400 border-blue-800">Git-native</Badge>
-            <Badge className="bg-purple-950 text-purple-400 border-purple-800">Diff Viewer</Badge>
-            <Badge className="bg-orange-950 text-orange-400 border-orange-800">Version Control</Badge>
-          </div>
-        </CardContent>
-      </Card>
-    </section>
-
-    <section class="mb-12">
-      <h2 class="text-2xl font-bold mb-6">Implementation Reference</h2>
-
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card class="border-zinc-800 bg-zinc-950">
-          <CardHeader>
-            <div class="flex items-center justify-between">
-              <CardTitle class="text-base">Backend: ArtifactAgent.ts</CardTitle>
-              <Badge variant="secondary">Agent SDK</Badge>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <pre class="text-xs bg-zinc-900 p-4 rounded-lg border border-zinc-800 overflow-x-auto max-h-96"><code class="text-zinc-300">{`import { AIChatAgent } from "@cloudflare/ai-chat";
+const artifactAgentCode = `import { AIChatAgent } from "@cloudflare/ai-chat";
 import { generateText } from "ai";
 
 export class ArtifactAgent extends AIChatAgent {
@@ -110,19 +66,9 @@ Return only the refactored code.\`
 
     return { status: "reverted", hash: commitHash };
   }
-}`}</code></pre>
-          </CardContent>
-        </Card>
+}`;
 
-        <Card class="border-zinc-800 bg-zinc-950">
-          <CardHeader>
-            <div class="flex items-center justify-between">
-              <CardTitle class="text-base">Frontend: CodeRefinementView.tsx</CardTitle>
-              <Badge variant="secondary">assistant-ui</Badge>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <pre class="text-xs bg-zinc-900 p-4 rounded-lg border border-zinc-800 overflow-x-auto max-h-96"><code class="text-zinc-300">{`import { useAgent } from "agents/react";
+const codeRefinementViewCode = `import { useAgent } from "agents/react";
 import { useAgentChat } from "@cloudflare/ai-chat/react";
 import { DiffEditor } from "@monaco-editor/react";
 
@@ -145,7 +91,7 @@ export function CodeRefinementView() {
   return (
     <div className="h-screen flex flex-col bg-zinc-950">
       {/* Header */}
-      <div className="p-4 border-b border-zinc-800 flex justify-between items-center">
+      <div className="p-4 flex justify-between items-center">
         <div>
           <h2 className="text-base font-bold text-white">
             Cloudflare Git Artifact: index.ts
@@ -165,16 +111,10 @@ export function CodeRefinementView() {
 
         {/* Actions */}
         <div className="flex gap-2">
-          <button
-            onClick={() => agent.stub.getFileHistory("index.ts")}
-            className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded text-xs transition-colors"
-          >
+          <button onClick={() => agent.stub.getFileHistory("index.ts")}>
             View History
           </button>
-          <button
-            onClick={() => agent.stub.revertToCommit(lastCommitHash)}
-            className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded text-xs transition-colors"
-          >
+          <button onClick={() => agent.stub.revertToCommit(lastCommitHash)}>
             Revert
           </button>
         </div>
@@ -188,54 +128,19 @@ export function CodeRefinementView() {
             modified={updatedCode}
             language="typescript"
             theme="vs-dark"
-            options={{
-              readOnly: true,
-              renderSideBySide: true,
-              minimap: { enabled: false }
-            }}
+            options={{ readOnly: true, renderSideBySide: true }}
           />
         ) : (
           <div className="flex items-center justify-center h-full">
-            <p className="text-zinc-500 text-sm">
-              No changes to display
-            </p>
+            <p className="text-zinc-500 text-sm">No changes to display</p>
           </div>
         )}
       </div>
-
-      {/* Stats Footer */}
-      {originalCode && updatedCode && (
-        <div className="p-3 border-t border-zinc-800 flex justify-between items-center text-xs text-zinc-400">
-          <div className="flex gap-4">
-            <span className="text-green-400">
-              + {countLines(updatedCode) - countLines(originalCode)} lines
-            </span>
-            <span className="text-red-400">
-              - {countLines(originalCode) - countLines(updatedCode)} lines
-            </span>
-          </div>
-          <span>
-            Git-native versioned storage
-          </span>
-        </div>
-      )}
     </div>
   );
-}
+}`;
 
-function countLines(code: string): number {
-  return code.split("\\n").length;
-}`}</code></pre>
-          </CardContent>
-        </Card>
-      </div>
-    </section>
-
-    <section class="mb-12">
-      <h2 class="text-2xl font-bold mb-6">Wrangler Configuration</h2>
-      <Card class="border-zinc-800 bg-zinc-950">
-        <CardContent class="p-6">
-          <pre class="text-xs bg-zinc-900 p-4 rounded-lg border border-zinc-800 overflow-x-auto"><code class="text-zinc-300">{`{
+const artifactWranglerCode = `{
   "name": "artifacts-showcase",
   "main": "dist/_worker.js/index.js",
   "compatibility_date": "2026-05-25",
@@ -262,9 +167,68 @@ function countLines(code: string): number {
   "ai": {
     "binding": "AI"
   }
-}`}</code></pre>
+}`;
+---
+
+<BaseLayout title="Memory & Artifacts" description="Git-native versioned storage with diff viewing">
+  <div class="container mx-auto px-4 py-12 max-w-7xl">
+
+    <section class="mb-12">
+      <div class="flex items-center gap-3 mb-4">
+        <span class="text-5xl">📂</span>
+        <div>
+          <h1 class="text-4xl font-bold tracking-tight">Memory & Artifacts</h1>
+          <p class="text-muted-foreground mt-2">Git-native versioned storage with assistant-ui Diff Viewer</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="mb-12">
+      <Card class="border-zinc-800 bg-zinc-950">
+        <CardHeader>
+          <CardTitle>Showcase Overview</CardTitle>
+        </CardHeader>
+        <CardContent class="space-y-4">
+          <p class="text-sm text-muted-foreground">
+            Memory & Artifacts integrates a comparative viewport panel wrapping up a styled code revision viewer tracking custom state snapshots (<code class="text-orange-400">originalCode</code> vs <code class="text-orange-400">updatedCode</code>) with Git-compatible versioning.
+          </p>
+          <div class="flex flex-wrap gap-2">
+            <Badge className="bg-green-950 text-green-400 border-green-800">Artifacts</Badge>
+            <Badge className="bg-blue-950 text-blue-400 border-blue-800">Git-native</Badge>
+            <Badge className="bg-purple-950 text-purple-400 border-purple-800">Diff Viewer</Badge>
+            <Badge className="bg-orange-950 text-orange-400 border-orange-800">Version Control</Badge>
+          </div>
         </CardContent>
       </Card>
+    </section>
+
+    <section class="mb-12">
+      <h2 class="text-2xl font-bold mb-6">Implementation Reference</h2>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <CodeBlock
+          client:visible
+          filename="ArtifactAgent.ts"
+          language="ts"
+          code={artifactAgentCode}
+          showLineNumbers
+          maxHeight="24rem"
+        />
+
+        <CodeBlock
+          client:visible
+          filename="CodeRefinementView.tsx"
+          language="tsx"
+          code={codeRefinementViewCode}
+          showLineNumbers
+          maxHeight="24rem"
+        />
+      </div>
+    </section>
+
+    <section class="mb-12">
+      <h2 class="text-2xl font-bold mb-6">Wrangler Configuration</h2>
+      <CodeBlock client:visible filename="wrangler.jsonc" language="json" code={artifactWranglerCode} showLineNumbers />
     </section>
 
     <section class="mb-12">

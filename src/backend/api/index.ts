@@ -27,14 +27,18 @@ import { clientErrorRouter } from "./routes/client-error";
 import { adminRouter, configRouter } from "./routes/config";
 import { docsRouter } from "./routes/docs";
 import { healthRouter } from "./routes/health";
+import { inboxRouter } from "./routes/inbox";
 import { activityRouter } from "./routes/activity";
 import { dashboardRouter } from "./routes/dashboard";
 import { notificationsRouter } from "./routes/notifications";
 import { projectsRouter } from "./routes/projects";
 import { seedRouter } from "./routes/seed";
 import { settingsRouter } from "./routes/settings";
+import { taskDetailRouter } from "./routes/task-detail";
+import { taskHierarchyRouter } from "./routes/task-hierarchy";
 import { tasksRouter } from "./routes/tasks";
 import { teamNotesRouter } from "./routes/team-notes";
+import { threadsRouter } from "./routes/threads";
 import { webhooksRouter } from "./routes/webhooks";
 
 // ---------------------------------------------------------------------------
@@ -117,12 +121,19 @@ app.route("/api/docs", docsRouter);
 // Feature APIs (open — see auth note above)
 app.route("/api/projects", projectsRouter);
 app.route("/api/tasks", tasksRouter);
+// Comments / Subtasks / Attachments for a single task — mounted alongside
+// tasksRouter under the same base; its paths are all `/{id}/…` sub-resources.
+app.route("/api/tasks", taskDetailRouter);
+// Parent/child (subtask) navigation — GET /{id}/children, GET /{id}/ancestors.
+app.route("/api/tasks", taskHierarchyRouter);
 app.route("/api/team-notes", teamNotesRouter);
+app.route("/api/threads", threadsRouter);
 app.route("/api/settings", settingsRouter);
 app.route("/api/webhooks", webhooksRouter);
 app.route("/api/activity", activityRouter);
 app.route("/api/notifications", notificationsRouter);
 app.route("/api/dashboard", dashboardRouter);
+app.route("/api/inbox", inboxRouter);
 app.route("/api/seed", seedRouter);
 
 app.route("/api/__client-error", clientErrorRouter);

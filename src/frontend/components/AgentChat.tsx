@@ -1,36 +1,28 @@
 /**
- * @fileoverview AgentChat — assistant-ui `<Thread />` wired to the ChatBroker
- * Durable Object over a WebSocket channel.
+ * @fileoverview AgentChat — the enhanced assistant-ui `<Thread />` wired to the
+ * ChatBroker Durable Object over a WebSocket channel.
  *
- * No external provider middleware sits between the browser and the broker:
- * `useAgentChat` from `@cloudflare/ai-chat/react` opens a WebSocket directly
- * to the `CHAT_BROKER` Durable Object (keyed by session id) and streams
- * UI-message frames back. The DO calls Workers AI via the project's
- * `getProvider()` registry on the server side.
+ * `useAgentChat` from `@cloudflare/ai-chat/react` opens a WebSocket directly to
+ * the `CHAT_BROKER` Durable Object (keyed by session id) and streams UI-message
+ * frames back. The DO calls Workers AI via the project's `getChatModel()` on the
+ * server side. No external provider middleware sits in between.
  *
- * The thread is composed from `@assistant-ui/react` primitives
- * (ThreadPrimitive, MessagePrimitive, ComposerPrimitive). `@assistant-ui/react`
- * itself does not ship a styled `<Thread />`; that lives in `@assistant-ui/react-ui`
- * or the shadcn registry. The primitives give us full Monolith styling control.
+ * The visible surface is the shared, enhanced {@link Thread} (markdown replies
+ * via Shiki code blocks, welcome + follow-up suggestion chips, and inline
+ * generative-UI tool cards for `showMetric` / `createTaskDraft`).
+ *
+ * Browser-only: depends transitively on `agents/react` + PartySocket. The
+ * consuming page mounts this `client:only="react"`.
  */
 
 "use client";
 
-import { useState, type ComponentProps } from "react";
+import { useState } from "react";
 
 import { useAgent } from "agents/react";
 import { useAgentChat } from "@cloudflare/ai-chat/react";
-
-import {
-  AssistantRuntimeProvider,
-  ComposerPrimitive,
-  MessagePrimitive,
-  ThreadPrimitive,
-} from "@assistant-ui/react";
 import { useAISDKRuntime } from "@assistant-ui/react-ai-sdk";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -39,6 +31,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
+import { ThreadProvider, type ThreadStatus } from "@/components/assistant/Thread";
+
+/** Resolve (and persist) a stable per-session ChatBroker id. */
 function newSessionId() {
   if (typeof window === "undefined") return "session-ssr";
   const stored = window.sessionStorage.getItem("agent-chat-session");
@@ -48,36 +43,27 @@ function newSessionId() {
   return fresh;
 }
 
+/** Map PartySocket `readyState` (0=CONNECTING, 1=OPEN, 2/3=CLOSING/CLOSED). */
+function statusFromReadyState(readyState: number): ThreadStatus {
+  if (readyState === 1) return "connected";
+  if (readyState === 0) return "connecting";
+  return "disconnected";
+}
+
 export function AgentChat() {
   const [sessionId] = useState(newSessionId);
 
-  // 1. Open the long-lived WebSocket connection to the ChatBroker DO.
-  //    The DO name (`chat-broker`) is the kebab-case of the class name and
-  //    must match the `/agents/:name/:instance` routing rule used by the SDK.
+  // 1. Open the long-lived WebSocket to the ChatBroker DO. The agent name
+  //    (`chat-broker`) is the kebab-case class name; `name` keys the instance.
   const agent = useAgent({ agent: "chat-broker", name: sessionId });
 
-  // 2. Subscribe to the broker's persisted message stream. `useAgentChat`
-  //    returns an `@ai-sdk/react` Chat surface backed by the DO transport.
-  //    History is rehydrated server-side from the DO's SQLite store via the
-  //    SDK's `/get-messages` endpoint — no `initialMessages` needed here.
+  // 2. Subscribe to the broker's persisted message stream. History rehydrates
+  //    server-side from the DO's SQLite store via the SDK's `/get-messages`.
   const chat = useAgentChat({ agent });
 
   // 3. Adapt the AI SDK chat surface to assistant-ui's runtime.
-  //    `useAgentChat`'s return type is a structural extension of `useChat`, so
-  //    `useAISDKRuntime` consumes it directly. The cast on the resulting runtime
-  //    bridges a benign `@assistant-ui/react` vs `@assistant-ui/react-ai-sdk`
-  //    version-skew in the `AssistantRuntime` type — verified to converge at
-  //    runtime. See the assistant-ui Cloudflare Agents integration guide.
   const runtime = useAISDKRuntime(chat);
-  type RuntimeProp = ComponentProps<typeof AssistantRuntimeProvider>["runtime"];
-
-  // PartySocket readyState: 0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED.
-  const status =
-    agent.readyState === 1
-      ? "connected"
-      : agent.readyState === 0
-        ? "connecting"
-        : "disconnected";
+  const status = statusFromReadyState(agent.readyState);
 
   return (
     <Card className="flex h-[calc(100vh-12rem)] flex-col">
@@ -86,68 +72,15 @@ export function AgentChat() {
           <CardTitle>Assistant</CardTitle>
           <CardDescription>
             assistant-ui Thread routed through the ChatBroker Durable Object over a
-            WebSocket channel. No external provider middleware.
+            WebSocket channel. Markdown, suggestions, and generative UI included.
           </CardDescription>
         </div>
-        <div className="flex flex-col items-end gap-1">
-          <Badge variant={status === "connected" ? "default" : "outline"}>{status}</Badge>
-          <code className="text-xs text-muted-foreground">{sessionId.slice(0, 18)}…</code>
-        </div>
+        <code className="shrink-0 text-xs text-muted-foreground">{sessionId.slice(0, 18)}…</code>
       </CardHeader>
 
       <CardContent className="min-h-0 flex-1 p-0">
-        <AssistantRuntimeProvider runtime={runtime as unknown as RuntimeProp}>
-          <ThreadPrimitive.Root className="flex h-full flex-col">
-            <ThreadPrimitive.Viewport className="flex-1 overflow-y-auto px-6 py-4">
-              <ThreadPrimitive.Empty>
-                <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-muted-foreground">
-                  <p className="text-sm">No messages yet — start the conversation.</p>
-                  <p className="text-xs">Streaming over wss://&hellip;/agents/chat-broker/{sessionId.slice(0, 10)}…</p>
-                </div>
-              </ThreadPrimitive.Empty>
-
-              <ThreadPrimitive.Messages
-                components={{
-                  UserMessage: UserMessage,
-                  AssistantMessage: AssistantMessage,
-                }}
-              />
-            </ThreadPrimitive.Viewport>
-
-            <ComposerPrimitive.Root className="flex items-end gap-2 px-6 py-4">
-              <ComposerPrimitive.Input
-                rows={1}
-                autoFocus
-                placeholder="Ask the assistant…"
-                className="flex-1 resize-none rounded-md bg-muted/40 px-3 py-2 text-sm ring-1 ring-foreground/10 placeholder:text-muted-foreground focus:outline-none focus:ring-foreground/30"
-              />
-              <ComposerPrimitive.Send asChild>
-                <Button size="sm">Send</Button>
-              </ComposerPrimitive.Send>
-            </ComposerPrimitive.Root>
-          </ThreadPrimitive.Root>
-        </AssistantRuntimeProvider>
+        <ThreadProvider runtime={runtime} status={status} />
       </CardContent>
     </Card>
-  );
-}
-
-function UserMessage() {
-  return (
-    <MessagePrimitive.Root className="mb-4 flex justify-end">
-      <div className="max-w-[80%] rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground">
-        <MessagePrimitive.Parts />
-      </div>
-    </MessagePrimitive.Root>
-  );
-}
-
-function AssistantMessage() {
-  return (
-    <MessagePrimitive.Root className="mb-4 flex justify-start">
-      <div className="max-w-[80%] rounded-md bg-muted/60 px-3 py-2 text-sm">
-        <MessagePrimitive.Parts />
-      </div>
-    </MessagePrimitive.Root>
   );
 }

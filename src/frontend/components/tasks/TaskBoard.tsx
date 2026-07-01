@@ -1,7 +1,7 @@
 /**
  * @fileoverview TaskBoard — the `/tasks/board` island (hextaui "task-board").
  * Loads `GET /api/tasks/board` (server returns `{ columns: [...] }`) and renders
- * four kanban columns: To Do / In Progress / In Review / Done.
+ * four kanban columns: Not Started / In Progress / In Review / Done.
  *
  * Moving a card — via HTML5 drag-drop onto a column, or via the per-card
  * Move buttons — issues `PATCH /api/tasks/{id}` with the new `status`. Updates
@@ -22,6 +22,8 @@ import { cn } from "@/lib/utils";
 import { EmptyState, ErrorState } from "./Shared";
 import { TaskCard } from "./TaskCard";
 import { TaskDialog } from "./TaskDialog";
+import { TaskPreviewDialog } from "./TaskPreviewDialog";
+import { useProjects } from "./useProjects";
 import {
   BOARD_STATUSES,
   STATUS_LABELS,
@@ -38,6 +40,12 @@ export function TaskBoard() {
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<TaskStatus | null>(null);
   const draggingRef = useRef<Task | null>(null);
+
+  // Preview modal state.
+  const [previewTask, setPreviewTask] = useState<Task | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+
+  const { nameById } = useProjects();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -107,6 +115,26 @@ export function TaskBoard() {
     );
   }, []);
 
+  const openPreview = useCallback((task: Task) => {
+    setPreviewTask(task);
+    setPreviewOpen(true);
+  }, []);
+
+  // Reconcile an edited task back into the board. If its status changed, move
+  // it to the correct column; otherwise replace it in place.
+  const handleUpdated = useCallback((updated: Task) => {
+    setPreviewTask(updated);
+    setColumns((prev) => {
+      const without = prev.map((col) => ({
+        ...col,
+        tasks: col.tasks.filter((t) => t.id !== updated.id),
+      }));
+      return without.map((col) =>
+        col.status === updated.status ? { ...col, tasks: [updated, ...col.tasks] } : col,
+      );
+    });
+  }, []);
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -140,7 +168,7 @@ export function TaskBoard() {
         <EmptyState
           icon={<PlusIcon />}
           title="No tasks on the board"
-          description="Create your first task to populate the To Do column."
+          description="Create your first task to populate the Not Started column."
           action={
             <TaskDialog
               onSaved={handleCreated}
@@ -192,6 +220,7 @@ export function TaskBoard() {
                       task={task}
                       pending={pendingId === task.id}
                       onMove={handleAdjacentMove}
+                      onOpen={openPreview}
                       onDragStart={(t) => {
                         draggingRef.current = t;
                       }}
@@ -214,6 +243,14 @@ export function TaskBoard() {
           ))}
         </div>
       )}
+
+      <TaskPreviewDialog
+        task={previewTask}
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        projectName={previewTask?.projectId ? nameById.get(previewTask.projectId) : null}
+        onSaved={handleUpdated}
+      />
     </div>
   );
 }

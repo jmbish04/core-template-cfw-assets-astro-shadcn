@@ -4,7 +4,17 @@
  * trigger element passed as `children`.
  *
  * On submit it POSTs `/api/tasks` (create) or PATCHes `/api/tasks/{id}` (edit)
- * and calls `onSaved(task)` so the host island can optimistically refresh.
+ * and calls `onSaved(task)` so the host island can optimistically refresh. When
+ * a `parentId` is supplied the created task is POSTed pre-linked as a child of
+ * that parent (used by the Subtasks "Create new subtask" flow).
+ *
+ * The Description field is a {@link TaskRichEditor} (PlateJS): `task.description`
+ * now stores **sanitized HTML**, and legacy Plate-envelope / markdown /
+ * plain-text descriptions are upgraded on load. PlateJS is browser-only; the
+ * editor is only ever rendered inside the opened Dialog and behind a `mounted`
+ * guard, so it never runs during Astro SSR / first hydration paint (avoiding
+ * React #418/#425).
+ *
  * Validation errors and API failures are surfaced inline (no alert()).
  */
 
@@ -22,7 +32,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -33,6 +42,7 @@ import {
 import { apiSend, ApiError } from "@/lib/api";
 
 import { ErrorState } from "./Shared";
+import { TaskRichEditor } from "./TaskRichEditor";
 import { useProjects } from "./useProjects";
 import {
   PRIORITY_LABELS,
@@ -54,6 +64,11 @@ export interface TaskDialogProps {
   defaultStatus?: TaskStatus;
   /** Default project applied to a newly created task. */
   defaultProjectId?: string;
+  /**
+   * When set on a create, the new task is POSTed pre-linked as a child of this
+   * parent task id (the Subtasks "Create new subtask" flow). Ignored on edit.
+   */
+  parentId?: string;
   /** Called with the persisted task after a successful save. */
   onSaved: (task: Task) => void;
 }
@@ -71,10 +86,16 @@ export function TaskDialog({
   task,
   defaultStatus,
   defaultProjectId,
+  parentId,
   onSaved,
 }: TaskDialogProps) {
   const editing = Boolean(task);
   const { options: projectOptions } = useProjects();
+
+  // PlateJS is browser-only; gate the editor behind a mounted flag so it never
+  // renders during SSR / first hydration paint on this `client:load` page.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
@@ -126,7 +147,7 @@ export function TaskDialog({
     try {
       const saved = editing
         ? await apiSend<Task>("PATCH", `tasks/${task!.id}`, body)
-        : await apiSend<Task>("POST", "tasks", body);
+        : await apiSend<Task>("POST", "tasks", parentId ? { ...body, parentId } : body);
       onSaved(saved);
       setOpen(false);
     } catch (e) {
@@ -141,11 +162,15 @@ export function TaskDialog({
       <DialogTrigger render={trigger} />
       <DialogContent className="max-w-xl">
         <DialogHeader>
-          <DialogTitle>{editing ? "Edit task" : "New task"}</DialogTitle>
+          <DialogTitle>
+            {editing ? "Edit task" : parentId ? "New subtask" : "New task"}
+          </DialogTitle>
           <DialogDescription>
             {editing
               ? "Update the task details below."
-              : "Create a task and drop it into a board column."}
+              : parentId
+                ? "Create a task linked as a subtask of the current task."
+                : "Create a task and drop it into a board column."}
           </DialogDescription>
         </DialogHeader>
 
@@ -162,20 +187,26 @@ export function TaskDialog({
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="task-desc">Description</Label>
-            <Textarea
-              id="task-desc"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Optional details, acceptance criteria, links…"
-              rows={3}
-            />
+            <Label>Description</Label>
+            {mounted ? (
+              <TaskRichEditor
+                valueHtml={description}
+                onChangeHtml={setDescription}
+                placeholder="Optional details, acceptance criteria, links…"
+              />
+            ) : (
+              <div className="min-h-40 rounded-md bg-input/30 ring-1 ring-border/40" />
+            )}
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
               <Label>Status</Label>
-              <Select value={status} onValueChange={(v) => setStatus(v as TaskStatus)}>
+              <Select
+                value={status}
+                onValueChange={(v) => setStatus(v as TaskStatus)}
+                items={STATUS_LABELS}
+              >
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
@@ -191,7 +222,11 @@ export function TaskDialog({
 
             <div className="grid gap-2">
               <Label>Priority</Label>
-              <Select value={priority} onValueChange={(v) => setPriority(v as TaskPriority)}>
+              <Select
+                value={priority}
+                onValueChange={(v) => setPriority(v as TaskPriority)}
+                items={PRIORITY_LABELS}
+              >
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
@@ -210,6 +245,10 @@ export function TaskDialog({
               <Select
                 value={projectId || "__none__"}
                 onValueChange={(v) => setProjectId(v === "__none__" ? "" : String(v))}
+                items={{
+                  __none__: "No project",
+                  ...Object.fromEntries(projectOptions.map((o) => [o.value, o.label])),
+                }}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="No project" />

@@ -29,6 +29,11 @@
   },
   "ai": {
     "binding": "AI",
+    // Workers AI has no local emulation. `remote: true` lets `wrangler dev`
+    // (which runs Durable Objects locally — `--remote` is unsupported for DOs)
+    // proxy AI inference to the real Workers AI service, so the chat agents
+    // stream genuine model output during local development.
+    "remote": true,
   },
   "durable_objects": {
     "bindings": [
@@ -56,7 +61,34 @@
         "name": "NOTIFICATIONS_AGENT",
         "class_name": "NotificationsAgent",
       },
+      {
+        "name": "ORCHESTRATOR_AGENT",
+        "class_name": "OrchestratorAgent",
+      },
+      {
+        "name": "RESEARCHER_AGENT",
+        "class_name": "ResearcherAgent",
+      },
+      {
+        "name": "CODER_AGENT",
+        "class_name": "CoderAgent",
+      },
+      {
+        "name": "MCP_AGENT",
+        "class_name": "McpAgent",
+      },
+      {
+        "name": "THINKING_AGENT",
+        "class_name": "ThinkingAgent",
+      },
+      {
+        "name": "SKILLS_AGENT",
+        "class_name": "SkillsAgent",
+      },
     ],
+  },
+  "browser": {
+    "binding": "MYBROWSER",
   },
   "worker_loaders": [
     { "binding": "WORKER_LOADERS" }
@@ -85,7 +117,50 @@
       "deleted_classes": ["OrchestratorAgent", "GoogleDocsAgent"],
       "new_sqlite_classes": ["ChatBroker", "NotificationsAgent"],
     },
+    // v3 re-introduces the OrchestratorAgent (re-created additively after v2
+    // retired it) as a live multi-agent coordinator, adds its specialist
+    // sub-agents (ResearcherAgent, CoderAgent), and registers the three new
+    // showcase agents (McpAgent, ThinkingAgent, SkillsAgent). v1/v2 are left
+    // untouched — they are immutable history.
+    {
+      "tag": "v3",
+      "new_sqlite_classes": [
+        "OrchestratorAgent",
+        "ResearcherAgent",
+        "CoderAgent",
+        "McpAgent",
+        "ThinkingAgent",
+        "SkillsAgent",
+      ],
+    },
   ],
+  // ---------------------------------------------------------------------------
+  // Cloudflare Email Routing (inbound) — the `/inbox` showcase
+  // ---------------------------------------------------------------------------
+  //
+  // RECEIVING email needs NO wrangler binding. The Worker exports an
+  // `email(message, env, ctx)` handler (see src/_worker.ts +
+  // src/backend/email/inbound.ts); Cloudflare invokes it when a Routing Rule
+  // points an incoming address at this Worker. Set that up out-of-band:
+  //
+  //   Dashboard → the zone → Email → Email Routing →
+  //     1. Enable Email Routing for the domain (adds the required MX + TXT/SPF).
+  //     2. Routing Rules → "Send to a Worker" → select this Worker
+  //        (core-template-cfw-assets-astro-shadcn), or use a catch-all rule.
+  //   …or via CLI:
+  //     npx wrangler email routing rules create \
+  //       --match "to=demo@yourdomain.com" --action worker \
+  //       --value core-template-cfw-assets-astro-shadcn
+  //
+  // FORWARDING a copy via `message.forward(INBOX_FORWARD_TO)` is optional. The
+  // destination must be VERIFIED first (Dashboard → Destination addresses, or
+  // `npx wrangler email routing addresses create you@gmail.com`). Leave
+  // INBOX_FORWARD_TO empty to disable forwarding.
+  //
+  // REPLYING/SENDING (not used by this showcase) WOULD need a binding:
+  //   "send_email": [{ "name": "EMAIL" }]
+  // plus `npx wrangler email sending enable yourdomain.com`. Add it only if you
+  // wire an outbound reply flow.
   "vars": {
     "AI_GATEWAY_ID": "default-gateway",
     "MODEL_CHAT": "@cf/openai/gpt-oss-120b",
@@ -93,6 +168,9 @@
     "MODEL_DRAFT": "@cf/openai/gpt-oss-120b",
     "MODEL_TRANSCRIBE": "@cf/openai/whisper-large-v3-turbo",
     "DEFAULT_MODEL_EMBEDDING": "@cf/baai/bge-large-en-v1.5",
+    // Optional verified destination for message.forward() in the email handler.
+    // Empty string = forwarding disabled (the message is stored in D1 only).
+    "INBOX_FORWARD_TO": "",
   },
   "kv_namespaces": [
     {
