@@ -30,7 +30,7 @@
 
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ListTreeIcon, PlusIcon, Unlink2Icon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -80,6 +80,15 @@ export function TaskSubtasks({
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<Task | null>(null);
 
+  // Keep the latest `onProgressChange` in a ref so `load` does NOT depend on it.
+  // The parent may pass a fresh callback each render; if `load` depended on it,
+  // `useEffect(..., [load])` would refetch every render → an infinite
+  // children/ancestors fetch loop (which Cloudflare eventually 403-rate-limits).
+  const onProgressChangeRef = useRef(onProgressChange);
+  useEffect(() => {
+    onProgressChangeRef.current = onProgressChange;
+  }, [onProgressChange]);
+
   /** Load the current task's direct children + ancestor ids (for cycle guard). */
   const load = useCallback(async () => {
     setLoading(true);
@@ -91,13 +100,13 @@ export function TaskSubtasks({
       ]);
       setChildren(childRes.data ?? []);
       setAncestorIds((ancestorRes.data ?? []).map((a) => a.id));
-      onProgressChange?.(deriveProgress(childRes.data ?? []));
+      onProgressChangeRef.current?.(deriveProgress(childRes.data ?? []));
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Failed to load subtasks.");
     } finally {
       setLoading(false);
     }
-  }, [taskId, onProgressChange]);
+  }, [taskId]);
 
   useEffect(() => {
     void load();
