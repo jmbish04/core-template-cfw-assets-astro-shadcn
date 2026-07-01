@@ -28,6 +28,35 @@ export const spawnTaskSchema = z.object({
 export type SpawnTaskParams = z.infer<typeof spawnTaskSchema>;
 
 /**
+ * A single text part of a nested sub-agent {@link NestedThreadMessage}.
+ *
+ * Structurally compatible with assistant-ui's `TextMessagePart` so the frontend
+ * can render these directly with the same primitives used for top-level
+ * messages.
+ */
+export interface NestedTextPart {
+  type: "text";
+  text: string;
+}
+
+/**
+ * A nested sub-agent conversation turn, shaped to be structurally compatible
+ * with assistant-ui's `ThreadMessage` (the `messages` array read by the
+ * `MessagePartPrimitive.Messages` primitive / the readonly nested message list).
+ *
+ * The orchestrator builds a two-turn conversation per delegation:
+ *   `[{ role: "user", content: [task] }, { role: "assistant", content: [output] }]`
+ */
+export interface NestedThreadMessage {
+  /** Stable id for React keying (unique within the tool result). */
+  id: string;
+  /** Who "spoke" this turn in the sub-agent conversation. */
+  role: "user" | "assistant";
+  /** Message content parts (always a single text part here). */
+  content: NestedTextPart[];
+}
+
+/**
  * Result of a delegated task, returned to the model (and surfaced in the UI as
  * a tool result). Carries the specialist's *real* output.
  */
@@ -42,10 +71,22 @@ export interface SubAgentResult {
   status: "completed" | "failed";
   /** The specialist's real output (present on success). */
   output?: string;
+  /**
+   * Alias of {@link output} carried for the model / any consumer that keys off
+   * `answer`. Kept in sync with `output`.
+   */
+  answer?: string;
   /** Error message (present on failure). */
   error?: string;
   /** Wall-clock duration of the delegated call, in milliseconds. */
   durationMs: number;
+  /**
+   * The sub-agent conversation, as an array of assistant-ui-compatible
+   * {@link NestedThreadMessage} objects. The frontend renders these nested
+   * under the delegation tool call (the assistant-ui Multi-Agent pattern):
+   *   `[{ role: "user", content: [task] }, { role: "assistant", content: [output] }]`.
+   */
+  messages: NestedThreadMessage[];
 }
 
 /**

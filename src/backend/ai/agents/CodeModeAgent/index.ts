@@ -30,6 +30,7 @@ import type {
   ExecutePlanParams,
 } from "./types";
 import { executePlanSchema } from "./types";
+import { prepareModule, hasFetchEntry } from "./sandbox";
 
 /**
  * CodeModeAgent - Executes AI-generated code in secure V8 isolates
@@ -61,22 +62,35 @@ export class CodeModeAgent extends AIChatAgent<Env> {
     const result = streamText({
       model: getChatModel(this.env),
       messages: await convertToModelMessages(this.messages as UIMessage[]),
-      system: `You are a Code Mode agent that can write and execute TypeScript code securely on Cloudflare Workers.
+      system: `You are the Code Mode agent. You support two workflows, chosen by the user:
 
-When the user asks you to perform a task that requires code execution:
-1. Write a complete, self-contained TypeScript worker script
-2. Use the executePlan tool to run it
-3. The script must export a default object with a fetch handler
-4. Keep code concise and focused on the task
+## 1. Dynamic Worker Sandbox
+When the user wants to RUN code, write a complete, self-contained Worker script and
+call the executePlan tool to execute it in an isolated V8 sandbox. Rules:
+- Prefer the module form: export default { async fetch(request) { … return new Response(...) } }.
+- A bare snippet that ends in \`return <value>\` is also accepted — it is auto-wrapped
+  and its value is JSON-encoded, so \`const sum = 2 + 40; return { sum };\` works.
+- TypeScript type annotations are fine; they are stripped before execution.
+- After running, briefly explain the result the tool returned.
 
-Example structure:
+## 2. Plan with the agent
+When the user wants a PLAN (not execution), do NOT call the tool. Instead respond in
+Markdown: a short numbered plan, then the code in a fenced \`\`\`typescript block so it
+renders as a proper code card. Explain trade-offs concisely.
+
+If it is unclear which workflow the user wants, ask them to pick "Dynamic Worker Sandbox"
+or "Plan with the agent". Keep every response focused and concise.
+
+Example runnable structure:
 \`\`\`typescript
 export default {
   async fetch(request) {
-    // Your code here
-    return new Response(JSON.stringify(result));
-  }
-}
+    const result = { ok: true };
+    return new Response(JSON.stringify(result), {
+      headers: { "content-type": "application/json" },
+    });
+  },
+};
 \`\`\``,
       tools: {
         executePlan: tool({
@@ -119,13 +133,19 @@ export default {
     const startTime = Date.now();
 
     try {
-      if (!config.code.includes("fetch") || !config.code.includes("Response")) {
+      // Prepare (TS-strip + normalize) the snippet up front so validation runs
+      // against what will ACTUALLY execute — a bare `return {...}` body or a
+      // service-worker listener is wrapped into a real fetch module here.
+      const prepared = prepareModule(config.code);
+      if (!hasFetchEntry(prepared.code)) {
         throw new Error(
-          "Code must include a fetch handler that returns a Response object.",
+          "Could not derive a fetch handler from the submitted code. Provide either " +
+            "`export default { fetch(request) { … } }`, an `addEventListener('fetch', …)` " +
+            "listener, or a snippet ending in `return <value>`.",
         );
       }
 
-      const output = await this.runInDynamicWorker(config);
+      const output = await this.runInDynamicWorker({ ...config, code: prepared.code });
       const executionTime = Date.now() - startTime;
 
       this.agentState.totalExecutions++;

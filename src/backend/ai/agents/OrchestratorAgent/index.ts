@@ -29,8 +29,39 @@ import { convertToModelMessages, stepCountIs, streamText, tool, type UIMessage }
 import { getChatModel } from "@/backend/ai/providers/ai-sdk";
 import type { ResearcherAgent } from "@/backend/ai/agents/ResearcherAgent";
 import type { CoderAgent } from "@/backend/ai/agents/CoderAgent";
-import type { SpawnTaskParams, OrchestratorState, SubAgentResult } from "./types";
+import type {
+  SpawnTaskParams,
+  OrchestratorState,
+  SubAgentResult,
+  NestedThreadMessage,
+} from "./types";
 import { spawnTaskSchema } from "./types";
+
+/**
+ * Build the nested sub-agent conversation the frontend renders under the
+ * delegation tool call (the assistant-ui Multi-Agent pattern). Produces a
+ * two-turn thread: the delegated task as the sub-agent's "user" turn, and the
+ * specialist's real output (or error) as its "assistant" turn.
+ *
+ * @param taskId - The delegation id, used to derive stable message ids.
+ * @param task - The task delegated to the specialist.
+ * @param assistantText - The specialist's output, or an error explanation.
+ * @returns Assistant-ui-compatible `ThreadMessage[]`.
+ */
+function buildNestedMessages(
+  taskId: string,
+  task: string,
+  assistantText: string,
+): NestedThreadMessage[] {
+  return [
+    { id: `${taskId}-user`, role: "user", content: [{ type: "text", text: task }] },
+    {
+      id: `${taskId}-assistant`,
+      role: "assistant",
+      content: [{ type: "text", text: assistantText }],
+    },
+  ];
+}
 
 const SYSTEM_PROMPT = `You are the Multi-Agent Orchestrator for the Cloudflare Edge Showcase.
 Analyze each user request and delegate it to the most appropriate specialist using the spawnTask tool:
@@ -147,27 +178,35 @@ export class OrchestratorAgent extends AIChatAgent<Env> {
         const ns = this.env.RESEARCHER_AGENT as unknown as DurableObjectNamespace<ResearcherAgent>;
         const stub = await getAgentByName<Env, ResearcherAgent>(ns, instance);
         const r = await stub.research(task);
+        const assistantText =
+          r.output ?? r.error ?? "The researcher returned no output.";
         result = {
           agentType,
           instance,
           taskId: r.taskId,
           status: r.status,
           output: r.output,
+          answer: r.output,
           error: r.error,
           durationMs: r.durationMs,
+          messages: buildNestedMessages(r.taskId, task, assistantText),
         };
       } else {
         const ns = this.env.CODER_AGENT as unknown as DurableObjectNamespace<CoderAgent>;
         const stub = await getAgentByName<Env, CoderAgent>(ns, instance);
         const r = await stub.code(task);
+        const assistantText =
+          r.output ?? r.error ?? "The coder returned no output.";
         result = {
           agentType,
           instance,
           taskId: r.taskId,
           status: r.status,
           output: r.output,
+          answer: r.output,
           error: r.error,
           durationMs: r.durationMs,
+          messages: buildNestedMessages(r.taskId, task, assistantText),
         };
       }
 
@@ -207,6 +246,7 @@ export class OrchestratorAgent extends AIChatAgent<Env> {
         status: "failed",
         error,
         durationMs: 0,
+        messages: buildNestedMessages(taskId, task, `Delegation failed: ${error}`),
       };
     }
   }

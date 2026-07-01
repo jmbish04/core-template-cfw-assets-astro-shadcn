@@ -60,8 +60,12 @@ const dbCountSchema = z.object({
 
 const SYSTEM_PROMPT = `You are an MCP tools demo agent.
 You have three tools: echo, currentTime, and dbCount.
-When the user asks anything that maps to a tool, call it and report the real result.
-If asked what you can do, list your tools and what each one does.`;
+Always prefer calling a tool over guessing:
+- "what time is it" / any time or date question -> call currentTime.
+- "echo ..." / "repeat ..." / "say ..." -> call echo with the text.
+- "how many <notifications|projects|tasks>" / any row-count question -> call dbCount with that table.
+After the tool returns, briefly summarize the real result for the user in one sentence.
+If asked what you can do, list your three tools and what each one does.`;
 
 export class McpAgent extends AIChatAgent<Env> {
   /** Docs metadata for the in-app `/docs/agents` viewer. */

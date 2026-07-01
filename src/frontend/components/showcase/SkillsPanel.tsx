@@ -22,9 +22,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { ThreadProvider, type ThreadStatus } from "@/components/assistant/Thread";
 
-import { AgentThread, statusFromReadyState } from "./AgentThread";
 import { ConnectionBadge, EmptyState, ErrorBanner, LoadingRow, useSessionId } from "./shared";
+import { ShowcaseErrorBoundary } from "./ShowcaseErrorBoundary";
 
 /** A registered skill from the agent's `listSkills()` RPC. */
 interface Skill {
@@ -32,6 +33,20 @@ interface Skill {
   description: string;
   triggers: string[];
 }
+
+/** Map a PartySocket `readyState` to the Thread's status vocabulary. */
+function statusFromReadyState(readyState: number): ThreadStatus {
+  if (readyState === 1) return "connected";
+  if (readyState === 0) return "connecting";
+  return "disconnected";
+}
+
+/** Suggested prompts that each activate a distinct skill. */
+const WELCOME_SUGGESTIONS = [
+  "Summarize: Durable Objects give you strongly consistent, single-instance state.",
+  "Translate to French: Where is the nearest station?",
+  "Calculate: (18 * 3) + 7 / 2",
+];
 
 /** Skills showcase: registry + matcher + chat. */
 export function SkillsPanel() {
@@ -84,6 +99,7 @@ export function SkillsPanel() {
   }
 
   return (
+    <ShowcaseErrorBoundary label="The skills panel hit an error.">
     <div className="grid gap-6 lg:grid-cols-2">
       {/* Registry + matcher */}
       <div className="flex flex-col gap-6">
@@ -163,12 +179,22 @@ export function SkillsPanel() {
       <Card className="flex h-[36rem] flex-col">
         <CardHeader className="pb-3">
           <CardTitle>Chat with skills</CardTitle>
-          <CardDescription>The agent selects and applies a skill per message.</CardDescription>
+          <CardDescription>
+            The agent selects and applies a skill per message; replies render as markdown.
+          </CardDescription>
         </CardHeader>
         <CardContent className="min-h-0 flex-1 p-0">
-          <AgentThread runtime={runtime} placeholder="Ask anything — the agent picks a skill…" />
+          <ThreadProvider
+            runtime={runtime}
+            status={status}
+            welcomeTitle="Pick a skill"
+            welcomeSubtitle="Each message activates one skill — summarize, translate, or calculate. Try one:"
+            welcomeSuggestions={WELCOME_SUGGESTIONS}
+            placeholder="Ask anything — the agent picks a skill…"
+          />
         </CardContent>
       </Card>
     </div>
+    </ShowcaseErrorBoundary>
   );
 }

@@ -87,6 +87,13 @@ export function ModelPicker({ className }: ModelPickerProps) {
     [remoteId],
   );
 
+  // Only render when there's a persistent thread context (the multi-thread
+  // `/assistant` workspace). Single-thread showcase Threads (code-mode, mcp,
+  // thinking, …) have no thread-list runtime, so `remoteId` is undefined there
+  // and the per-thread model picker is hidden — it only applies to persisted
+  // threads whose model choice is stored in `chat_threads`.
+  if (!remoteId) return null;
+
   return (
     <Select value={model} onValueChange={(v) => onChange(String(v))}>
       <SelectTrigger size="sm" className={className ?? "h-8 min-w-44 text-xs"}>

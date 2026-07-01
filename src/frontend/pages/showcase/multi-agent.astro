@@ -15,11 +15,12 @@ import { MultiAgentPanel } from "@/components/showcase/MultiAgentPanel";
         <Badge variant="outline">orchestrator-agent</Badge>
       </div>
       <p class="max-w-2xl text-sm text-muted-foreground">
-        The orchestrator is an RPC agent that routes work to specialised
-        subagents. Send a task and it calls
-        <code class="text-primary">delegate("research" | "code", task)</code>; the
-        result panel shows exactly which subagent instance ran, its real output,
-        and how long it took. <code class="text-primary">getStats()</code> tracks the
+        Chat with the orchestrator and watch it delegate. When it routes a task
+        to a specialist, it calls the
+        <code class="text-primary">spawnTask</code> tool; the specialist's real
+        conversation renders <strong>nested</strong> under that tool call —
+        "Researcher Agent (working…)" then the sub-agent's reply, the assistant-ui
+        Multi-Agent pattern. <code class="text-primary">getStats()</code> tracks the
         running delegation totals.
       </p>
     </header>

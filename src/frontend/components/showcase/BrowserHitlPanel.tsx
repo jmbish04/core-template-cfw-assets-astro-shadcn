@@ -15,8 +15,9 @@
 
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { type ComponentProps, useCallback, useEffect, useState } from "react";
 
+import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import { useAgent } from "agents/react";
 import { useAgentChat } from "@cloudflare/ai-chat/react";
 import { useAISDKRuntime } from "@assistant-ui/react-ai-sdk";
@@ -25,9 +26,20 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
-import { AgentThread, statusFromReadyState } from "./AgentThread";
+import { Thread } from "@/components/assistant/Thread";
+
+import { statusFromReadyState } from "./AgentThread";
 import { ApprovalGate } from "./ApprovalGate";
+import { ScreenshotToolUI } from "./ScreenshotToolUI";
 import { ConnectionBadge, EmptyState, ErrorBanner, LoadingRow, useSessionId } from "./shared";
+
+/**
+ * The `runtime` prop type expected by `AssistantRuntimeProvider`. `useAISDKRuntime`
+ * resolves against a different `@assistant-ui/core` minor than the provider, so we
+ * bridge the (structurally identical) runtime through this type — the same cast
+ * the Wave-1 `ThreadProvider` performs.
+ */
+type RuntimeProp = ComponentProps<typeof AssistantRuntimeProvider>["runtime"];
 
 /** Entry from the agent's `getActionLog()` RPC. */
 interface ActionLogEntry {
@@ -93,31 +105,46 @@ export function BrowserHitlPanel() {
   }, [chat.isStreaming, status, refreshLog]);
 
   return (
-    <div className="grid gap-6 lg:grid-cols-3">
-      {/* Chat (2 cols) */}
-      <Card className="flex h-[34rem] flex-col lg:col-span-2">
-        <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3">
-          <div>
-            <CardTitle>Browser agent</CardTitle>
-            <CardDescription>
-              Tools: <code className="text-primary">takeScreenshot</code>,{" "}
-              <code className="text-amber-400">fillSecureForm</code>,{" "}
-              <code className="text-amber-400">clickElement</code> (gated).
-            </CardDescription>
-          </div>
-          <ConnectionBadge status={status} sessionId={sessionId} />
-        </CardHeader>
-        <CardContent className="min-h-0 flex-1 p-0">
-          <AgentThread
-            runtime={runtime}
-            placeholder="e.g. take a screenshot of example.com, then fill the login form…"
-            emptyLabel="Ask the agent to act on a page — gated actions wait for your approval."
-          />
-        </CardContent>
-      </Card>
+    <AssistantRuntimeProvider runtime={runtime as unknown as RuntimeProp}>
+      {/* Register the read-only screenshot tool UI (renders nothing until used). */}
+      <ScreenshotToolUI />
 
-      {/* Approval gate + log (1 col) */}
-      <div className="flex flex-col gap-6">
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Chat (2 cols) */}
+        <Card className="flex h-[34rem] flex-col lg:col-span-2">
+          <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3">
+            <div>
+              <CardTitle>Browser agent</CardTitle>
+              <CardDescription>
+                Tools: <code className="text-primary">takeScreenshot</code>,{" "}
+                <code className="text-amber-400">fillSecureForm</code>,{" "}
+                <code className="text-amber-400">clickElement</code> (gated).
+              </CardDescription>
+            </div>
+            <ConnectionBadge status={status} sessionId={sessionId} />
+          </CardHeader>
+          <CardContent className="min-h-0 flex-1 p-0">
+            <Thread
+              placeholder="e.g. take a screenshot of example.com, then fill the login form…"
+              welcomeTitle="Browser automation with approval"
+              welcomeSubtitle="Ask the agent to act on a page — read-only screenshots run freely, while dangerous actions pause for your approval."
+              welcomeSuggestions={[
+                "Take a screenshot of example.com",
+                "Fill the login form at example.com with a test email",
+                "Click the submit button on example.com",
+                "Screenshot example.com full page",
+              ]}
+              followUpSuggestions={[
+                "Now fill the form",
+                "Take another screenshot",
+                "Click submit",
+              ]}
+            />
+          </CardContent>
+        </Card>
+
+        {/* Approval gate + log (1 col) */}
+        <div className="flex flex-col gap-6">
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Approval gate</CardTitle>
@@ -178,7 +205,8 @@ export function BrowserHitlPanel() {
             )}
           </CardContent>
         </Card>
+        </div>
       </div>
-    </div>
+    </AssistantRuntimeProvider>
   );
 }

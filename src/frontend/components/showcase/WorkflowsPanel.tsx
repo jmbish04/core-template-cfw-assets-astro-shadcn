@@ -2,15 +2,21 @@
  * @fileoverview Live interactive panel for the `workflows-agent`.
  *
  * Demonstrates server-driven progress streaming: we subscribe to the agent's
- * state via `useAgent({ onStateUpdate })` and render a LIVE progress bar +
- * step label that updates as the Durable Object pushes
- * `{ activeWorkflow, lastProgress: { step, percent, message? } }`.
+ * synced state via `useAgent({ onStateUpdate })` and render a LIVE
+ * {@link WorkflowProgress} view (overall bar + per-step list) that updates as
+ * the Durable Object pushes `{ activeWorkflow, lastProgress }`.
  *
- * The chat thread drives the workflow tools (`transcribeAudio`, `processData`).
- * A manual "Check progress" button calls the `@callable getWorkflowProgress(id)`
- * RPC as a fallback / on-demand poll.
+ * CRITICAL FIX (React #31): `activeWorkflow` is an OBJECT
+ * (`{ workflowId, status, overallProgress, steps, startTime }`). The previous
+ * panel typed it as a string and rendered it directly as a React child, which
+ * crashed the whole page with "object … is not valid as a React child". This
+ * version reads the object's fields explicitly inside {@link WorkflowProgress}
+ * and wraps the whole panel in {@link ShowcaseErrorBoundary} so any mid-run
+ * failure degrades to a recoverable error card instead of a white screen.
  *
- * Mounted with `client:only="react"` — browser-only agents stack.
+ * The chat thread uses the Wave-1 assistant-ui {@link ThreadProvider} so replies
+ * render as markdown (Shiki code blocks, generative cards, reasoning), not raw
+ * HTML. Mounted with `client:only="react"` — browser-only agents stack.
  */
 
 "use client";
@@ -23,27 +29,42 @@ import { useAISDKRuntime } from "@assistant-ui/react-ai-sdk";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
+import { ThreadProvider, type ThreadStatus } from "@/components/assistant/Thread";
 
-import { AgentThread, statusFromReadyState } from "./AgentThread";
-import { ConnectionBadge, EmptyState, ErrorBanner, useSessionId } from "./shared";
-
-/** Progress payload the workflows-agent broadcasts on each step. */
-interface WorkflowProgress {
-  step: string;
-  percent: number;
-  message?: string;
-}
-
-/** Full state shape streamed from the workflows-agent Durable Object. */
-interface WorkflowsState {
-  activeWorkflow?: string | null;
-  lastProgress?: WorkflowProgress | null;
-}
+import { ConnectionBadge, ErrorBanner, useSessionId } from "./shared";
+import { ShowcaseErrorBoundary } from "./ShowcaseErrorBoundary";
+import {
+  WorkflowProgress,
+  type WorkflowProgressEvent,
+  type WorkflowStateView,
+} from "./WorkflowProgress";
 
 /**
- * Workflows showcase: a live progress stepper bound to `onStateUpdate`, plus a
- * chat that drives the workflow tools.
+ * Full synced state shape streamed from the workflows-agent Durable Object.
+ * `activeWorkflow` is the structured workflow snapshot (NOT a string).
+ */
+interface WorkflowsState {
+  activeWorkflow?: WorkflowStateView | null;
+  lastProgress?: WorkflowProgressEvent | null;
+}
+
+/** Map a PartySocket `readyState` to the Thread's status vocabulary. */
+function statusFromReadyState(readyState: number): ThreadStatus {
+  if (readyState === 1) return "connected";
+  if (readyState === 0) return "connecting";
+  return "disconnected";
+}
+
+/** Starter prompts that reliably kick off a real workflow. */
+const WELCOME_SUGGESTIONS = [
+  "Transcribe an audio URL: https://example.com/talk.mp3",
+  "Process a dataset from a URL as CSV",
+  "Run a data pipeline and stream the step progress",
+];
+
+/**
+ * Workflows showcase: a live, object-safe progress stepper bound to
+ * `onStateUpdate`, plus a Wave-1 chat thread that drives the workflow tools.
  */
 export function WorkflowsPanel() {
   const sessionId = useSessionId("workflows");
@@ -53,90 +74,88 @@ export function WorkflowsPanel() {
   const agent = useAgent<WorkflowsState>({
     agent: "workflows-agent",
     name: sessionId,
-    onStateUpdate: (next) => setState(next ?? {}),
+    onStateUpdate: (next) => {
+      // Defensive: only accept object-shaped frames; never let a bad frame throw.
+      try {
+        setState(next && typeof next === "object" ? next : {});
+      } catch {
+        setState({});
+      }
+    },
   });
   const chat = useAgentChat({ agent });
   const runtime = useAISDKRuntime(chat);
   const status = statusFromReadyState(agent.readyState);
 
-  const progress = state.lastProgress;
-  const active = state.activeWorkflow;
+  const workflow = state.activeWorkflow ?? null;
 
   /** On-demand poll of the active workflow's progress via RPC. */
   async function refreshProgress() {
-    if (!active) return;
+    if (!workflow?.workflowId) return;
     setError(null);
     try {
-      const res = await agent.call<WorkflowProgress>("getWorkflowProgress", [active]);
-      setState((prev) => ({ ...prev, lastProgress: res }));
+      const res = await agent.call<WorkflowStateView>("getWorkflowProgress", [workflow.workflowId]);
+      if (res) setState((prev) => ({ ...prev, activeWorkflow: res }));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to read workflow progress.");
     }
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
-      {/* Live progress */}
-      <Card className="flex flex-col">
-        <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3">
-          <div>
-            <CardTitle>Live workflow progress</CardTitle>
-            <CardDescription>
-              Streamed from the Durable Object via <code className="text-primary">onStateUpdate</code>.
-            </CardDescription>
-          </div>
-          <ConnectionBadge status={status} sessionId={sessionId} />
-        </CardHeader>
-        <CardContent className="flex flex-1 flex-col gap-4">
-          {active ? (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between text-xs">
-                <code className="text-primary">{active}</code>
-                <span className="text-muted-foreground tabular-nums">
-                  {Math.round(progress?.percent ?? 0)}%
-                </span>
-              </div>
-              <Progress value={Math.round(progress?.percent ?? 0)} />
-              <div className="rounded-md bg-muted/30 px-3 py-2 text-xs ring-1 ring-border/40">
-                <p className="font-medium">{progress?.step ?? "Starting…"}</p>
-                {progress?.message && (
-                  <p className="mt-1 text-muted-foreground">{progress.message}</p>
-                )}
-              </div>
+    <ShowcaseErrorBoundary label="The workflows panel hit an error while streaming.">
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Live progress */}
+        <Card className="flex flex-col">
+          <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3">
+            <div>
+              <CardTitle>Live workflow progress</CardTitle>
+              <CardDescription>
+                Streamed from the Durable Object via{" "}
+                <code className="text-primary">onStateUpdate</code>.
+              </CardDescription>
+            </div>
+            <ConnectionBadge status={status} sessionId={sessionId} />
+          </CardHeader>
+          <CardContent className="flex flex-1 flex-col gap-4">
+            <WorkflowProgress workflow={workflow} lastProgress={state.lastProgress} />
+
+            {workflow?.workflowId && (
               <Button
                 size="sm"
                 variant="outline"
                 onClick={refreshProgress}
                 disabled={status !== "connected"}
+                className="self-start"
               >
                 Check progress
               </Button>
-            </div>
-          ) : (
-            <EmptyState label="No active workflow. Ask the agent to transcribe audio or process data to kick one off." />
-          )}
+            )}
 
-          <ErrorBanner message={error} />
-        </CardContent>
-      </Card>
+            <ErrorBanner message={error} />
+          </CardContent>
+        </Card>
 
-      {/* Chat */}
-      <Card className="flex h-[32rem] flex-col">
-        <CardHeader className="pb-3">
-          <CardTitle>Drive a workflow</CardTitle>
-          <CardDescription>
-            Tools: <code className="text-primary">transcribeAudio</code>,{" "}
-            <code className="text-primary">processData</code>.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="min-h-0 flex-1 p-0">
-          <AgentThread
-            runtime={runtime}
-            placeholder="e.g. process this dataset of 1,000 rows…"
-            emptyLabel="Start a workflow — progress streams to the left."
-          />
-        </CardContent>
-      </Card>
-    </div>
+        {/* Chat */}
+        <Card className="flex h-[34rem] flex-col">
+          <CardHeader className="pb-3">
+            <CardTitle>Drive a workflow</CardTitle>
+            <CardDescription>
+              Tools: <code className="text-primary">transcribeAudio</code>,{" "}
+              <code className="text-primary">processData</code>.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="min-h-0 flex-1 p-0">
+            <ThreadProvider
+              runtime={runtime}
+              status={status}
+              welcomeTitle="Run a durable workflow"
+              welcomeSubtitle="Kick off a multi-step task — progress streams to the left as each step completes."
+              welcomeSuggestions={WELCOME_SUGGESTIONS}
+              placeholder="e.g. transcribe an audio URL, or process a dataset…"
+            />
+          </CardContent>
+        </Card>
+      </div>
+    </ShowcaseErrorBoundary>
   );
 }

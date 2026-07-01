@@ -20,9 +20,19 @@ import { McpPanel } from "@/components/showcase/McpPanel";
         call. This page reads the live registry from the agent&rsquo;s
         <code class="text-primary">listTools()</code> RPC, lets you invoke any tool
         directly through <code class="text-primary">callTool(name, input)</code>, and
-        runs a chat where the model picks tools (<code class="text-primary">echo</code>,
+        runs an assistant-ui chat where the model picks tools
+        (<code class="text-primary">echo</code>,
         <code class="text-primary">currentTime</code>,
-        <code class="text-primary">dbCount</code>) on its own.
+        <code class="text-primary">dbCount</code>) on its own &mdash; each rendered
+        as a rich tool card.
+      </p>
+      <p class="mt-2 max-w-2xl text-xs text-muted-foreground/80">
+        Built natively on our pinned <code class="text-primary">@assistant-ui/react</code>
+        primitives (welcome screen, suggested prompts, markdown, and
+        <code class="text-primary">makeAssistantToolUI</code> tool cards). We evaluated
+        <code class="text-primary">@assistant-ui/react-mcp</code> but it requires the
+        core <code class="text-primary">0.14+</code> resource architecture plus Radix,
+        so it is incompatible with this codebase &mdash; see the panel source header.
       </p>
     </header>
 
