@@ -1,32 +1,35 @@
 /**
- * @fileoverview FacetFilter — a reusable Linear-style faceted chip filter.
+ * @fileoverview FacetFilter — a reusable Linear/devl.dev-style faceted filter.
  *
- * A single facet renders as an outline {@link Button} (the {@link FacetButton})
- * that shows the facet label, a count separator, and the active selection as
- * inline chips (up to two values) or a count badge ("N selected") when more
- * than two values are selected. Clicking it opens a Base-UI {@link Popover}
- * whose body is an optional search box ({@link FacetSearch}) plus a checkbox
- * list of options. Selection is multi-select: toggling a checkbox adds/removes
- * the value from the controlled `value` string array.
+ * A single facet renders as an outline {@link Button} trigger ({@link FacetTrigger})
+ * that is **dashed when empty** and **solid when active**, showing the facet
+ * label, a count badge of how many values are selected, and up to two selected
+ * value chips (a "+N" chip absorbs the remainder). Clicking it opens a Base-UI
+ * {@link Popover} whose body is an optional search box ({@link FacetSearch}, an
+ * `InputGroup`) plus a {@link CheckboxGroup} of option rows ({@link FacetRow} —
+ * a {@link Checkbox} + a leading visual + label + a **per-option count**). A
+ * footer surfaces a Clear button and an "{n} selected" indicator.
  *
  * This is a fully controlled component — the parent owns `value` and receives
  * the next array via `onChange`. It is intentionally backend-agnostic: each
- * option carries an optional `render` to draw a status icon, priority badge,
- * label chip, or assignee avatar inline in both the trigger chips and the list.
+ * option carries an optional `render` to draw a status dot, priority dot, label
+ * chip, or assignee avatar inline in both the trigger chips and the list, plus
+ * an optional `count` computed from the loaded task corpus.
  *
- * Built entirely on the project's Base-UI primitives (Popover, Checkbox, Badge,
- * Separator, InputGroup) — zero Radix, Monolith dark theme (ring-based
- * separation, no 1px borders).
+ * Built entirely on the project's Base-UI primitives (Popover, CheckboxGroup,
+ * Checkbox, Badge, Separator, InputGroup) — zero Radix, Monolith dark theme
+ * (ring-based separation, no 1px borders).
  */
 
 "use client";
 
-import { useId, useMemo, useState, type ReactNode } from "react";
-import { CheckIcon, PlusCircleIcon, SearchIcon, XIcon } from "lucide-react";
+import { useMemo, useState, type ReactNode } from "react";
+import { PlusCircleIcon, SearchIcon, XIcon } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { CheckboxGroup } from "@/components/ui/checkbox-group";
 import {
   InputGroup,
   InputGroupAddon,
@@ -52,12 +55,14 @@ export interface FacetOption {
   /** Human label shown in the option row and (by default) the trigger chip. */
   label: string;
   /**
-   * Optional custom renderer for the option's leading visual (status icon,
-   * priority badge, label chip, assignee avatar). Receives a `context` so the
+   * Optional custom renderer for the option's leading visual (status dot,
+   * priority dot, label chip, assignee avatar). Receives a `context` so the
    * same option can render slightly differently inside the trigger chip vs. the
    * popover list row if desired.
    */
   render?: (ctx: { context: "trigger" | "list" }) => ReactNode;
+  /** Per-option occurrence count across the loaded task corpus. */
+  count?: number;
   /** Optional keyword string appended to the label for search matching. */
   keywords?: string;
 }
@@ -83,52 +88,64 @@ export interface FacetFilterProps {
 }
 
 // ---------------------------------------------------------------------------
-// FacetButton — the outline trigger with inline selection chips
+// FacetTrigger — the outline trigger with count badge + selection chips
 // ---------------------------------------------------------------------------
 
-interface FacetButtonProps {
+interface FacetTriggerProps {
   label: string;
   /** The options matching the current selection, in selection-stable order. */
   selected: FacetOption[];
   className?: string;
 }
 
+/** Max value chips rendered inline before collapsing into a "+N" chip. */
+const MAX_CHIPS = 2;
+
 /**
- * The outline trigger button. Renders the facet label, and — when there is an
- * active selection — a vertical {@link Separator} followed by either up to two
- * value chips or a single "N selected" count badge.
+ * The outline trigger button. Dashed with a "+" glyph when empty; solid with a
+ * count badge and up to {@link MAX_CHIPS} value chips (plus a "+N" overflow
+ * chip) when active.
  */
-function FacetButton({ label, selected, className }: FacetButtonProps) {
+function FacetTrigger({ label, selected, className }: FacetTriggerProps) {
   const count = selected.length;
+  const active = count > 0;
+  const chips = selected.slice(0, MAX_CHIPS);
+  const overflow = count - chips.length;
+
   return (
     <Button
       type="button"
       variant="outline"
       size="sm"
-      className={cn("h-8 gap-1.5 border-dashed", count > 0 && "border-solid", className)}
+      className={cn("h-8 gap-1.5 border-dashed", active && "border-solid", className)}
     >
       <PlusCircleIcon className="size-3.5 text-muted-foreground" />
       <span>{label}</span>
-      {count > 0 ? (
+      {active ? (
         <>
           <Separator orientation="vertical" className="mx-0.5 h-4 bg-border/60" />
-          {count > 2 ? (
-            <Badge variant="secondary" className="rounded-sm px-1 font-normal">
-              {count} selected
-            </Badge>
-          ) : (
-            <span className="flex items-center gap-1">
-              {selected.map((opt) => (
-                <Badge
-                  key={opt.value}
-                  variant="secondary"
-                  className="rounded-sm px-1 font-normal"
-                >
-                  {opt.render ? opt.render({ context: "trigger" }) : opt.label}
-                </Badge>
-              ))}
-            </span>
-          )}
+          <Badge
+            variant="secondary"
+            className="rounded-sm px-1 font-normal tabular-nums lg:hidden"
+          >
+            {count}
+          </Badge>
+          <span className="hidden items-center gap-1 lg:flex">
+            {chips.map((opt) => (
+              <Badge
+                key={opt.value}
+                variant="secondary"
+                className="rounded-sm px-1 font-normal"
+              >
+                {opt.render ? opt.render({ context: "trigger" }) : opt.label}
+              </Badge>
+            ))}
+            {overflow > 0 ? (
+              <Badge variant="secondary" className="rounded-sm px-1 font-normal tabular-nums">
+                +{overflow}
+              </Badge>
+            ) : null}
+          </span>
         </>
       ) : null}
     </Button>
@@ -163,6 +180,45 @@ function FacetSearch({ value, onChange, placeholder }: FacetSearchProps) {
 }
 
 // ---------------------------------------------------------------------------
+// FacetRow — a single option row (checkbox + visual + label + count)
+// ---------------------------------------------------------------------------
+
+interface FacetRowProps {
+  option: FacetOption;
+}
+
+/**
+ * A single option row inside the popover list. The whole row is a `<label>` so
+ * clicking anywhere toggles its {@link Checkbox} (whose `name` is the option
+ * value, contributing to the enclosing {@link CheckboxGroup}). The leading
+ * visual + label sit on the left; the per-option count is right-aligned.
+ */
+function FacetRow({ option }: FacetRowProps) {
+  return (
+    <label
+      className={cn(
+        "flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors",
+        "hover:bg-muted has-data-[checked]:bg-muted/60",
+      )}
+    >
+      <Checkbox name={option.value} />
+      <span className="flex min-w-0 flex-1 items-center gap-2">
+        {option.render ? (
+          option.render({ context: "list" })
+        ) : (
+          <span className="truncate">{option.label}</span>
+        )}
+      </span>
+      {option.count != null ? (
+        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+          {option.count}
+        </span>
+      ) : null}
+    </label>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // FacetFilter — the orchestrator
 // ---------------------------------------------------------------------------
 
@@ -180,17 +236,13 @@ export function FacetFilter({
 }: FacetFilterProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const listboxId = useId();
 
   const showSearch = searchable ?? options.length > 8;
-  const selectedSet = useMemo(() => new Set(value), [value]);
 
   // The selected options in the order they appear in `value` (stable chips).
   const selectedOptions = useMemo(() => {
     const byValue = new Map(options.map((o) => [o.value, o]));
-    return value
-      .map((v) => byValue.get(v) ?? { value: v, label: v })
-      .filter(Boolean) as FacetOption[];
+    return value.map((v) => byValue.get(v) ?? { value: v, label: v });
   }, [options, value]);
 
   const filtered = useMemo(() => {
@@ -200,14 +252,6 @@ export function FacetFilter({
       `${o.label} ${o.keywords ?? ""}`.toLowerCase().includes(q),
     );
   }, [options, query]);
-
-  function toggle(optValue: string) {
-    if (selectedSet.has(optValue)) {
-      onChange(value.filter((v) => v !== optValue));
-    } else {
-      onChange([...value, optValue]);
-    }
-  }
 
   return (
     <Popover
@@ -219,7 +263,7 @@ export function FacetFilter({
     >
       <PopoverTrigger
         render={
-          <FacetButton label={label} selected={selectedOptions} className={className} />
+          <FacetTrigger label={label} selected={selectedOptions} className={className} />
         }
       />
       <PopoverContent align="start" className="w-64 gap-0 p-0">
@@ -234,65 +278,39 @@ export function FacetFilter({
         ) : null}
 
         <ScrollArea className="max-h-64">
-          <div aria-label={label} id={listboxId} className="flex flex-col p-1">
+          <CheckboxGroup
+            value={value}
+            onValueChange={onChange}
+            aria-label={label}
+            className="gap-0 p-1"
+          >
             {filtered.length === 0 ? (
               <p className="px-2 py-6 text-center text-xs text-muted-foreground">
                 No matches
               </p>
             ) : (
-              filtered.map((opt) => {
-                const checked = selectedSet.has(opt.value);
-                return (
-                  <button
-                      key={opt.value}
-                      type="button"
-                      role="checkbox"
-                      aria-checked={checked}
-                      onClick={() => toggle(opt.value)}
-                      className={cn(
-                        "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors",
-                        "hover:bg-muted focus-visible:bg-muted focus-visible:outline-none",
-                      )}
-                    >
-                      <Checkbox
-                        checked={checked}
-                        // Render-only mirror of selection; the row button owns the toggle.
-                        tabIndex={-1}
-                        aria-hidden
-                        className="pointer-events-none"
-                      />
-                      <span className="flex min-w-0 flex-1 items-center gap-2">
-                        {opt.render ? opt.render({ context: "list" }) : (
-                          <span className="truncate">{opt.label}</span>
-                        )}
-                      </span>
-                      {checked ? (
-                        <CheckIcon className="size-3.5 shrink-0 text-muted-foreground" />
-                      ) : null}
-                    </button>
-                );
-              })
+              filtered.map((opt) => <FacetRow key={opt.value} option={opt} />)
             )}
-          </div>
+          </CheckboxGroup>
         </ScrollArea>
 
-        {value.length > 0 ? (
-          <>
-            <Separator className="bg-border/40" />
-            <div className="p-1">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-7 w-full justify-center text-xs text-muted-foreground"
-                onClick={() => onChange([])}
-              >
-                <XIcon className="size-3.5" />
-                Clear {label.toLowerCase()}
-              </Button>
-            </div>
-          </>
-        ) : null}
+        <Separator className="bg-border/40" />
+        <div className="flex items-center justify-between gap-2 p-1.5">
+          <span className="pl-1 text-xs text-muted-foreground tabular-nums">
+            {value.length} selected
+          </span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs text-muted-foreground"
+            disabled={value.length === 0}
+            onClick={() => onChange([])}
+          >
+            <XIcon className="size-3.5" />
+            Clear
+          </Button>
+        </div>
       </PopoverContent>
     </Popover>
   );

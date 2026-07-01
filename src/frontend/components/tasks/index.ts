@@ -15,6 +15,7 @@ export { TaskFilters } from "./TaskFilters";
 export { TaskDialog } from "./TaskDialog";
 export { TaskPreviewDialog } from "./TaskPreviewDialog";
 export { TaskDetail } from "./TaskDetail";
+export { TaskDetailSidebar } from "./TaskDetailSidebar";
 export { ProjectPreviewDialog } from "./ProjectPreviewDialog";
 export { FacetFilter } from "./FacetFilter";
 export type { FacetOption } from "./FacetFilter";

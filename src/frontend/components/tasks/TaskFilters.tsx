@@ -1,24 +1,46 @@
 /**
- * @fileoverview TaskFilters — the Linear-style faceted filter bar shared by the
- * TaskList table. A controlled component: it owns no state; the parent passes
- * the current `value` and an `onChange` patch handler.
+ * @fileoverview TaskFilters — the devl.dev/Linear-style faceted filter bar for
+ * the TaskList table. A controlled component: it owns no query state; the parent
+ * passes the current `value`, an `onChange` patch handler, and an `onClear`
+ * reset. It also receives the derived facet vocabulary + per-option counts (via
+ * {@link useTaskFacets}) and the filtered/total task tallies for the summary.
  *
- * Each facet (Status, Priority, Project, Assignee, Label) is a multi-select
- * {@link FacetFilter}: a dashed outline button that opens a popover with a
- * (searchable) checkbox list, surfacing the active selection as inline chips.
- * Assignee and Label options are derived from the real task data via
- * {@link useTaskFacets} rather than free-text inputs. A free-text search box
- * and a single-select sort round out the bar, plus an "N filters active"
- * indicator and a Clear-all button.
+ * Layout:
+ *   - a free-text search {@link InputGroup};
+ *   - a row of facet buttons (Status, Priority, Project, Assignee, Label), each
+ *     an {@link FacetFilter} popover with an in-popover search, a multi-select
+ *     {@link CheckboxGroup} of rows (leading dot/avatar + label + per-option
+ *     count), and a Clear + "N selected" footer;
+ *   - an "Add filter" dashed popover to reveal any facet not yet visible (all
+ *     are visible by default; the control keeps parity with the reference and
+ *     offers a keyboard-friendly menu to jump to a facet);
+ *   - a reset-all button and an "{N} filters · {X} of {Y} tasks" summary line.
+ *
+ * Assignee and Label options are derived from the real task data rather than
+ * free-text inputs. This file stays a thin composition layer — the option
+ * builders live in `facet-options.tsx` and the trigger/row primitives in
+ * `FacetFilter.tsx`.
  */
 
-import { SearchIcon, SlidersHorizontalIcon, XIcon } from "lucide-react";
+"use client";
+
+import { useMemo } from "react";
+import { ListFilterIcon, PlusIcon, SearchIcon, XIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/components/ui/input-group";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Separator } from "@/components/ui/separator";
 
 import { FacetFilter } from "./FacetFilter";
-import { FilterSelect } from "./FilterSelect";
 import {
   assigneeFacetOptions,
   labelFacetOptions,
@@ -70,105 +92,175 @@ export function activeFilterCount(value: TaskQuery): number {
   );
 }
 
-const SORT_OPTIONS = [
-  { value: "createdAt", label: "Recently created" },
-  { value: "dueDate", label: "Due date" },
-  { value: "priority", label: "Priority" },
-  { value: "position", label: "Manual order" },
-];
+/** The facet dimensions, in bar order, keyed to the `TaskQuery` fields. */
+const FACET_KEYS = ["status", "priority", "projectId", "assignee", "label"] as const;
+type FacetKey = (typeof FACET_KEYS)[number];
 
-const STATUS_FACET = statusFacetOptions();
-const PRIORITY_FACET = priorityFacetOptions();
+const FACET_LABELS: Record<FacetKey, string> = {
+  status: "Status",
+  priority: "Priority",
+  projectId: "Project",
+  assignee: "Assignee",
+  label: "Label",
+};
 
 export interface TaskFiltersProps {
   value: TaskQuery;
   onChange: (patch: Partial<TaskQuery>) => void;
   onClear: () => void;
+  /** How many tasks currently match (rows shown). */
+  filtered: number;
+  /** Total tasks in the corpus (unfiltered). */
+  total: number;
 }
 
-export function TaskFilters({ value, onChange, onClear }: TaskFiltersProps) {
+/**
+ * The faceted filter bar. See the file header for the full anatomy.
+ */
+export function TaskFilters({ value, onChange, onClear, filtered, total }: TaskFiltersProps) {
   const { options: projectOptions } = useProjects();
-  const { assignees, labels, error } = useTaskFacets();
+  const { assignees, labels, counts, error } = useTaskFacets();
   if (error) {
     console.error("Failed to load task facets:", error);
   }
 
-  const projectFacet = projectFacetOptions(projectOptions);
-  const assigneeFacet = assigneeFacetOptions(assignees);
-  const labelFacet = labelFacetOptions(labels);
+  const statusFacet = useMemo(() => statusFacetOptions(counts.status), [counts.status]);
+  const priorityFacet = useMemo(
+    () => priorityFacetOptions(counts.priority),
+    [counts.priority],
+  );
+  const projectFacet = useMemo(
+    () => projectFacetOptions(projectOptions, counts.projectId),
+    [projectOptions, counts.projectId],
+  );
+  const assigneeFacet = useMemo(
+    () => assigneeFacetOptions(assignees, counts.assignee),
+    [assignees, counts.assignee],
+  );
+  const labelFacet = useMemo(
+    () => labelFacetOptions(labels, counts.label),
+    [labels, counts.label],
+  );
 
   const activeCount = activeFilterCount(value);
+
+  /** Focus/scroll a facet into view when picked from the "Add filter" menu. */
+  function jumpToFacet(key: FacetKey) {
+    const el = document.querySelector<HTMLButtonElement>(`[data-facet="${key}"]`);
+    el?.focus();
+    el?.click();
+  }
 
   return (
     <div className="flex flex-col gap-3">
       <div className="relative min-w-[12rem] flex-1">
-        <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={value.q}
-          onChange={(e) => onChange({ q: e.target.value })}
-          placeholder="Search tasks…"
-          className="pl-8"
-          aria-label="Search tasks"
-        />
+        <InputGroup>
+          <InputGroupAddon>
+            <SearchIcon className="size-4" />
+          </InputGroupAddon>
+          <InputGroupInput
+            value={value.q}
+            onChange={(e) => onChange({ q: e.target.value })}
+            placeholder="Search tasks…"
+            aria-label="Search tasks"
+          />
+        </InputGroup>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <FacetFilter
-          label="Status"
-          options={STATUS_FACET}
-          value={value.status}
-          onChange={(next) => onChange({ status: next as TaskStatus[] })}
-        />
-        <FacetFilter
-          label="Priority"
-          options={PRIORITY_FACET}
-          value={value.priority}
-          onChange={(next) => onChange({ priority: next as TaskPriority[] })}
-        />
-        <FacetFilter
-          label="Project"
-          options={projectFacet}
-          value={value.projectId}
-          onChange={(next) => onChange({ projectId: next })}
-        />
-        <FacetFilter
-          label="Assignee"
-          options={assigneeFacet}
-          value={value.assignee}
-          onChange={(next) => onChange({ assignee: next })}
-        />
-        <FacetFilter
-          label="Label"
-          options={labelFacet}
-          value={value.label}
-          onChange={(next) => onChange({ label: next })}
-        />
+        <div data-facet="status">
+          <FacetFilter
+            label="Status"
+            options={statusFacet}
+            value={value.status}
+            onChange={(next) => onChange({ status: next as TaskStatus[] })}
+          />
+        </div>
+        <div data-facet="priority">
+          <FacetFilter
+            label="Priority"
+            options={priorityFacet}
+            value={value.priority}
+            onChange={(next) => onChange({ priority: next as TaskPriority[] })}
+          />
+        </div>
+        <div data-facet="projectId">
+          <FacetFilter
+            label="Project"
+            options={projectFacet}
+            value={value.projectId}
+            onChange={(next) => onChange({ projectId: next })}
+          />
+        </div>
+        <div data-facet="assignee">
+          <FacetFilter
+            label="Assignee"
+            options={assigneeFacet}
+            value={value.assignee}
+            onChange={(next) => onChange({ assignee: next })}
+          />
+        </div>
+        <div data-facet="label">
+          <FacetFilter
+            label="Label"
+            options={labelFacet}
+            value={value.label}
+            onChange={(next) => onChange({ label: next })}
+          />
+        </div>
 
-        <FilterSelect
-          value={value.sort}
-          onChange={(v) => onChange({ sort: v ?? "createdAt" })}
-          options={SORT_OPTIONS}
-          allLabel="Recently created"
-          aria-label="Sort tasks"
-        />
+        <Popover>
+          <PopoverTrigger
+            render={
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5 border-dashed text-muted-foreground"
+              >
+                <PlusIcon className="size-3.5" />
+                Add filter
+              </Button>
+            }
+          />
+          <PopoverContent align="start" className="w-48 gap-0 p-1">
+            {FACET_KEYS.map((key) => (
+              <Button
+                key={key}
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 w-full justify-start font-normal"
+                onClick={() => jumpToFacet(key)}
+              >
+                {FACET_LABELS[key]}
+              </Button>
+            ))}
+          </PopoverContent>
+        </Popover>
 
         {activeCount > 0 ? (
-          <>
-            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-              <SlidersHorizontalIcon className="size-3.5" />
-              {activeCount} {activeCount === 1 ? "filter" : "filters"} active
-            </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onClear}
-              className="text-muted-foreground"
-            >
-              <XIcon className="size-4" />
-              Clear all
-            </Button>
-          </>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onClear}
+            className="h-8 text-muted-foreground"
+          >
+            <XIcon className="size-4" />
+            Reset
+          </Button>
         ) : null}
+      </div>
+
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <ListFilterIcon className="size-3.5" />
+        <span className="tabular-nums">
+          {activeCount} {activeCount === 1 ? "filter" : "filters"}
+        </span>
+        <Separator orientation="vertical" className="h-3.5 bg-border/60" />
+        <span className="tabular-nums">
+          {filtered} of {total} {total === 1 ? "task" : "tasks"}
+        </span>
       </div>
     </div>
   );

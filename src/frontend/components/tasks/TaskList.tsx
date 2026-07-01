@@ -6,10 +6,12 @@
  *   - Faceted, multi-select TaskFilters bar (search, status[], priority[],
  *     project[], assignee[], label[], sort). Multi-values are serialized as
  *     comma-separated query params (e.g. `?status=todo,in_review`).
- *   - Inline status + priority editing via Select → `PATCH /api/tasks/{id}`
+ *   - Read-only StatusBadge / PriorityBadge cells (no inline editing in the
+ *     row) plus a trailing pencil action button that navigates to the full
+ *     task viewport at `/tasks/{id}`.
  *   - Clicking a row opens a fast preview MODAL (TaskPreviewDialog) with an
  *     "Open full page" link to `/tasks/{id}`. Action controls inside the row
- *     (status/priority selects) stopPropagation so they don't open the modal.
+ *     (the pencil) stopPropagation so they don't also open the modal.
  *   - "New task" Dialog (TaskDialog) → `POST /api/tasks`
  *
  * The initial `projectId` filter can be seeded from the URL (`?projectId=`) so
@@ -19,17 +21,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { PlusIcon } from "lucide-react";
+import { PencilIcon, PlusIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -38,11 +33,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { apiGet, apiSend, ApiError } from "@/lib/api";
+import { apiGet, ApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { shortDate, relativeTime } from "@/lib/format";
 
 import { AssigneeAvatar, EmptyState, ErrorState, LabelChips } from "./Shared";
+import { PriorityBadge } from "./PriorityBadge";
+import { TaskStatusBadge } from "./StatusBadge";
 import { TaskDialog } from "./TaskDialog";
 import { TaskPreviewDialog } from "./TaskPreviewDialog";
 import {
@@ -53,16 +50,9 @@ import {
 } from "./TaskFilters";
 import { useProjects } from "./useProjects";
 import {
-  BOARD_STATUSES,
-  PRIORITY_LABELS,
-  STATUS_LABELS,
   type ListEnvelope,
   type Task,
-  type TaskPriority,
-  type TaskStatus,
 } from "./types";
-
-const PRIORITIES: TaskPriority[] = ["low", "medium", "high", "urgent"];
 
 export interface TaskListProps {
   /** Optional initial project filter (seeded from `?projectId=` on the page). */
@@ -76,7 +66,6 @@ export function TaskList({ initialProjectId }: TaskListProps) {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [pendingId, setPendingId] = useState<string | null>(null);
 
   // Preview modal state.
   const [previewTask, setPreviewTask] = useState<Task | null>(null);
@@ -127,23 +116,6 @@ export function TaskList({ initialProjectId }: TaskListProps) {
     void load();
   }, [load]);
 
-  const patchField = useCallback(
-    async (task: Task, patch: Partial<Pick<Task, "status" | "priority">>) => {
-      setPendingId(task.id);
-      const prev = { status: task.status, priority: task.priority };
-      setTasks((list) => list.map((t) => (t.id === task.id ? { ...t, ...patch } : t)));
-      try {
-        await apiSend<Task>("PATCH", `tasks/${task.id}`, patch);
-      } catch (e) {
-        setTasks((list) => list.map((t) => (t.id === task.id ? { ...t, ...prev } : t)));
-        setError(e instanceof ApiError ? e.message : "Failed to update task.");
-      } finally {
-        setPendingId(null);
-      }
-    },
-    [],
-  );
-
   const handleCreated = useCallback((task: Task) => {
     setTasks((prev) => [task, ...prev]);
     setTotal((t) => t + 1);
@@ -175,7 +147,13 @@ export function TaskList({ initialProjectId }: TaskListProps) {
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-[16rem] flex-1">
-          <TaskFilters value={query} onChange={onChange} onClear={onClear} />
+          <TaskFilters
+            value={query}
+            onChange={onChange}
+            onClear={onClear}
+            filtered={tasks.length}
+            total={total}
+          />
         </div>
         <TaskDialog
           onSaved={handleCreated}
@@ -230,6 +208,9 @@ export function TaskList({ initialProjectId }: TaskListProps) {
                 <TableHead>Assignee</TableHead>
                 <TableHead>Due</TableHead>
                 <TableHead className="text-right">Updated</TableHead>
+                <TableHead className="w-12">
+                  <span className="sr-only">Actions</span>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -255,39 +236,11 @@ export function TaskList({ initialProjectId }: TaskListProps) {
                     <span className="font-medium">{task.title}</span>
                     <LabelChips labels={task.labels} max={3} className="mt-1" />
                   </TableCell>
-                  <TableCell onClick={(e) => e.stopPropagation()}>
-                    <Select
-                      value={task.status}
-                      onValueChange={(v) => patchField(task, { status: v as TaskStatus })}
-                    >
-                      <SelectTrigger size="sm" disabled={pendingId === task.id}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {BOARD_STATUSES.map((s) => (
-                          <SelectItem key={s} value={s}>
-                            {STATUS_LABELS[s]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  <TableCell>
+                    <TaskStatusBadge status={task.status} />
                   </TableCell>
-                  <TableCell onClick={(e) => e.stopPropagation()}>
-                    <Select
-                      value={task.priority}
-                      onValueChange={(v) => patchField(task, { priority: v as TaskPriority })}
-                    >
-                      <SelectTrigger size="sm" disabled={pendingId === task.id}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {PRIORITIES.map((p) => (
-                          <SelectItem key={p} value={p}>
-                            {PRIORITY_LABELS[p]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  <TableCell>
+                    <PriorityBadge priority={task.priority} />
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {task.projectId ? (nameById.get(task.projectId) ?? "—") : "—"}
@@ -305,18 +258,27 @@ export function TaskList({ initialProjectId }: TaskListProps) {
                   <TableCell className="text-right text-muted-foreground">
                     {relativeTime(task.updatedAt)}
                   </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      render={
+                        <a
+                          href={`/tasks/${task.id}`}
+                          aria-label={`Edit task ${task.title}`}
+                        />
+                      }
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <PencilIcon className="size-4" />
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </div>
       )}
-
-      {!loading && tasks.length > 0 ? (
-        <p className="text-xs text-muted-foreground">
-          Showing {tasks.length} of {total} {total === 1 ? "task" : "tasks"}
-        </p>
-      ) : null}
 
       <TaskPreviewDialog
         task={previewTask}
