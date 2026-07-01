@@ -51,7 +51,6 @@ import { TaskStatusBadge } from "./StatusBadge";
 import { TaskAttachments } from "./TaskAttachments";
 import { TaskComments } from "./TaskComments";
 import { TaskDetailSidebar } from "./TaskDetailSidebar";
-import { CompletionCard } from "./TaskDetailSections";
 import { TaskSubtasks } from "./TaskSubtasks";
 import { type Task } from "./types";
 
@@ -303,16 +302,20 @@ export function TaskDetail({ id }: TaskDetailProps) {
             </CardContent>
           </Card>
 
-          {/* Completion (real task.progress). */}
-          <CompletionCard task={task} saving={saving} onPatch={patch} />
-
-          {/* Subtasks — toggling a subtask re-derives task.progress on the
-              server; mirror that locally so the Completion card stays in sync. */}
+          {/* "Tasks" card — the subtask checklist now OWNS completion: a
+              "{done}/{total} completed" header, a progress bar, then the
+              checklist. Toggling a subtask re-derives task.progress on the
+              server; mirror it locally so the board/table/sidebar stay in sync.
+              For subtask-less tasks a manual progress control (onSetProgress →
+              PATCH) is shown as a fallback so completion is still settable. */}
           <TaskSubtasks
             taskId={task.id}
+            taskProgress={task.progress}
+            saving={saving}
             onProgressChange={(progress) =>
               setTask((prev) => (prev ? { ...prev, progress } : prev))
             }
+            onSetProgress={(progress) => patch({ progress })}
           />
 
           {/* Comments — real thread + composer. */}

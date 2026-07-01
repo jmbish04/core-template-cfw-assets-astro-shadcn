@@ -3,11 +3,17 @@
  * task viewport (`/tasks/[id]`). Retrofits the framework's Properties card as a
  * `grid-cols-[76px_1fr]` label/value list with separators between groups:
  *
- *   Status      → editable via a {@link Select} (PATCH status)
- *   Priority    → editable via a {@link Select} (PATCH priority)
- *   Assignees   → the task's single `assignee` rendered as an avatar + name row
- *                 (the multi-row layout shape is preserved for future multi-assignee)
- *   Project     → editable via a {@link Select} of `/api/projects` (PATCH projectId)
+ *   Status      → the colored {@link TaskStatusBadge}, editable via a
+ *                 badge-as-trigger {@link BadgeSelect} (PATCH status).
+ *   Priority    → the colored {@link PriorityBadge}, editable via a
+ *                 badge-as-trigger {@link BadgeSelect} (PATCH priority).
+ *   Assignees   → the task's single `assignee` rendered as one avatar + full
+ *                 display-name row (the layout shape is kept for future
+ *                 multi-assignee). Never shows a duplicated initials token.
+ *   Project     → the project's NAME (resolved from `/api/projects` via
+ *                 {@link useProjects}), editable via a {@link Select} whose
+ *                 trigger shows the name and whose options list names
+ *                 (value=id). Never shows a raw project id.
  *   Started     → `task.createdAt` (calendar icon + formatted date, read-only)
  *   Due date    → editable inline `<input type=date>` (PATCH dueDate)
  *   Labels      → wrapped outline badges, editable via a comma-separated input
@@ -37,11 +43,12 @@ import {
 import { shortDate } from "@/lib/format";
 
 import { AssigneeAvatar } from "./Shared";
+import { BadgeSelect } from "./BadgeSelect";
+import { PriorityBadge } from "./PriorityBadge";
+import { TaskStatusBadge } from "./StatusBadge";
 import { useProjects } from "./useProjects";
 import {
   BOARD_STATUSES,
-  PRIORITY_LABELS,
-  STATUS_LABELS,
   type Task,
   type TaskPriority,
   type TaskStatus,
@@ -49,6 +56,18 @@ import {
 
 const PRIORITIES: TaskPriority[] = ["low", "medium", "high", "urgent"];
 const NO_PROJECT = "__none__";
+
+/** Status options rendered as colored badges inside the {@link BadgeSelect}. */
+const STATUS_OPTIONS = BOARD_STATUSES.map((s) => ({
+  value: s,
+  badge: <TaskStatusBadge status={s} />,
+}));
+
+/** Priority options rendered as colored badges inside the {@link BadgeSelect}. */
+const PRIORITY_OPTIONS = PRIORITIES.map((p) => ({
+  value: p,
+  badge: <PriorityBadge priority={p} />,
+}));
 
 export interface TaskDetailSidebarProps {
   task: Task;
@@ -74,7 +93,7 @@ function toDateInput(value: Task["dueDate"]): string {
 }
 
 export function TaskDetailSidebar({ task, saving, onPatch }: TaskDetailSidebarProps) {
-  const { options: projectOptions } = useProjects();
+  const { options: projectOptions, nameById } = useProjects();
 
   const [editingDue, setEditingDue] = useState(false);
   const [dueDraft, setDueDraft] = useState("");
@@ -89,48 +108,37 @@ export function TaskDetailSidebar({ task, saving, onPatch }: TaskDetailSidebarPr
         </h2>
 
         <PropertyRow label="Status">
-          <Select
+          <BadgeSelect<TaskStatus>
             value={task.status}
-            onValueChange={(v) => onPatch({ status: v as TaskStatus })}
-          >
-            <SelectTrigger size="sm" className="w-full" disabled={saving}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {BOARD_STATUSES.map((s) => (
-                <SelectItem key={s} value={s}>
-                  {STATUS_LABELS[s]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            options={STATUS_OPTIONS}
+            onChange={(status) => onPatch({ status })}
+            ariaLabel="Change status"
+            disabled={saving}
+          />
         </PropertyRow>
 
         <PropertyRow label="Priority">
-          <Select
+          <BadgeSelect<TaskPriority>
             value={task.priority}
-            onValueChange={(v) => onPatch({ priority: v as TaskPriority })}
-          >
-            <SelectTrigger size="sm" className="w-full" disabled={saving}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {PRIORITIES.map((p) => (
-                <SelectItem key={p} value={p}>
-                  {PRIORITY_LABELS[p]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            options={PRIORITY_OPTIONS}
+            onChange={(priority) => onPatch({ priority })}
+            ariaLabel="Change priority"
+            disabled={saving}
+          />
         </PropertyRow>
 
         <Separator className="bg-border/40" />
 
         <PropertyRow label="Assignees">
-          {/* Single assignee today; layout shape kept for future multi-assignee. */}
+          {/* One row per assignee (single today; layout shape kept for future
+              multi-assignee). Avatar = initials(name); the label is the full
+              display name — never a duplicated initials token. */}
           <div className="flex flex-col gap-1.5">
             {task.assignee ? (
-              <AssigneeAvatar name={task.assignee} showName />
+              <div className="flex items-center gap-2">
+                <AssigneeAvatar name={task.assignee} />
+                <span className="truncate text-sm">{task.assignee}</span>
+              </div>
             ) : (
               <span className="text-muted-foreground">Unassigned</span>
             )}
@@ -138,12 +146,21 @@ export function TaskDetailSidebar({ task, saving, onPatch }: TaskDetailSidebarPr
         </PropertyRow>
 
         <PropertyRow label="Project">
+          {/* Trigger + options show the project NAME (value=id); never a raw id.
+              `task.projectId` is resolved to a name via `nameById`, with the
+              options list itself supplying the label for the selected value. */}
           <Select
             value={task.projectId ?? NO_PROJECT}
             onValueChange={(v) => onPatch({ projectId: v === NO_PROJECT ? null : String(v) })}
           >
             <SelectTrigger size="sm" className="w-full" disabled={saving}>
-              <SelectValue placeholder="No project" />
+              <SelectValue>
+                {(value: unknown) => {
+                  const id = value == null ? null : String(value);
+                  if (!id || id === NO_PROJECT) return "No project";
+                  return nameById.get(id) ?? "No project";
+                }}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={NO_PROJECT}>No project</SelectItem>

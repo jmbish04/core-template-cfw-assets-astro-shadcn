@@ -1,38 +1,69 @@
 /**
- * @fileoverview TaskSubtasks — the real Subtasks checklist for the task
- * viewport, backed by `GET/POST/PATCH/DELETE /api/tasks/{id}/subtasks`.
+ * @fileoverview TaskSubtasks — the "Tasks" checklist card for the task viewport,
+ * backed by `GET/POST/PATCH/DELETE /api/tasks/{id}/subtasks`. This card OWNS the
+ * task's completion presentation (the standalone "Completion" stepper card was
+ * folded in here to match the mockup):
  *
- * Each row is a Base-UI Checkbox + label (strikethrough + muted when done) with
- * a hover delete button. A "{done}/{total} completed" summary + progress bar are
- * derived purely from the subtask rows. Because the server re-derives the parent
- * task's `progress` from these rows on every mutation, we surface an
- * `onProgressChange(progress)` callback so the parent viewport (and thus the
- * Completion card / board / table) stays in sync without a full refetch.
+ *   Header  → a "Tasks" title with a "{done}/{total} completed" label on the
+ *             right (derived from the real subtask rows).
+ *   Bar     → a thin progress bar directly beneath the header. When subtasks
+ *             exist the bar reflects them; when there are ZERO subtasks it
+ *             reflects the task's own `progress` and a compact −/+10 stepper +
+ *             presets is shown as a fallback so subtask-less tasks can still set
+ *             progress manually.
+ *   List    → the Base-UI Checkbox rows (strikethrough + muted when done) with a
+ *             hover delete button, then an add-subtask input.
+ *
+ * Because the server re-derives the parent task's `progress` from these rows on
+ * every mutation, we surface `onProgressChange(progress)` so the parent viewport
+ * (and thus the board / table / sidebar) stays in sync without a full refetch.
  */
 
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { PlusIcon, Trash2Icon } from "lucide-react";
+import { MinusIcon, PlusIcon, Trash2Icon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import { Separator } from "@/components/ui/separator";
 import { apiGet, apiSend, ApiError } from "@/lib/api";
 
 import { ErrorState } from "./Shared";
 import type { TaskSubtask } from "./types";
 
+/** Quick-set progress presets for the subtask-less manual fallback. */
+const PROGRESS_PRESETS = [0, 25, 50, 75, 100];
+
+/** Clamp an arbitrary number into the inclusive 0–100 progress range. */
+function clampProgress(n: number): number {
+  return Math.max(0, Math.min(100, Math.round(n)));
+}
+
 export interface TaskSubtasksProps {
   taskId: string;
+  /**
+   * The task's own `progress` (0–100). Used ONLY as the fallback bar + manual
+   * control target when the task has zero subtasks; when subtasks exist the bar
+   * is derived from them instead.
+   */
+  taskProgress: number;
+  /** True while a parent PATCH is in flight (disables the manual controls). */
+  saving?: boolean;
   /**
    * Called with the newly-derived 0–100 completion percentage whenever the
    * subtask set changes, so the parent can keep `task.progress` in sync with
    * what the server just computed.
    */
   onProgressChange?: (progress: number) => void;
+  /**
+   * PATCH the task's `progress` directly. Invoked only by the manual fallback
+   * control shown when there are zero subtasks.
+   */
+  onSetProgress?: (progress: number) => void;
 }
 
 /** Derive the 0–100 completion percentage from a set of subtasks. */
@@ -43,7 +74,13 @@ function deriveProgress(subtasks: TaskSubtask[]): number {
 }
 
 /** Subtasks checklist card for a single task. */
-export function TaskSubtasks({ taskId, onProgressChange }: TaskSubtasksProps) {
+export function TaskSubtasks({
+  taskId,
+  taskProgress,
+  saving = false,
+  onProgressChange,
+  onSetProgress,
+}: TaskSubtasksProps) {
   const [subtasks, setSubtasks] = useState<TaskSubtask[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -122,25 +159,67 @@ export function TaskSubtasks({ taskId, onProgressChange }: TaskSubtasksProps) {
     [commit, subtasks, taskId],
   );
 
+  const hasSubtasks = subtasks.length > 0;
   const doneCount = subtasks.filter((s) => s.done).length;
-  const progress = deriveProgress(subtasks);
+  // When subtasks exist the bar is derived from them; otherwise it reflects the
+  // task's own manually-set progress.
+  const barValue = hasSubtasks ? deriveProgress(subtasks) : taskProgress;
 
   return (
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-sm">Subtasks</CardTitle>
-          {subtasks.length > 0 ? (
-            <span className="text-xs tabular-nums text-muted-foreground">
-              {doneCount}/{subtasks.length} completed
-            </span>
-          ) : null}
+          <CardTitle className="text-sm">Tasks</CardTitle>
+          <span className="text-xs tabular-nums text-muted-foreground">
+            {hasSubtasks
+              ? `${doneCount}/${subtasks.length} completed`
+              : `${barValue}% complete`}
+          </span>
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         {error ? <ErrorState message={error} onRetry={load} /> : null}
 
-        {subtasks.length > 0 ? <Progress value={progress} /> : null}
+        {/* Thin progress bar directly beneath the header, above the checklist. */}
+        <Progress value={barValue} />
+
+        {/* Manual progress fallback — only when there are no subtasks, so
+            subtask-less tasks can still set completion. Once a subtask exists
+            the bar is derived from the checklist and this control disappears. */}
+        {!hasSubtasks && onSetProgress ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="icon-sm"
+              variant="outline"
+              aria-label="Decrease progress by 10"
+              disabled={saving || taskProgress <= 0}
+              onClick={() => onSetProgress(clampProgress(taskProgress - 10))}
+            >
+              <MinusIcon className="size-4" />
+            </Button>
+            <Button
+              size="icon-sm"
+              variant="outline"
+              aria-label="Increase progress by 10"
+              disabled={saving || taskProgress >= 100}
+              onClick={() => onSetProgress(clampProgress(taskProgress + 10))}
+            >
+              <PlusIcon className="size-4" />
+            </Button>
+            <Separator orientation="vertical" className="mx-1 h-6 bg-border/40" />
+            {PROGRESS_PRESETS.map((p) => (
+              <Button
+                key={p}
+                size="sm"
+                variant={taskProgress === p ? "secondary" : "ghost"}
+                disabled={saving}
+                onClick={() => onSetProgress(p)}
+              >
+                {p}%
+              </Button>
+            ))}
+          </div>
+        ) : null}
 
         {loading ? (
           <p className="text-sm text-muted-foreground">Loading subtasks…</p>
