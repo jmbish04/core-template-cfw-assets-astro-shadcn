@@ -98,9 +98,16 @@ export function TaskSubtasks({
         apiGet<{ data: Task[] }>(`tasks/${taskId}/children`),
         apiGet<{ data: { id: string }[] }>(`tasks/${taskId}/ancestors`),
       ]);
-      setChildren(childRes.data ?? []);
+      const kids = childRes.data ?? [];
+      setChildren(kids);
       setAncestorIds((ancestorRes.data ?? []).map((a) => a.id));
-      onProgressChangeRef.current?.(deriveProgress(childRes.data ?? []));
+      // Only mirror CHILD-DERIVED progress up to the parent when the task
+      // actually has children. For a childless task the task's own stored
+      // progress governs (set manually via the ProgressCard), so firing
+      // onProgressChange(0) here would wrongly clobber it back to 0%.
+      if (kids.length > 0) {
+        onProgressChangeRef.current?.(deriveProgress(kids));
+      }
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Failed to load subtasks.");
     } finally {
