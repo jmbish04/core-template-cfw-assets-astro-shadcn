@@ -3,10 +3,15 @@
  * backed by `GET/POST /api/tasks/{id}/comments`.
  *
  * Renders each comment as an avatar-initials + name + relative-time header over
- * a muted bubble body, oldest→newest. Below the thread sits a composer: a
- * textarea (⌘/Ctrl+Enter to send) plus a Comment button. Posting optimistically
+ * a muted bubble body, oldest→newest. Each body is stored as **sanitized HTML**
+ * and rendered via {@link TaskRichHtml}. Below the thread sits a {@link
+ * TaskRichEditor} composer with a submit / ⌘↵ affordance; posting optimistically
  * appends the new comment, then reconciles with the server row (or rolls back on
  * error). No data is fabricated — an empty thread shows an honest empty state.
+ *
+ * The Plate composer is browser-only, so it is gated behind a `mounted` flag
+ * (rendering a placeholder shell during SSR / first hydration paint) and mounted
+ * inside the existing `client:load` task island.
  */
 
 "use client";
@@ -15,13 +20,16 @@ import { useCallback, useEffect, useState } from "react";
 import { MessageSquareIcon } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Markdown } from "@/components/ui/markdown";
-import { RichTextComposer } from "@/components/ui/rich-text-composer";
+import { Kbd } from "@/components/ui/kbd";
 import { apiGet, apiSend, ApiError } from "@/lib/api";
 import { relativeTime } from "@/lib/format";
 
 import { ErrorState } from "./Shared";
+import { TaskRichEditor } from "./TaskRichEditor";
+import { TaskRichHtml } from "./TaskRichHtml";
+import { htmlToPlainText } from "./task-html";
 import { initials, type TaskComment } from "./types";
 
 export interface TaskCommentsProps {
@@ -35,6 +43,14 @@ export function TaskComments({ taskId }: TaskCommentsProps) {
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  // Bumped after each successful post to remount (and clear) the Plate composer,
+  // since the editor seeds its value once on mount.
+  const [composerKey, setComposerKey] = useState(0);
+
+  // The Plate composer is browser-only; gate it behind a mounted flag so it never
+  // renders during SSR / first hydration paint on this `client:load` island.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -53,9 +69,13 @@ export function TaskComments({ taskId }: TaskCommentsProps) {
     void load();
   }, [load]);
 
+  // `draft` holds sanitized HTML from the editor; treat it as empty when it has
+  // no visible text (an empty document still serializes to a stray `<p></p>`).
+  const draftEmpty = !htmlToPlainText(draft).trim();
+
   const send = useCallback(async () => {
-    const body = draft.trim();
-    if (!body || sending) return;
+    const body = draft;
+    if (draftEmpty || sending) return;
     setSending(true);
     setError(null);
 
@@ -70,6 +90,8 @@ export function TaskComments({ taskId }: TaskCommentsProps) {
     };
     setComments((prev) => [...prev, optimistic]);
     setDraft("");
+    // Remount the composer so it clears back to an empty document.
+    setComposerKey((k) => k + 1);
 
     try {
       const saved = await apiSend<TaskComment>("POST", `tasks/${taskId}/comments`, { body });
@@ -81,7 +103,7 @@ export function TaskComments({ taskId }: TaskCommentsProps) {
     } finally {
       setSending(false);
     }
-  }, [draft, sending, taskId]);
+  }, [draft, draftEmpty, sending, taskId]);
 
   return (
     <Card>
@@ -120,7 +142,7 @@ export function TaskComments({ taskId }: TaskCommentsProps) {
                     </span>
                   </div>
                   <div className="rounded-lg bg-muted/30 px-3 py-2">
-                    <Markdown>{comment.body}</Markdown>
+                    <TaskRichHtml stored={comment.body} />
                   </div>
                 </div>
               </li>
@@ -128,17 +150,46 @@ export function TaskComments({ taskId }: TaskCommentsProps) {
           </ul>
         )}
 
-        {/* Composer */}
-        <RichTextComposer
-          value={draft}
-          onChange={setDraft}
-          rows={3}
-          placeholder="Write a comment…"
-          onSubmit={() => void send()}
-          submitLabel="Comment"
-          submitting={sending}
-          submitDisabled={!draft.trim()}
-        />
+        {/* Composer — Plate rich-text editor + submit / ⌘↵ footer. Gated behind
+            `mounted` so the browser-only editor never renders during SSR. */}
+        {mounted ? (
+          <div
+            className="flex flex-col overflow-hidden rounded-lg bg-input/30 ring-1 ring-border/40 focus-within:ring-2 focus-within:ring-ring/50"
+            onKeyDownCapture={(e) => {
+              // ⌘/Ctrl+Enter submits, mirroring the old composer affordance.
+              if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                e.preventDefault();
+                if (!sending && !draftEmpty) void send();
+              }
+            }}
+          >
+            <TaskRichEditor
+              key={composerKey}
+              valueHtml=""
+              onChangeHtml={setDraft}
+              placeholder="Write a comment…"
+              className="rounded-none bg-transparent ring-0 focus-within:ring-0"
+              contentClassName="min-h-20"
+            />
+            <div className="flex items-center justify-between gap-2 bg-muted/10 px-2 py-1.5">
+              <span className="flex items-center gap-1 text-[11px] text-muted-foreground/70">
+                <Kbd>⌘</Kbd>
+                <Kbd>↵</Kbd>
+                <span>send</span>
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => void send()}
+                disabled={sending || draftEmpty}
+              >
+                {sending ? "Comment…" : "Comment"}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="min-h-28 rounded-lg bg-input/30 ring-1 ring-border/40" />
+        )}
       </CardContent>
     </Card>
   );

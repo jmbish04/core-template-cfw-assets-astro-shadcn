@@ -30,6 +30,7 @@ import { AssigneeAvatar, LabelChips } from "./Shared";
 import { PriorityBadge } from "./PriorityBadge";
 import { TaskStatusBadge } from "./StatusBadge";
 import { TaskDialog } from "./TaskDialog";
+import { htmlToPlainText } from "./task-html";
 import type { Task } from "./types";
 
 export interface TaskPreviewDialogProps {
@@ -64,9 +65,13 @@ export function TaskPreviewDialog({
             </DialogHeader>
 
             <div className="flex flex-col gap-4">
-              {task.description ? (
-                <p className="text-sm whitespace-pre-wrap text-muted-foreground">
-                  {task.description}
+              {/* `description` may hold HTML, a legacy Plate envelope, or plain
+                  text; render the flattened plain-text snippet so the quick-look
+                  never leaks raw HTML/JSON (and never mounts the Plate editor in
+                  a list context). */}
+              {task.description && htmlToPlainText(task.description).trim() ? (
+                <p className="line-clamp-6 text-sm whitespace-pre-wrap text-muted-foreground">
+                  {htmlToPlainText(task.description)}
                 </p>
               ) : (
                 <p className="text-sm text-muted-foreground/60 italic">No description</p>

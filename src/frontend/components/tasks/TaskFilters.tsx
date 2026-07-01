@@ -24,8 +24,14 @@
 
 "use client";
 
-import { useMemo } from "react";
-import { ListFilterIcon, PlusIcon, SearchIcon, XIcon } from "lucide-react";
+import { useEffect, useMemo } from "react";
+import {
+  AlertTriangleIcon,
+  ListFilterIcon,
+  PlusIcon,
+  SearchIcon,
+  XIcon,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -119,10 +125,13 @@ export interface TaskFiltersProps {
  */
 export function TaskFilters({ value, onChange, onClear, filtered, total }: TaskFiltersProps) {
   const { options: projectOptions } = useProjects();
-  const { assignees, labels, counts, error } = useTaskFacets();
-  if (error) {
-    console.error("Failed to load task facets:", error);
-  }
+  const { assignees, labels, counts, loading, error } = useTaskFacets();
+
+  // Surface facet-load failures for observability. Kept in an effect (not the
+  // render body) so it fires once per error rather than on every re-render.
+  useEffect(() => {
+    if (error) console.error("Failed to load task facets:", error);
+  }, [error]);
 
   const statusFacet = useMemo(() => statusFacetOptions(counts.status), [counts.status]);
   const priorityFacet = useMemo(
@@ -261,6 +270,20 @@ export function TaskFilters({ value, onChange, onClear, filtered, total }: TaskF
         <span className="tabular-nums">
           {filtered} of {total} {total === 1 ? "task" : "tasks"}
         </span>
+        {error ? (
+          <>
+            <Separator orientation="vertical" className="h-3.5 bg-border/60" />
+            <output className="inline-flex items-center gap-1 text-destructive">
+              <AlertTriangleIcon className="size-3.5" />
+              Assignee &amp; Label facets unavailable
+            </output>
+          </>
+        ) : loading ? (
+          <>
+            <Separator orientation="vertical" className="h-3.5 bg-border/60" />
+            <span className="text-muted-foreground/70">Loading facets…</span>
+          </>
+        ) : null}
       </div>
     </div>
   );

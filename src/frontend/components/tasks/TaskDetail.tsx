@@ -7,12 +7,14 @@
  *                  (title editable inline via PATCH).
  *   Layout       → `lg:grid-cols-[1fr_264px]`. On mobile the sidebar stacks
  *                  ABOVE the main column via `order` classes.
- *   Left column  → (1) Description card (editable, PATCH). (2) Completion card:
- *                  a "{progress}% complete" label + thin progress bar + a
- *                  −/+10 stepper and quick presets (real `task.progress`).
- *                  (3) Subtasks (checklist backed by /api/tasks/{id}/subtasks,
- *                  toggles re-derive task.progress) + (4) Comments (thread +
- *                  composer) + (5) Attachments (R2-backed upload/stream) — all
+ *   Breadcrumbs  → an ancestor trail at the very top ({@link TaskBreadcrumbs},
+ *                  from `GET /api/tasks/{id}/ancestors`).
+ *   Left column  → (1) Description card — a PlateJS rich-text editor/renderer
+ *                  (shared with team notes), PATCHing the serialized Plate
+ *                  envelope into `task.description`. (2) Subtasks (child tasks
+ *                  backed by /api/tasks/{id}/children, completion + radial gauge
+ *                  derived from their statuses) + (3) Comments (thread +
+ *                  composer) + (4) Attachments (R2-backed upload/stream) — all
  *                  fully backed by their own API routes.
  *   Right column → {@link TaskDetailSidebar} Properties card (status, priority,
  *                  assignees, project, started, due date, labels).
@@ -41,17 +43,19 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Markdown } from "@/components/ui/markdown";
-import { RichTextComposer } from "@/components/ui/rich-text-composer";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiGet, apiSend, ApiError } from "@/lib/api";
 
 import { ErrorState } from "./Shared";
 import { PriorityBadge } from "./PriorityBadge";
+import { TaskBreadcrumbs } from "./TaskBreadcrumbs";
 import { TaskStatusBadge } from "./StatusBadge";
 import { TaskAttachments } from "./TaskAttachments";
 import { TaskComments } from "./TaskComments";
 import { TaskDetailSidebar } from "./TaskDetailSidebar";
+import { TaskRichEditor } from "./TaskRichEditor";
+import { TaskRichHtml } from "./TaskRichHtml";
+import { htmlToPlainText } from "./task-html";
 import { TaskSubtasks } from "./TaskSubtasks";
 import { type Task } from "./types";
 
@@ -70,6 +74,13 @@ export function TaskDetail({ id }: TaskDetailProps) {
   const [titleDraft, setTitleDraft] = useState("");
   const [editingDesc, setEditingDesc] = useState(false);
   const [descDraft, setDescDraft] = useState("");
+
+  // PlateJS (description editor + renderer) is browser-only. This page mounts as
+  // a `client:load` island, so guard Plate behind a mounted flag: during SSR /
+  // first hydration paint we render a lightweight placeholder, then swap in the
+  // real editor/renderer after mount. Prevents React #418/#425 hydration errors.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -161,6 +172,9 @@ export function TaskDetail({ id }: TaskDetailProps) {
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Ancestor trail: "Tasks / <root> / … / <parent> / <current>". */}
+      <TaskBreadcrumbs taskId={task.id} title={task.title} />
+
       <div className="flex items-center justify-between gap-3">
         <a
           href="/tasks"
@@ -269,21 +283,20 @@ export function TaskDetail({ id }: TaskDetailProps) {
               </div>
             </CardHeader>
             <CardContent>
-              {editingDesc ? (
+              {editingDesc && mounted ? (
                 <div className="flex flex-col gap-2">
-                  <RichTextComposer
-                    value={descDraft}
-                    onChange={setDescDraft}
-                    rows={5}
-                    autoFocus
-                    disabled={saving}
-                    placeholder="Describe this task in Markdown…"
+                  <TaskRichEditor
+                    valueHtml={descDraft}
+                    onChangeHtml={setDescDraft}
+                    placeholder="Describe this task…"
                   />
                   <div className="flex gap-2">
                     <Button
                       size="sm"
                       disabled={saving}
                       onClick={async () => {
+                        // The editor emits "" for an empty document; store null
+                        // so the "No description" empty state renders next time.
                         await patch({ description: descDraft.trim() || null });
                         setEditingDesc(false);
                       }}
@@ -295,19 +308,22 @@ export function TaskDetail({ id }: TaskDetailProps) {
                     </Button>
                   </div>
                 </div>
-              ) : task.description ? (
-                <Markdown>{task.description}</Markdown>
+              ) : task.description && htmlToPlainText(task.description).trim() ? (
+                // TaskRichHtml is SSR-safe: it shows inert plain text before mount
+                // and swaps in DOMPurify-sanitized HTML once hydrated.
+                <TaskRichHtml stored={task.description} />
               ) : (
                 <p className="text-sm italic text-muted-foreground/60">No description</p>
               )}
             </CardContent>
           </Card>
 
-          {/* "Tasks" card — the subtask checklist now OWNS completion: a
-              "{done}/{total} completed" header, a progress bar, then the
-              checklist. Toggling a subtask re-derives task.progress on the
-              server; mirror it locally so the board/table/sidebar stay in sync.
-              For subtask-less tasks a manual progress control (onSetProgress →
+          {/* "Subtasks" card — child tasks now OWN completion: a
+              "{done}/{total} completed" header, a progress bar + radial gauge
+              derived from the children's statuses, the child list (click →
+              preview → viewport), an add-existing typeahead, and a create flow.
+              Completion mirrors back so the board/table/sidebar stay in sync.
+              For childless tasks a manual progress control (onSetProgress →
               PATCH) is shown as a fallback so completion is still settable. */}
           <TaskSubtasks
             taskId={task.id}

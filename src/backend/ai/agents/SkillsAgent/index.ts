@@ -75,11 +75,14 @@ function safeCalc(expression: string): number {
   // Shunting-yard to RPN, then evaluate — no Function/eval.
   const tokens = expression.match(/\d+\.?\d*|\.\d+|[+\-*/()]/g);
   if (!tokens) throw new Error("Empty expression.");
+  // A number token may start with a digit (`5`, `1.5`) OR a leading decimal
+  // point (`.5`, `.25`) — classify on the full numeric shape, not just `^\d`.
+  const isNumber = (t: string): boolean => /^(?:\d+\.?\d*|\.\d+)$/.test(t);
   const prec: Record<string, number> = { "+": 1, "-": 1, "*": 2, "/": 2 };
   const out: string[] = [];
   const ops: string[] = [];
   for (const t of tokens) {
-    if (/^\d/.test(t)) out.push(t);
+    if (isNumber(t)) out.push(t);
     else if (t === "(") ops.push(t);
     else if (t === ")") {
       while (ops.length && ops[ops.length - 1] !== "(") out.push(ops.pop() as string);
@@ -96,7 +99,7 @@ function safeCalc(expression: string): number {
   }
   const stack: number[] = [];
   for (const t of out) {
-    if (/^\d/.test(t)) stack.push(parseFloat(t));
+    if (isNumber(t)) stack.push(parseFloat(t));
     else {
       const b = stack.pop();
       const a = stack.pop();
