@@ -12,6 +12,7 @@
 
 "use client";
 
+import { cn } from "@/lib/utils";
 import { type ReactNode } from "react";
 import { ArrowUpRightIcon, CalendarIcon, PencilIcon } from "lucide-react";
 
@@ -26,7 +27,7 @@ import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { shortDate, relativeTime } from "@/lib/format";
 
-import { AssigneeAvatar, LabelChips } from "./Shared";
+import { AssigneeAvatar, LabelChips, MOBILE_SHEET_DIALOG } from "./Shared";
 import { PriorityBadge } from "./PriorityBadge";
 import { TaskStatusBadge } from "./StatusBadge";
 import { TaskDialog } from "./TaskDialog";
@@ -53,7 +54,7 @@ export function TaskPreviewDialog({
 }: TaskPreviewDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className={cn("max-w-lg", MOBILE_SHEET_DIALOG)}>
         {task ? (
           <>
             <DialogHeader>

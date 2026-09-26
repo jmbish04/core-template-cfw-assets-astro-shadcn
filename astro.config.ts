@@ -26,6 +26,9 @@ export default defineConfig({
     imageService: "cloudflare",
     platformProxy: {
       enabled: true,
+      // `ai` is remote-only. Set CF_REMOTE_BINDINGS=0 to run the UI locally when a
+      // remote preview session can't be created (AI calls then fail, pages still render).
+      remoteBindings: process.env.CF_REMOTE_BINDINGS !== "0",
     },
     routes: {
       // Extend Cloudflare routes to include backend API routes
@@ -34,25 +37,12 @@ export default defineConfig({
         exclude: [],
       },
     },
-    // Configure worker entry point with Durable Object exports.
-    // These names must match the DO classes re-exported from `src/_worker.ts`
-    // and the `durable_objects.bindings` class names in `wrangler.jsonc`.
+    // No Durable Objects in this Worker — every inference call routes through
+    // the CORE_GUARDIAN service binding instead. namedExports stays empty;
+    // repopulate it if a DO class is ever reintroduced.
     workerEntryPoint: {
       path: "src/_worker.ts",
-      namedExports: [
-        "ChatBroker",
-        "CodeModeAgent",
-        "BrowserHitlAgent",
-        "WorkflowsAgent",
-        "ArtifactAgent",
-        "NotificationsAgent",
-        "OrchestratorAgent",
-        "ResearcherAgent",
-        "CoderAgent",
-        "McpAgent",
-        "ThinkingAgent",
-        "SkillsAgent",
-      ],
+      namedExports: [],
     },
   }),
   integrations: [react()],

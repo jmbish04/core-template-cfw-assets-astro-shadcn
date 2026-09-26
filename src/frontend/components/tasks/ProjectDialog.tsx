@@ -5,6 +5,7 @@
  * page can use any button styling.
  */
 
+import { cn } from "@/lib/utils";
 import { useEffect, useState, type ReactElement } from "react";
 
 import {
@@ -29,7 +30,7 @@ import {
 } from "@/components/ui/select";
 import { apiSend, ApiError } from "@/lib/api";
 
-import { ErrorState } from "./Shared";
+import { ErrorState, MOBILE_SHEET_DIALOG } from "./Shared";
 import {
   PROJECT_STATUS_LABELS,
   type Project,
@@ -39,6 +40,8 @@ import {
 const STATUSES: ProjectStatus[] = ["active", "on_hold", "archived"];
 
 /** Six accent presets matching the Monolith chart palette family. */
+// ponytail: stored as project.color (user data rendered via inline style), not
+// styling — so literal hex is intentional here; tokens would not persist.
 const COLOR_PRESETS = ["#6366f1", "#0ea5e9", "#10b981", "#f59e0b", "#f43f5e", "#a855f7"];
 
 /** Lowercase, hyphenate, strip non-url-safe chars to build a slug. */
@@ -124,7 +127,7 @@ export function ProjectDialog({ trigger, project, onSaved }: ProjectDialogProps)
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={trigger} />
-      <DialogContent className="max-w-lg">
+      <DialogContent className={cn("max-w-lg", MOBILE_SHEET_DIALOG)}>
         <DialogHeader>
           <DialogTitle>{editing ? "Edit project" : "New project"}</DialogTitle>
           <DialogDescription>

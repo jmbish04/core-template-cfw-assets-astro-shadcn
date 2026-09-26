@@ -25,12 +25,12 @@ function parseList(raw: string): string[] {
 function ChipRow({ label, items, tone }: { label: string; items: string[]; tone: string }) {
   return (
     <div className="flex items-start gap-2 text-sm">
-      <span className="w-20 shrink-0 pt-0.5 font-mono text-xs uppercase text-zinc-500">
+      <span className="w-20 shrink-0 pt-0.5 font-mono text-xs uppercase text-muted-foreground">
         {label}
       </span>
       <div className="flex flex-wrap gap-1.5">
         {items.length === 0 ? (
-          <span className="text-xs italic text-zinc-600">∅ empty</span>
+          <span className="text-xs italic text-muted-foreground">∅ empty</span>
         ) : (
           items.map((item, i) => (
             <Badge key={`${item}-${i}`} className={tone}>
@@ -50,7 +50,7 @@ function DiffPanel() {
   const diff = useMemo(() => diffArrays(parseList(before), parseList(after)), [before, after]);
 
   return (
-    <Card className="border-zinc-800 bg-zinc-950">
+    <Card className="border-border bg-muted/40">
       <CardHeader>
         <CardTitle className="text-base">diffArrays(prev, next)</CardTitle>
         <CardDescription>
@@ -59,30 +59,30 @@ function DiffPanel() {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <label htmlFor="diff-before" className="space-y-1.5 text-xs text-zinc-400">
+          <label htmlFor="diff-before" className="space-y-1.5 text-xs text-muted-foreground">
             <span>Before</span>
             <Input id="diff-before" value={before} onChange={(e) => setBefore(e.target.value)} />
           </label>
-          <label htmlFor="diff-after" className="space-y-1.5 text-xs text-zinc-400">
+          <label htmlFor="diff-after" className="space-y-1.5 text-xs text-muted-foreground">
             <span>After</span>
             <Input id="diff-after" value={after} onChange={(e) => setAfter(e.target.value)} />
           </label>
         </div>
-        <div className="space-y-2 rounded-lg border border-zinc-800 bg-zinc-900/50 p-3">
+        <div className="space-y-2 rounded-lg border border-border bg-muted/40 p-3">
           <ChipRow
             label="added"
             items={diff.added}
-            tone="bg-green-950 text-green-400 border-green-800"
+            tone="bg-success/10 text-success-foreground border-success/30"
           />
           <ChipRow
             label="removed"
             items={diff.removed}
-            tone="bg-red-950 text-red-400 border-red-800"
+            tone="bg-destructive/10 text-destructive-foreground border-destructive/30"
           />
           <ChipRow
             label="common"
             items={diff.common}
-            tone="bg-zinc-800 text-zinc-300 border-zinc-700"
+            tone="bg-muted text-foreground border-border"
           />
         </div>
       </CardContent>
@@ -96,7 +96,7 @@ function TogglePanel() {
   const [selected, setSelected] = useState<string[]>(["workers", "d1"]);
 
   return (
-    <Card className="border-zinc-800 bg-zinc-950">
+    <Card className="border-border bg-muted/40">
       <CardHeader>
         <CardTitle className="text-base">toggleInArray(items, value)</CardTitle>
         <CardDescription>
@@ -115,8 +115,8 @@ function TogglePanel() {
                 className={
                   "rounded-md border px-2.5 py-1 text-xs transition-colors " +
                   (on
-                    ? "border-orange-600 bg-orange-950 text-orange-300"
-                    : "border-zinc-800 bg-zinc-900 text-zinc-400 hover:border-zinc-600")
+                    ? "border-primary bg-warning/10 text-warning-foreground"
+                    : "border-border bg-muted/40 text-muted-foreground hover:border-border")
                 }
               >
                 {opt}
@@ -124,7 +124,7 @@ function TogglePanel() {
             );
           })}
         </div>
-        <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-3 font-mono text-xs text-zinc-300">
+        <div className="rounded-lg border border-border bg-muted/40 p-3 font-mono text-xs text-foreground">
           selected = {JSON.stringify(selected)}
         </div>
       </CardContent>
@@ -157,34 +157,34 @@ function GroupPanel() {
   const byName = useMemo(() => keyBy(PEOPLE, (p) => p.name), []);
 
   return (
-    <Card className="border-zinc-800 bg-zinc-950">
+    <Card className="border-border bg-muted/40">
       <CardHeader>
         <CardTitle className="text-base">groupBy · sortBy · keyBy · pipe</CardTitle>
         <CardDescription>Compose Remeda primitives over a list of records.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
-        <div className="space-y-2 rounded-lg border border-zinc-800 bg-zinc-900/50 p-3">
-          <p className="font-mono text-xs uppercase text-zinc-500">groupBy(team)</p>
+        <div className="space-y-2 rounded-lg border border-border bg-muted/40 p-3">
+          <p className="font-mono text-xs uppercase text-muted-foreground">groupBy(team)</p>
           {Object.entries(byTeam).map(([team, members]) => (
             <ChipRow
               key={team}
               label={team}
               items={(members as Person[]).map((m) => m.name)}
-              tone="bg-blue-950 text-blue-400 border-blue-800"
+              tone="bg-info/10 text-info-foreground border-info/30"
             />
           ))}
         </div>
-        <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-3">
-          <p className="mb-2 font-mono text-xs uppercase text-zinc-500">
+        <div className="rounded-lg border border-border bg-muted/40 p-3">
+          <p className="mb-2 font-mono text-xs uppercase text-muted-foreground">
             top 3 by commits (sortBy + take)
           </p>
           <ChipRow
             label="ranked"
             items={ranked.map((p) => `${p.name}·${p.commits}`)}
-            tone="bg-purple-950 text-purple-400 border-purple-800"
+            tone="bg-info/10 text-info-foreground border-info/30"
           />
         </div>
-        <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-3 font-mono text-xs text-zinc-400">
+        <div className="rounded-lg border border-border bg-muted/40 p-3 font-mono text-xs text-muted-foreground">
           keyBy(name).katherine.commits = {byName.katherine.commits}
         </div>
       </CardContent>
@@ -199,7 +199,7 @@ function CleanPanel() {
   const cleaned = useMemo(() => unique(compact(parseList(raw))), [raw]);
 
   return (
-    <Card className="border-zinc-800 bg-zinc-950">
+    <Card className="border-border bg-muted/40">
       <CardHeader>
         <CardTitle className="text-base">unique(compact(items))</CardTitle>
         <CardDescription>
@@ -208,12 +208,12 @@ function CleanPanel() {
       </CardHeader>
       <CardContent className="space-y-3">
         <Input value={raw} onChange={(e) => setRaw(e.target.value)} />
-        <div className="space-y-2 rounded-lg border border-zinc-800 bg-zinc-900/50 p-3">
-          <ChipRow label="input" items={tokens} tone="bg-zinc-800 text-zinc-400 border-zinc-700" />
+        <div className="space-y-2 rounded-lg border border-border bg-muted/40 p-3">
+          <ChipRow label="input" items={tokens} tone="bg-muted text-muted-foreground border-border" />
           <ChipRow
             label="cleaned"
             items={cleaned}
-            tone="bg-orange-950 text-orange-400 border-orange-800"
+            tone="bg-warning/10 text-warning-foreground border-warning/30"
           />
         </div>
       </CardContent>

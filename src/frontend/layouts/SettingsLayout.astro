@@ -1,15 +1,15 @@
 ---
 /**
+ * RESPONSIVE STRATEGY
+ * desktop: page toolbar, then a 200px vertical side-tab rail (ReUI profile-1 look) beside the section content.
+ * mobile (390px): the rail becomes a horizontal scroll rail of line tabs above the content; no page scroll sideways.
+ * vehicle: same as mobile; each tab is a 36px tap target.
+ *
  * @fileoverview SettingsLayout — shared chrome for every /settings/* page.
  *
- * Wraps BaseLayout (which provides the Header/Navbar + Footer + dark theme boot)
- * and lays out a two-column shell: the SettingsNav sub-navigation on the left
- * (collapses to a horizontal scroller on mobile) and the section content in the
- * main column on the right.
- *
- * The active route is read from `Astro.url.pathname` and passed to the
- * `<SettingsNav />` island so the correct section is highlighted on first paint
- * without waiting for hydration.
+ * Wraps BaseLayout (app-shell-12) with PageBody + PageToolbar and the static
+ * SettingsNav rail. The active route comes from `Astro.url.pathname`, so the
+ * rail renders correctly with no hydration.
  *
  * Usage (from a page):
  *   <SettingsLayout title="Preferences" description="…">
@@ -18,35 +18,30 @@
  */
 
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import { SettingsNav } from "@/components/settings";
+import { PageBody, PageToolbar } from "@/components/blocks/app-shell-12/components/page-toolbar";
+import { SettingsNav } from "@/components/settings/SettingsNav";
+
+interface Props {
+  title: string;
+  description?: string;
+}
 
 const { title, description } = Astro.props;
 
-// Normalise the active path (drop any trailing slash) so it matches the
-// hrefs declared in SETTINGS_SECTIONS exactly.
+// Drop any trailing slash so it matches the SETTINGS_SECTIONS hrefs exactly.
 const active = Astro.url.pathname.replace(/\/$/, "");
 ---
 
 <BaseLayout title={`${title} · Settings`} description={description}>
-  <div class="container mx-auto max-w-6xl px-4 py-10">
-    <header class="mb-8 flex flex-col gap-2">
-      <div class="flex items-center gap-3">
-        <span class="text-3xl">⚙️</span>
-        <h1 class="text-3xl font-semibold tracking-tight">Settings</h1>
-      </div>
-      <p class="max-w-2xl text-sm text-muted-foreground">
-        Manage your workspace preferences, notification delivery, outbound
-        webhooks, audit history, and advanced controls.
-      </p>
-    </header>
-
-    <div class="grid gap-8 md:grid-cols-[220px_1fr]">
-      <aside class="md:sticky md:top-20 md:self-start">
-        <SettingsNav active={active} client:load />
+  <PageBody>
+    <PageToolbar title={title} description={description} />
+    <div class="grid min-w-0 gap-5 md:grid-cols-[200px_minmax(0,1fr)] md:gap-8">
+      <aside class="min-w-0 md:sticky md:top-4 md:self-start">
+        <SettingsNav active={active} />
       </aside>
       <section class="min-w-0">
         <slot />
       </section>
     </div>
-  </div>
+  </PageBody>
 </BaseLayout>

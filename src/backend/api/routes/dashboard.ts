@@ -16,10 +16,9 @@
  */
 
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
-import { generateText } from "ai";
 import { and, asc, desc, eq, gte, lte, sql } from "drizzle-orm";
 
-import { getChatModel } from "../../ai/providers/ai-sdk";
+import { guardianChat } from "../../ai/guardian";
 import { getDb } from "../../db";
 import { metricsDaily, notifications, projects, tasks } from "../../db/schema";
 
@@ -414,16 +413,16 @@ Dashboard metrics (${rangeLabel} window):
 
 Respond with only the bullet list. No preamble, no headings.`;
 
-    // --- Call Workers AI --------------------------------------------------
+    // --- Call core-guardian -------------------------------------------------
     let insight: string;
     try {
-      const model = getChatModel(c.env);
-      const result = await generateText({
-        model,
-        prompt,
-        maxOutputTokens: 400,
+      const result = await guardianChat(c.env, {
+        task: "dashboard_insights",
+        useCase: "chat",
+        importance: "low",
+        messages: [{ role: "user", content: prompt }],
       });
-      insight = result.text.trim();
+      insight = result.text;
       if (!insight) throw new Error("empty response");
     } catch (aiErr) {
       console.error(

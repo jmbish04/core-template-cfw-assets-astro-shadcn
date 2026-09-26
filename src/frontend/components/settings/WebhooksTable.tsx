@@ -1,40 +1,47 @@
 /**
- * @fileoverview WebhooksTable — CRUD + test surface for outbound webhooks.
+ * @fileoverview WebhooksTable — outbound webhook endpoints, built on ReUI
+ * settings-8 (Frame of endpoint Item rows with delivery-health alert
+ * indicators, status badge, copyable URL, enable Switch and an actions menu).
  *
- * Data flows entirely through the real Hono API:
- *   - GET    /api/webhooks            – list (paginated; we load the first page)
- *   - POST   /api/webhooks            – create (via the add/edit Dialog)
- *   - PATCH  /api/webhooks/{id}       – partial update (Dialog + active toggle)
- *   - DELETE /api/webhooks/{id}       – delete (via AlertDialog confirmation)
- *   - POST   /api/webhooks/{id}/test  – simulate a delivery, surface the result
+ * The block's StatusIndicator, EndpointAlertIndicator and EndpointUrlCopy are
+ * reused as-is; this file maps real `/api/webhooks` rows onto them:
+ *   - GET    /api/webhooks            – list (first 100)
+ *   - POST   /api/webhooks            – create (editor dialog / sheet)
+ *   - PATCH  /api/webhooks/{id}       – edit + inline enable toggle
+ *   - DELETE /api/webhooks/{id}       – delete (AlertDialog confirmation)
+ *   - POST   /api/webhooks/{id}/test  – simulate a delivery
  *
- * No window.confirm/prompt — destructive delete is gated by an AlertDialog and
- * create/edit happens in a Dialog form. Monolith dark profile throughout.
+ * Health is derived from `active`, `lastStatus` and `lastTriggeredAt`; the API
+ * has no delivery history, so alerts describe the most recent delivery only.
  */
 
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
 
-import { PencilIcon, PlusIcon, SendIcon, Trash2Icon } from "lucide-react";
+import {
+  EllipsisVerticalIcon,
+  PencilIcon,
+  PlusIcon,
+  SendIcon,
+  Trash2Icon,
+  WebhookIcon,
+} from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { EndpointAlertIndicator } from "@/components/blocks/settings-8/components/endpoint-alert-indicator";
+import { EndpointUrlCopy } from "@/components/blocks/settings-8/components/endpoint-url-copy";
+import { StatusIndicator } from "@/components/blocks/settings-8/components/status-indicator";
+import type {
+  EndpointAlert,
+  EndpointStatus,
+} from "@/components/blocks/settings-8/components/data";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Frame,
+  FrameDescription,
+  FrameHeader,
+  FramePanel,
+  FrameTitle,
+} from "@/components/reui/frame";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -45,18 +52,53 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemMedia,
+  ItemTitle,
+} from "@/components/ui/item";
 import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 import { apiGet, ApiError, apiSend } from "@/lib/api";
 import { relativeTime } from "@/lib/format";
@@ -82,8 +124,6 @@ interface Webhook {
 interface WebhookListResponse {
   data: Webhook[];
   total: number;
-  limit: number;
-  offset: number;
 }
 
 interface TestResponse {
@@ -92,7 +132,7 @@ interface TestResponse {
   lastTriggeredAt: number | null;
 }
 
-/** Editable draft used by the add/edit Dialog. */
+/** Editable draft used by the add/edit form. */
 interface WebhookDraft {
   name: string;
   url: string;
@@ -110,28 +150,173 @@ function parseEvents(raw: string): string[] {
     .filter(Boolean);
 }
 
+function errMessage(e: unknown, fallback: string): string {
+  return e instanceof ApiError ? e.message : fallback;
+}
+
+// ---------------------------------------------------------------------------
+// Health mapping onto the settings-8 status + alert model
+// ---------------------------------------------------------------------------
+
+function endpointStatus(wh: Webhook): EndpointStatus {
+  if (!wh.active) return "disabled";
+  if (wh.lastStatus && !wh.lastStatus.startsWith("2")) return "failing";
+  return "active";
+}
+
+function endpointAlerts(wh: Webhook): EndpointAlert[] {
+  if (wh.lastStatus && !wh.lastStatus.startsWith("2")) {
+    return [
+      {
+        id: "failing",
+        tone: "critical",
+        badgeLabel: "Failing",
+        detail: `Last delivery returned ${wh.lastStatus}. Fix the endpoint, then send a test.`,
+      },
+    ];
+  }
+  if (!wh.active) {
+    return [
+      {
+        id: "paused",
+        tone: "warning",
+        badgeLabel: "Paused",
+        detail: `${wh.name} is paused and not receiving new events.`,
+      },
+    ];
+  }
+  if (!wh.lastTriggeredAt) {
+    return [
+      {
+        id: "untested",
+        tone: "warning",
+        badgeLabel: "No deliveries",
+        detail: "Nothing has been delivered yet. Send a test to confirm the endpoint responds.",
+      },
+    ];
+  }
+  return [
+    {
+      id: "healthy",
+      tone: "success",
+      badgeLabel: "Healthy",
+      detail: `Last delivery ${relativeTime(wh.lastTriggeredAt)} returned ${wh.lastStatus ?? "OK"}.`,
+    },
+  ];
+}
+
+// ---------------------------------------------------------------------------
+// Endpoint row (settings-8 EndpointRow grammar)
+// ---------------------------------------------------------------------------
+
+function EndpointRow({
+  wh,
+  testing,
+  onToggle,
+  onTest,
+  onEdit,
+  onDelete,
+}: {
+  wh: Webhook;
+  testing: boolean;
+  onToggle: (active: boolean) => void;
+  onTest: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const events =
+    wh.events.length === 0
+      ? "No events"
+      : wh.events.length <= 2
+        ? wh.events.join(", ")
+        : `${wh.events.slice(0, 2).join(", ")} +${wh.events.length - 2}`;
+
+  return (
+    <Item className="rounded-none border-0">
+      <ItemMedia variant="icon" className="hidden translate-y-0! self-center! sm:flex">
+        <span className="border-border flex size-10 items-center justify-center rounded-md border [&_svg]:opacity-60">
+          <WebhookIcon aria-hidden="true" />
+        </span>
+      </ItemMedia>
+
+      <ItemContent className="min-w-0 gap-1">
+        <ItemTitle className="min-w-0 gap-2">
+          <span className="min-w-0 truncate">{wh.name}</span>
+          <span className="flex shrink-0 items-center gap-1">
+            {endpointAlerts(wh).map((alert) => (
+              <EndpointAlertIndicator key={alert.id} alert={alert} />
+            ))}
+          </span>
+          <StatusIndicator status={endpointStatus(wh)} />
+        </ItemTitle>
+        <ItemDescription className="min-w-0">
+          <EndpointUrlCopy endpointName={wh.name} url={wh.url} />
+        </ItemDescription>
+        <ItemDescription className="min-w-0 truncate text-xs">
+          {events} · {wh.lastTriggeredAt ? `last delivery ${relativeTime(wh.lastTriggeredAt)}` : "never delivered"}
+        </ItemDescription>
+      </ItemContent>
+
+      <ItemActions className="gap-2 self-start sm:self-center">
+        <Switch
+          checked={wh.active}
+          onCheckedChange={onToggle}
+          aria-label={`Enable ${wh.name}`}
+        />
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label={`Open actions for ${wh.name}`}
+              >
+                <EllipsisVerticalIcon aria-hidden="true" />
+              </Button>
+            }
+          />
+          <DropdownMenuContent align="end" className="min-w-44">
+            <DropdownMenuGroup>
+              <DropdownMenuItem onClick={onTest} disabled={testing}>
+                <SendIcon aria-hidden="true" />
+                {testing ? "Sending test…" : "Send test delivery"}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onEdit}>
+                <PencilIcon aria-hidden="true" />
+                Edit endpoint
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem variant="destructive" onClick={onDelete}>
+                <Trash2Icon aria-hidden="true" />
+                Remove endpoint
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </ItemActions>
+    </Item>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
 export function WebhooksTable() {
+  const isMobile = useIsMobile();
   const [rows, setRows] = useState<Webhook[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Add/edit dialog state.
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<WebhookDraft>(EMPTY_DRAFT);
   const [submitting, setSubmitting] = useState(false);
   const [editorError, setEditorError] = useState<string | null>(null);
 
-  // Delete confirmation state.
   const [deleteTarget, setDeleteTarget] = useState<Webhook | null>(null);
   const [deleting, setDeleting] = useState(false);
-
-  // Per-row transient test feedback keyed by webhook id.
-  const [testResults, setTestResults] = useState<Record<string, string>>({});
   const [testingId, setTestingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -141,7 +326,7 @@ export function WebhooksTable() {
       const res = await apiGet<WebhookListResponse>("webhooks", { limit: 100 });
       setRows(res.data);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Failed to load webhooks.");
+      setError(errMessage(e, "Couldn't load webhooks. Refresh the page to try again."));
     } finally {
       setLoading(false);
     }
@@ -150,6 +335,9 @@ export function WebhooksTable() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const replaceRow = (id: string, next: Partial<Webhook>) =>
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...next } : r)));
 
   // --- Add / edit ----------------------------------------------------------
 
@@ -162,12 +350,7 @@ export function WebhooksTable() {
 
   const openEdit = useCallback((wh: Webhook) => {
     setEditingId(wh.id);
-    setDraft({
-      name: wh.name,
-      url: wh.url,
-      events: wh.events.join(", "),
-      active: wh.active,
-    });
+    setDraft({ name: wh.name, url: wh.url, events: wh.events.join(", "), active: wh.active });
     setEditorError(null);
     setEditorOpen(true);
   }, []);
@@ -191,23 +374,22 @@ export function WebhooksTable() {
       }
       setEditorOpen(false);
     } catch (e) {
-      setEditorError(e instanceof ApiError ? e.message : "Failed to save webhook.");
+      setEditorError(errMessage(e, "Couldn't save the webhook. Check the URL and try again."));
     } finally {
       setSubmitting(false);
     }
   }, [draft, editingId]);
 
-  // --- Active toggle (inline PATCH) ---------------------------------------
+  // --- Enable toggle (optimistic PATCH) -----------------------------------
 
   const toggleActive = useCallback(async (wh: Webhook, active: boolean) => {
-    // Optimistic update, rolled back on failure.
-    setRows((prev) => prev.map((r) => (r.id === wh.id ? { ...r, active } : r)));
+    replaceRow(wh.id, { active });
     try {
       const updated = await apiSend<Webhook>("PATCH", `webhooks/${wh.id}`, { active });
       setRows((prev) => prev.map((r) => (r.id === wh.id ? updated : r)));
     } catch (e) {
-      setRows((prev) => prev.map((r) => (r.id === wh.id ? { ...r, active: !active } : r)));
-      setError(e instanceof ApiError ? e.message : "Failed to update webhook.");
+      replaceRow(wh.id, { active: !active });
+      setError(errMessage(e, `Couldn't ${active ? "enable" : "pause"} ${wh.name}. Try again.`));
     }
   }, []);
 
@@ -221,7 +403,7 @@ export function WebhooksTable() {
       setRows((prev) => prev.filter((r) => r.id !== deleteTarget.id));
       setDeleteTarget(null);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Failed to delete webhook.");
+      setError(errMessage(e, "Couldn't delete the webhook. Try again."));
     } finally {
       setDeleting(false);
     }
@@ -231,229 +413,165 @@ export function WebhooksTable() {
 
   const testWebhook = useCallback(async (wh: Webhook) => {
     setTestingId(wh.id);
+    setError(null);
     try {
-      const res = await apiSend<TestResponse>("POST", `webhooks/${wh.id}/test`, undefined);
-      setRows((prev) =>
-        prev.map((r) =>
-          r.id === wh.id
-            ? { ...r, lastStatus: res.lastStatus, lastTriggeredAt: res.lastTriggeredAt }
-            : r,
-        ),
-      );
-      setTestResults((prev) => ({ ...prev, [wh.id]: res.lastStatus }));
+      const res = await apiSend<TestResponse>("POST", `webhooks/${wh.id}/test`);
+      replaceRow(wh.id, { lastStatus: res.lastStatus, lastTriggeredAt: res.lastTriggeredAt });
     } catch (e) {
-      setTestResults((prev) => ({
-        ...prev,
-        [wh.id]: e instanceof ApiError ? e.message : "Test failed",
-      }));
+      setError(errMessage(e, `Test delivery to ${wh.name} failed. Check the endpoint and try again.`));
     } finally {
       setTestingId(null);
     }
   }, []);
 
+  // --- Editor body (shared by the desktop Dialog and the mobile Sheet) ----
+
+  const editorTitle = editingId ? "Edit webhook" : "Add webhook";
+  const editorDescription = editingId
+    ? "Update this webhook's destination and event subscriptions."
+    : "Register a new outbound endpoint. A signing secret is generated automatically.";
+  const editorFields = (
+    <div className="flex flex-col gap-4">
+      <div className="grid gap-2">
+        <Label htmlFor="wh-name">Name</Label>
+        <Input
+          id="wh-name"
+          value={draft.name}
+          onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+          placeholder="Deploy notifier"
+        />
+      </div>
+      <div className="grid gap-2">
+        <Label htmlFor="wh-url">Endpoint URL</Label>
+        <Input
+          id="wh-url"
+          value={draft.url}
+          onChange={(e) => setDraft((d) => ({ ...d, url: e.target.value }))}
+          placeholder="https://example.com/hooks/incoming"
+          spellCheck={false}
+          className="font-mono"
+        />
+      </div>
+      <div className="grid gap-2">
+        <Label htmlFor="wh-events">Events</Label>
+        <Input
+          id="wh-events"
+          value={draft.events}
+          onChange={(e) => setDraft((d) => ({ ...d, events: e.target.value }))}
+          placeholder="task.created, project.updated"
+          spellCheck={false}
+        />
+        <p className="text-muted-foreground text-xs">Comma- or space-separated event types.</p>
+      </div>
+      <div className="flex items-center justify-between">
+        <Label htmlFor="wh-active">Enabled</Label>
+        <Switch
+          id="wh-active"
+          checked={draft.active}
+          onCheckedChange={(checked) => setDraft((d) => ({ ...d, active: checked }))}
+        />
+      </div>
+      <InlineError message={editorError} />
+    </div>
+  );
+  const editorActions = (
+    <>
+      <Button variant="outline" onClick={() => setEditorOpen(false)} disabled={submitting}>
+        Cancel
+      </Button>
+      <Button
+        onClick={submitDraft}
+        disabled={submitting || !draft.name.trim() || !draft.url.trim()}
+      >
+        {submitting ? "Saving…" : editingId ? "Save changes" : "Create webhook"}
+      </Button>
+    </>
+  );
+
   return (
-    <Card className="bg-card ring-1 ring-border/40">
-      <CardHeader className="flex flex-row items-start justify-between gap-4">
-        <div className="space-y-1">
-          <CardTitle>Webhooks</CardTitle>
-          <CardDescription>
-            Outbound HTTP endpoints that receive event payloads. Add, edit, test,
-            or remove deliveries.
-          </CardDescription>
-        </div>
-        <Button onClick={openCreate} size="sm">
-          <PlusIcon className="size-3.5" />
-          Add webhook
-        </Button>
-      </CardHeader>
+    <div className="flex w-full max-w-3xl flex-col gap-4">
+      <InlineError message={error} />
 
-      <CardContent className="flex flex-col gap-4">
-        <InlineError message={error} />
-
-        {loading ? (
-          <div className="space-y-2">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
+      <Frame>
+        <FrameHeader className="flex-row items-center justify-between gap-4 px-2! py-2.5!">
+          <div className="space-y-px">
+            <FrameTitle>Webhook endpoints</FrameTitle>
+            <FrameDescription>
+              {loading ? "Routes and status" : `${rows.length} ${rows.length === 1 ? "route" : "routes"} and their delivery health`}
+            </FrameDescription>
           </div>
-        ) : rows.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 rounded-lg bg-muted/20 py-12 text-center">
-            <p className="text-sm text-muted-foreground">No webhooks registered yet.</p>
-            <Button onClick={openCreate} size="sm" variant="outline">
-              <PlusIcon className="size-3.5" />
-              Add your first webhook
-            </Button>
-          </div>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow className="border-border/40">
-                <TableHead>Name</TableHead>
-                <TableHead>Endpoint</TableHead>
-                <TableHead>Events</TableHead>
-                <TableHead>Active</TableHead>
-                <TableHead>Last status</TableHead>
-                <TableHead>Last triggered</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((wh) => (
-                <TableRow key={wh.id} className="border-border/30">
-                  <TableCell className="font-medium">{wh.name}</TableCell>
-                  <TableCell className="max-w-[220px] truncate font-mono text-xs text-muted-foreground">
-                    {wh.url}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {wh.events.length === 0 ? (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      ) : (
-                        wh.events.slice(0, 3).map((ev) => (
-                          <Badge key={ev} variant="secondary" className="text-[10px]">
-                            {ev}
-                          </Badge>
-                        ))
-                      )}
-                      {wh.events.length > 3 ? (
-                        <Badge variant="outline" className="text-[10px]">
-                          +{wh.events.length - 3}
-                        </Badge>
-                      ) : null}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Switch
-                      aria-label={`Toggle ${wh.name}`}
-                      checked={wh.active}
-                      onCheckedChange={(checked) => void toggleActive(wh, checked)}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    {testResults[wh.id] ? (
-                      <span className="text-xs text-foreground">{testResults[wh.id]}</span>
-                    ) : wh.lastStatus ? (
-                      <Badge
-                        variant={wh.lastStatus.startsWith("2") ? "default" : "destructive"}
-                        className="text-[10px]"
-                      >
-                        {wh.lastStatus}
-                      </Badge>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    {wh.lastTriggeredAt ? relativeTime(wh.lastTriggeredAt) : "never"}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex justify-end gap-1">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => void testWebhook(wh)}
-                        disabled={testingId === wh.id}
-                        title="Send test delivery"
-                      >
-                        <SendIcon className="size-3.5" />
-                        {testingId === wh.id ? "Testing…" : "Test"}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => openEdit(wh)}
-                        title="Edit webhook"
-                      >
-                        <PencilIcon className="size-3.5" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setDeleteTarget(wh)}
-                        title="Delete webhook"
-                        className="text-destructive hover:text-destructive"
-                      >
-                        <Trash2Icon className="size-3.5" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </CardContent>
+          <Button onClick={openCreate}>
+            <PlusIcon aria-hidden="true" />
+            Add endpoint
+          </Button>
+        </FrameHeader>
 
-      {/* Add / edit dialog ----------------------------------------------- */}
-      <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{editingId ? "Edit webhook" : "Add webhook"}</DialogTitle>
-            <DialogDescription>
-              {editingId
-                ? "Update this webhook's destination and event subscriptions."
-                : "Register a new outbound endpoint. A signing secret is generated automatically."}
-            </DialogDescription>
-          </DialogHeader>
+        <FramePanel className="p-0!">
+          {loading ? (
+            <div className="space-y-2 p-4">
+              <Skeleton className="h-14 w-full" />
+              <Skeleton className="h-14 w-full" />
+            </div>
+          ) : rows.length === 0 ? (
+            <Empty className="border-0">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <WebhookIcon aria-hidden="true" />
+                </EmptyMedia>
+                <EmptyTitle>No webhooks yet</EmptyTitle>
+                <EmptyDescription>
+                  Add an endpoint to start receiving event payloads.
+                </EmptyDescription>
+              </EmptyHeader>
+              <EmptyContent>
+                <Button variant="outline" onClick={openCreate}>
+                  <PlusIcon aria-hidden="true" />
+                  Add your first endpoint
+                </Button>
+              </EmptyContent>
+            </Empty>
+          ) : (
+            rows.map((wh, index) => (
+              <div key={wh.id}>
+                {index > 0 ? <Separator /> : null}
+                <EndpointRow
+                  wh={wh}
+                  testing={testingId === wh.id}
+                  onToggle={(active) => void toggleActive(wh, active)}
+                  onTest={() => void testWebhook(wh)}
+                  onEdit={() => openEdit(wh)}
+                  onDelete={() => setDeleteTarget(wh)}
+                />
+              </div>
+            ))
+          )}
+        </FramePanel>
+      </Frame>
 
-          <div className="flex flex-col gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="wh-name">Name</Label>
-              <Input
-                id="wh-name"
-                value={draft.name}
-                onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
-                placeholder="Deploy notifier"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="wh-url">Endpoint URL</Label>
-              <Input
-                id="wh-url"
-                value={draft.url}
-                onChange={(e) => setDraft((d) => ({ ...d, url: e.target.value }))}
-                placeholder="https://example.com/hooks/incoming"
-                spellCheck={false}
-                className="font-mono text-xs"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="wh-events">Events</Label>
-              <Input
-                id="wh-events"
-                value={draft.events}
-                onChange={(e) => setDraft((d) => ({ ...d, events: e.target.value }))}
-                placeholder="task.created, project.updated"
-                spellCheck={false}
-              />
-              <p className="text-xs text-muted-foreground">
-                Comma- or space-separated event type strings.
-              </p>
-            </div>
-            <div className="flex items-center justify-between">
-              <Label htmlFor="wh-active">Active</Label>
-              <Switch
-                id="wh-active"
-                checked={draft.active}
-                onCheckedChange={(checked) => setDraft((d) => ({ ...d, active: checked }))}
-              />
-            </div>
-            <InlineError message={editorError} />
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditorOpen(false)} disabled={submitting}>
-              Cancel
-            </Button>
-            <Button
-              onClick={submitDraft}
-              disabled={submitting || !draft.name.trim() || !draft.url.trim()}
-            >
-              {submitting ? "Saving…" : editingId ? "Save changes" : "Create webhook"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Add / edit: Dialog on desktop, bottom Sheet on mobile ----------- */}
+      {isMobile ? (
+        <Sheet open={editorOpen} onOpenChange={setEditorOpen}>
+          <SheetContent side="bottom" className="max-h-[90dvh] overflow-y-auto rounded-t-xl">
+            <SheetHeader>
+              <SheetTitle>{editorTitle}</SheetTitle>
+              <SheetDescription>{editorDescription}</SheetDescription>
+            </SheetHeader>
+            <div className="px-4">{editorFields}</div>
+            <SheetFooter>{editorActions}</SheetFooter>
+          </SheetContent>
+        </Sheet>
+      ) : (
+        <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{editorTitle}</DialogTitle>
+              <DialogDescription>{editorDescription}</DialogDescription>
+            </DialogHeader>
+            {editorFields}
+            <DialogFooter>{editorActions}</DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Delete confirmation -------------------------------------------- */}
       <AlertDialog
@@ -464,25 +582,21 @@ export function WebhooksTable() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete webhook?</AlertDialogTitle>
+            <AlertDialogTitle>Remove webhook?</AlertDialogTitle>
             <AlertDialogDescription>
               This permanently removes{" "}
-              <span className="font-medium text-foreground">{deleteTarget?.name}</span>. Any
-              events subscribed to this endpoint will stop being delivered.
+              <span className="text-foreground font-medium">{deleteTarget?.name}</span>. Events
+              subscribed to this endpoint will stop being delivered.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
-              onClick={confirmDelete}
-              disabled={deleting}
-            >
-              {deleting ? "Deleting…" : "Delete"}
+            <AlertDialogAction variant="destructive" onClick={confirmDelete} disabled={deleting}>
+              {deleting ? "Removing…" : "Remove"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </Card>
+    </div>
   );
 }

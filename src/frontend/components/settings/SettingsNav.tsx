@@ -7,11 +7,8 @@
  * `/settings/*`, so the active section is derived from the current pathname at
  * render time (works for both SSR and the hydrated island).
  *
- * Monolith dark profile: no 1px borders — the active row is differentiated with
- * `bg-muted` + `ring-1 ring-border/40`, inactive rows are muted-foreground.
+ * Rendered without a client directive — it has no state.
  */
-
-"use client";
 
 import {
   ActivityIcon,
@@ -30,7 +27,7 @@ interface SettingsSection {
   href: string;
   /** Display label. */
   label: string;
-  /** One-line description shown under the label on wide screens. */
+  /** One-line description (link title). */
   description: string;
   /** Lucide icon for the row. */
   icon: LucideIcon;
@@ -83,18 +80,15 @@ interface SettingsNavProps {
 }
 
 /**
- * Left/top settings sub-navigation. Rendered as an island so the active styling
- * stays consistent with the rest of the hydrated settings UI, but it carries no
- * internal state — `active` is supplied by the host page.
+ * Settings section rail. Static (no hydration needed): `active` comes from the
+ * Astro page. Desktop: a vertical side-tab rail (ReUI profile-1 vertical Tabs
+ * look). Mobile: a horizontal scroll rail with a line indicator (line Tabs).
  */
 export function SettingsNav({ active }: SettingsNavProps) {
   return (
     <nav
       aria-label="Settings sections"
-      className={cn(
-        // Mobile: horizontal scroller. Desktop: vertical stack.
-        "flex gap-1 overflow-x-auto pb-2 md:flex-col md:overflow-visible md:pb-0",
-      )}
+      className="-mx-4 flex gap-1 overflow-x-auto border-b px-4 [scrollbar-width:none] md:mx-0 md:flex-col md:overflow-visible md:border-b-0 md:px-0"
     >
       {SETTINGS_SECTIONS.map((section) => {
         const isActive = active === section.href;
@@ -105,19 +99,17 @@ export function SettingsNav({ active }: SettingsNavProps) {
             href={section.href}
             aria-current={isActive ? "page" : undefined}
             data-active={isActive}
+            title={section.description}
             className={cn(
-              "group flex shrink-0 items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors",
-              "text-muted-foreground hover:bg-muted/40 hover:text-foreground",
-              "data-[active=true]:bg-muted data-[active=true]:text-foreground data-[active=true]:ring-1 data-[active=true]:ring-border/40",
+              "relative flex h-9 shrink-0 items-center gap-2 rounded-md px-2.5 text-sm font-medium whitespace-nowrap transition-colors",
+              "text-muted-foreground hover:text-foreground md:hover:bg-muted/60",
+              "data-[active=true]:text-foreground md:data-[active=true]:bg-muted",
+              // mobile line indicator under the active tab
+              "after:absolute after:inset-x-2 after:-bottom-px after:h-0.5 after:rounded-full data-[active=true]:after:bg-foreground md:after:hidden",
             )}
           >
-            <Icon className="size-4 shrink-0" />
-            <span className="flex flex-col">
-              <span className="font-medium">{section.label}</span>
-              <span className="hidden text-xs text-muted-foreground md:block">
-                {section.description}
-              </span>
-            </span>
+            <Icon className="size-4 shrink-0" aria-hidden="true" />
+            {section.label}
           </a>
         );
       })}

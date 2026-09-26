@@ -1,45 +1,38 @@
 ---
 /**
- * @fileoverview /notifications — realtime notifications page.
+ * RESPONSIVE STRATEGY
+ * desktop: page toolbar, then the inbox Frame (notification timeline) beside a 26rem test-composer Frame.
+ * mobile (390px): the composer stacks under the inbox; timeline rows wrap, "Mark read" stays on the title line.
+ * vehicle: same as mobile; reading-only use, each "Mark read" is a separate tap target.
  *
- * Mounts the existing `<NotificationsFeed />` island, which opens a long-lived
- * WebSocket to the NotificationsAgent Durable Object and renders the
- * server-authoritative `{ notifications, unread }` state with no polling.
+ * @fileoverview /notifications — notification inbox.
  *
- * Alongside it, `<SendTestNotification />` POSTs to /api/notifications (which
- * proxies through the same DO), so anything sent here appears in the feed in
- * realtime — a self-contained demonstration of the live transport.
+ * `<NotificationsFeed />` reads the D1-backed /api/notifications REST API and
+ * polls every 15s while visible (plain fetch island, so `client:load` is safe).
+ * `<SendTestNotification />` POSTs to the same API and pings the feed to
+ * refetch immediately.
  */
 
 import BaseLayout from "@/layouts/BaseLayout.astro";
+import { PageBody, PageToolbar } from "@/components/blocks/app-shell-12/components/page-toolbar";
 import { NotificationsFeed } from "@/components/NotificationsFeed";
 import { SendTestNotification } from "@/components/settings";
 ---
 
 <BaseLayout
   title="Notifications"
-  description="Realtime notification feed streamed over a WebSocket from the NotificationsAgent Durable Object."
+  description="Notification inbox backed by the notifications API."
 >
-  <div class="container mx-auto max-w-6xl px-4 py-10">
-    <header class="mb-8 flex flex-col gap-2">
-      <div class="flex items-center gap-3">
-        <span class="text-3xl">🔔</span>
-        <h1 class="text-3xl font-semibold tracking-tight">Notifications</h1>
-      </div>
-      <p class="max-w-2xl text-sm text-muted-foreground">
-        This feed streams over a WebSocket to the <code class="text-xs"
-          >NotificationsAgent</code
-        > Durable Object — new events, read-state changes, and clears arrive live
-        with no polling. Send a test notification below to watch it land in
-        realtime.
-      </p>
-    </header>
-
-    <div class="grid gap-6 lg:grid-cols-[1fr_minmax(0,28rem)]">
+  <PageBody>
+    <PageToolbar
+      title="Notifications"
+      description="Events from tasks, projects and the system. Mark items read or send a test to see one arrive."
+    />
+    <div class="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_26rem]">
       <NotificationsFeed client:load />
-      <div class="flex flex-col gap-6">
+      <div class="min-w-0">
         <SendTestNotification client:load />
       </div>
     </div>
-  </div>
+  </PageBody>
 </BaseLayout>

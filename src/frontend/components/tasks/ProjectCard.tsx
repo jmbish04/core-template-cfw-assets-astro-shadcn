@@ -1,23 +1,24 @@
 /**
- * @fileoverview ProjectCard — a single project tile for the ProjectList grid
- * (covers the hextaui "project-list" / "team-projects" card). Shows the accent
- * color dot, name, status badge, task count, owner, updated-relative time, and
- * a star toggle wired to `POST /api/projects/{id}/star`.
+ * @fileoverview ProjectCard — one project tile for the ProjectList, adapted
+ * from the ReUI Pro block `card-21` (a FramePanel inside a shared Frame grid:
+ * media tile + action top row, title, then a dot-separated meta line). The
+ * media tile carries the project's own colour; the action is the star toggle
+ * (`POST /api/projects/{id}/star`). Clicking the tile opens the preview.
  */
 
-import { FolderIcon, StarIcon } from "lucide-react";
+import { StarIcon } from "lucide-react";
 
+import { FramePanel } from "@/components/reui/frame";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { compactNumber, relativeTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { relativeTime } from "@/lib/format";
 
 import { ProjectStatusBadge } from "./StatusBadge";
 import type { Project } from "./types";
 
 export interface ProjectCardProps {
   project: Project;
-  /** Toggle the star; receives the project id. Optimistic at the parent. */
+  /** Toggle the star. Optimistic at the parent. */
   onToggleStar: (project: Project) => void;
   /** Open the project preview modal. */
   onOpen: (project: Project) => void;
@@ -27,7 +28,7 @@ export interface ProjectCardProps {
 
 export function ProjectCard({ project, onToggleStar, onOpen, starPending }: ProjectCardProps) {
   return (
-    <Card
+    <FramePanel
       role="button"
       tabIndex={0}
       aria-label={`Open project ${project.name}`}
@@ -39,57 +40,51 @@ export function ProjectCard({ project, onToggleStar, onOpen, starPending }: Proj
           onOpen(project);
         }
       }}
-      className="cursor-pointer transition-colors hover:bg-card/80"
+      className="flex cursor-pointer flex-col gap-5 transition-colors outline-none hover:bg-muted/30 focus-visible:ring-2 focus-visible:ring-ring max-md:gap-3"
     >
-      <CardContent className="flex flex-col gap-4">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <span
-              aria-hidden
-              className="size-3 shrink-0 rounded-full ring-1 ring-foreground/10"
-              style={{ backgroundColor: project.color }}
-            />
-            <span className="truncate text-sm font-medium">{project.name}</span>
-          </div>
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            aria-label={project.starred ? "Unstar project" : "Star project"}
-            aria-pressed={project.starred}
-            disabled={starPending}
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleStar(project);
-            }}
-          >
-            <StarIcon
-              className={cn(
-                "size-4",
-                project.starred ? "fill-amber-400 text-amber-400" : "text-muted-foreground",
-              )}
-            />
-          </Button>
-        </div>
-
-        {project.description ? (
-          <p className="line-clamp-2 text-sm text-muted-foreground">{project.description}</p>
-        ) : (
-          <p className="text-sm text-muted-foreground/60 italic">No description</p>
-        )}
-
-        <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2.5">
+          {/* project.color is user data (stored hex), so it stays an inline style. */}
+          <span
+            aria-hidden
+            className="size-8 shrink-0 rounded-md ring-1 ring-foreground/10"
+            style={{ backgroundColor: project.color }}
+          />
           <ProjectStatusBadge status={project.status} />
-          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-            <FolderIcon className="size-3.5" />
-            {project.taskCount} {project.taskCount === 1 ? "task" : "tasks"}
-          </span>
         </div>
+        <Button
+          variant="outline"
+          size="icon-sm"
+          aria-label={project.starred ? `Unstar ${project.name}` : `Star ${project.name}`}
+          aria-pressed={project.starred}
+          disabled={starPending}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleStar(project);
+          }}
+        >
+          <StarIcon
+            aria-hidden
+            className={cn(project.starred ? "fill-warning text-warning" : "text-muted-foreground")}
+          />
+        </Button>
+      </div>
 
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span className="truncate">{project.owner}</span>
-          <span>Updated {relativeTime(project.updatedAt)}</span>
+      <div className="flex min-w-0 flex-col gap-1.5">
+        <span className="truncate text-sm leading-tight font-semibold">{project.name}</span>
+        <p className="line-clamp-2 text-sm text-muted-foreground max-md:hidden">
+          {project.description || "No description"}
+        </p>
+        <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+          <span className="truncate font-medium text-foreground">{project.owner}</span>
+          <span aria-hidden className="size-1 shrink-0 rounded-full bg-muted-foreground/40" />
+          <span className="shrink-0 tabular-nums">
+            {compactNumber(project.taskCount)} {project.taskCount === 1 ? "task" : "tasks"}
+          </span>
+          <span aria-hidden className="size-1 shrink-0 rounded-full bg-muted-foreground/40" />
+          <span className="shrink-0">Updated {relativeTime(project.updatedAt)}</span>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </FramePanel>
   );
 }

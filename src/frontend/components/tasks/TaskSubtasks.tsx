@@ -34,7 +34,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ListTreeIcon, PlusIcon, Unlink2Icon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Frame, FrameHeader, FramePanel, FrameTitle } from "@/components/reui/frame";
 import { apiGet, apiSend, ApiError } from "@/lib/api";
 
 import { AssigneeAvatar, ErrorState } from "./Shared";
@@ -153,19 +153,19 @@ export function TaskSubtasks({
   );
 
   return (
-    <Card>
-      <CardHeader>
+    <Frame spacing="sm">
+      <FrameHeader>
         <div className="flex items-center justify-between gap-2">
-          <CardTitle className="flex items-center gap-2 text-sm">
+          <FrameTitle className="flex items-center gap-2 text-sm">
             <ListTreeIcon className="size-4 text-muted-foreground" />
             Subtasks
-          </CardTitle>
+          </FrameTitle>
           <span className="text-xs tabular-nums text-muted-foreground">
             {hasChildren ? `${doneCount}/${children.length} completed` : `${completion}% complete`}
           </span>
         </div>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+      </FrameHeader>
+      <FramePanel className="flex flex-col gap-4">
         {error ? <ErrorState message={error} onRetry={load} /> : null}
 
         {/* Child list. Clicking a row opens the quick-look preview. */}
@@ -245,7 +245,7 @@ export function TaskSubtasks({
             </Button>
           }
         />
-      </CardContent>
+      </FramePanel>
 
       {/* Quick-look preview for a clicked child → "Open full page" → /tasks/{id}. */}
       <TaskPreviewDialog
@@ -257,6 +257,6 @@ export function TaskSubtasks({
           setPreview(updated);
         }}
       />
-    </Card>
+    </Frame>
   );
 }

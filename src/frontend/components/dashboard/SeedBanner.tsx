@@ -13,7 +13,7 @@ import { useState } from "react";
 import { DatabaseIcon, Loader2Icon, SparklesIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Frame, FramePanel } from "@/components/reui/frame";
 import { ApiError, apiSend } from "@/lib/api";
 
 import type { DashboardStats } from "./types";
@@ -48,17 +48,17 @@ export function SeedBanner({
       await apiSend<SeedResult>("POST", "/seed");
       onSeeded();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to seed demo data.");
+      setError(err instanceof ApiError ? `${err.message} — try again.` : "Could not seed demo data. Try again.");
     } finally {
       setSeeding(false);
     }
   }
 
   return (
-    <Card className="bg-card ring-1 ring-border/40">
-      <CardContent className="flex flex-col items-start gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+    <Frame className="w-full">
+      <FramePanel className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-3">
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted text-foreground">
             <DatabaseIcon className="size-5" />
           </div>
           <div>
@@ -67,7 +67,7 @@ export function SeedBanner({
               Seed sample projects, tasks, activity, and notifications to see every
               chart, the realtime feed, and the Workers&nbsp;AI insights in action.
             </p>
-            {error && <p className="mt-1 text-sm text-rose-400">{error}</p>}
+            {error && <p className="mt-1 text-sm text-destructive">{error}</p>}
           </div>
         </div>
         <Button onClick={seed} disabled={seeding} className="shrink-0 gap-2">
@@ -78,7 +78,7 @@ export function SeedBanner({
           )}
           {seeding ? "Seeding…" : "Seed demo data"}
         </Button>
-      </CardContent>
-    </Card>
+      </FramePanel>
+    </Frame>
   );
 }

@@ -10,7 +10,6 @@
 
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 
-import { ChatBroker } from "../../ai/agents/ChatBroker";
 import {
   BEST_PRACTICES_TABLE_DESCRIPTION,
   BEST_PRACTICES_COLUMN_DESCRIPTIONS,
@@ -76,6 +75,14 @@ import {
   NOTIFICATIONS_TABLE_DESCRIPTION,
   NOTIFICATIONS_COLUMN_DESCRIPTIONS,
 } from "../../db/schemas/notifications/notifications";
+import {
+  CHAT_THREADS_TABLE_DESCRIPTION,
+  CHAT_THREADS_COLUMN_DESCRIPTIONS,
+} from "../../db/schemas/chat/threads";
+import {
+  CHAT_MESSAGES_TABLE_DESCRIPTION,
+  CHAT_MESSAGES_COLUMN_DESCRIPTIONS,
+} from "../../db/schemas/chat/messages";
 
 // ---------------------------------------------------------------------------
 // Registry — maps D1 table name → descriptions from schema modules
@@ -160,57 +167,26 @@ const TABLE_DOCS: Record<string, TableDocEntry> = {
     tableDescription: NOTIFICATIONS_TABLE_DESCRIPTION,
     columnDescriptions: NOTIFICATIONS_COLUMN_DESCRIPTIONS,
   },
+  // Domain — chat
+  chat_threads: {
+    tableDescription: CHAT_THREADS_TABLE_DESCRIPTION,
+    columnDescriptions: CHAT_THREADS_COLUMN_DESCRIPTIONS,
+  },
+  chat_messages: {
+    tableDescription: CHAT_MESSAGES_TABLE_DESCRIPTION,
+    columnDescriptions: CHAT_MESSAGES_COLUMN_DESCRIPTIONS,
+  },
 };
 
 const TABLE_NAMES = Object.keys(TABLE_DOCS);
 
 // ---------------------------------------------------------------------------
-// Agent metadata — the Agents SDK showcase agents
+// Agent metadata — removed with the Agents SDK / Durable Objects
 // ---------------------------------------------------------------------------
-
-/**
- * Lightweight metadata descriptors for the showcase Durable Object agents that
- * don't (yet) expose a static `docsMetadata()`. Keeps the `/docs/agents` page
- * populated without forcing every agent to implement the full contract.
- */
-const SHOWCASE_AGENTS = [
-  {
-    name: "CodeModeAgent",
-    className: "CodeModeAgent",
-    description:
-      "Demonstrates server-side tool calling: the agent generates and reasons over code, exposing callable RPC methods to the frontend.",
-    docsPath: "/docs/agents/code-mode",
-    methods: [] as Array<{ name: string; description: string }>,
-    tools: [] as string[],
-  },
-  {
-    name: "BrowserHitlAgent",
-    className: "BrowserHitlAgent",
-    description:
-      "Human-in-the-loop browser automation: proposes actions, persists them as proposals, and waits for approval before continuing.",
-    docsPath: "/docs/agents/browser-hitl",
-    methods: [],
-    tools: [],
-  },
-  {
-    name: "WorkflowsAgent",
-    className: "WorkflowsAgent",
-    description:
-      "Durable, multi-step workflows that survive restarts — showcases scheduled tasks and durable execution on a Durable Object.",
-    docsPath: "/docs/agents/workflows",
-    methods: [],
-    tools: [],
-  },
-  {
-    name: "ArtifactAgent",
-    className: "ArtifactAgent",
-    description:
-      "Streams structured artifacts (documents, canvases) back to an assistant-ui surface with incremental updates.",
-    docsPath: "/docs/agents/artifacts",
-    methods: [],
-    tools: [],
-  },
-];
+//
+// This template no longer has any Durable Object agents. GET /api/docs/agents
+// returns an empty list (see below) rather than a hand-rolled catalog — every
+// inference call now goes through the CORE_GUARDIAN service binding.
 
 // ---------------------------------------------------------------------------
 // Zod schemas for responses
@@ -340,10 +316,9 @@ docsRouter.openapi(
     },
   }),
   (async (c: any) => {
-    const agents = [
-      { ...ChatBroker.docsMetadata(), tools: [] as string[] },
-      ...SHOWCASE_AGENTS,
-    ];
+    // No Durable Object agents in this template — everything routes
+    // through the CORE_GUARDIAN service binding instead.
+    const agents: unknown[] = [];
 
     return c.json({ agents });
   }) as any,

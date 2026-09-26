@@ -1,33 +1,30 @@
 /**
- * @fileoverview PreferencesForm — Appearance, Language & Region, and
- * Accessibility preferences editor.
+ * @fileoverview PreferencesForm — Appearance, Language & region, and
+ * Accessibility preferences, built on ReUI settings-9 (collapsible Frame
+ * sections of Item rows mixing Select and Switch controls).
  *
- * Loads the single 'default' preferences row from `GET /api/settings/preferences`
- * and persists edits with `PUT /api/settings/preferences`. All fields are
- * optional on the wire; we send the full working copy on save. Errors are
- * surfaced inline via `ApiError.message`; a transient "Saved" flash confirms
- * success.
- *
- * Monolith dark profile: shadcn Card/Select/Switch primitives, settings rows
- * divided by `divide-border/40`, no traditional 1px borders.
+ * Loads the single 'default' row from `GET /api/settings/preferences` and saves
+ * the working copy with `PUT /api/settings/preferences` via the footer
+ * save + discard bar. Discard restores the last saved snapshot.
  */
 
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { Button } from "@/components/ui/button";
+import { ChevronRightIcon } from "lucide-react";
+
+import { Frame, FrameHeader, FramePanel, FrameTitle } from "@/components/reui/frame";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -38,17 +35,16 @@ import { apiGet, ApiError, apiSend } from "@/lib/api";
 
 import {
   InlineError,
+  type Option,
   RowSkeleton,
-  SavedFlash,
-  SectionHeader,
-  SettingsRow,
-  SettingsRowGroup,
+  SaveBar,
+  SettingRow,
+  SettingsRows,
   useSavedFlash,
 } from "./shared";
 
 // ---------------------------------------------------------------------------
-// Wire types — mirror `selectPreferencesSchema` (createdAt omitted; we only
-// read/write the editable surface).
+// Wire types — mirror `selectPreferencesSchema`.
 // ---------------------------------------------------------------------------
 
 interface Preferences {
@@ -70,145 +66,239 @@ interface Preferences {
   updatedAt: string | number | Date;
 }
 
-/** Body accepted by PUT /api/settings/preferences (all fields optional). */
-type PreferencesPatch = Partial<Omit<Preferences, "id" | "updatedAt">>;
+type Editable = Omit<Preferences, "id" | "updatedAt">;
+type BoolKey = {
+  [K in keyof Editable]: Editable[K] extends boolean ? K : never;
+}[keyof Editable];
+type StringKey = Exclude<keyof Editable, BoolKey>;
+
+/** Strip read-only fields so snapshots compare only what the form edits. */
+function editable(p: Preferences & { createdAt?: unknown }): Editable {
+  const { id: _id, updatedAt: _u, createdAt: _c, ...rest } = p;
+  return rest;
+}
 
 // ---------------------------------------------------------------------------
-// Option lists
+// Section definitions (settings-9 PREFERENCE_SECTIONS shape, real fields)
 // ---------------------------------------------------------------------------
 
-const THEME_OPTIONS = [
-  { value: "light", label: "Light" },
-  { value: "dark", label: "Dark" },
-  { value: "system", label: "System" },
-];
+type Row =
+  | { kind: "select"; key: StringKey; title: string; description: string; options: Option[] }
+  | { kind: "switch"; key: BoolKey; title: string; description: string }
+  | { kind: "color"; key: "accentColor"; title: string; description: string };
 
-const FONT_SIZE_OPTIONS = [
-  { value: "sm", label: "Small" },
-  { value: "md", label: "Medium" },
-  { value: "lg", label: "Large" },
-];
-
-const DENSITY_OPTIONS = [
-  { value: "compact", label: "Compact" },
-  { value: "comfortable", label: "Comfortable" },
-  { value: "spacious", label: "Spacious" },
-];
-
-const LANGUAGE_OPTIONS = [
-  { value: "en", label: "English" },
-  { value: "fr", label: "Français" },
-  { value: "de", label: "Deutsch" },
-  { value: "es", label: "Español" },
-  { value: "ja", label: "日本語" },
-];
-
-const TIMEZONE_OPTIONS = [
-  { value: "UTC", label: "UTC" },
-  { value: "America/New_York", label: "America/New_York" },
-  { value: "America/Los_Angeles", label: "America/Los_Angeles" },
-  { value: "Europe/London", label: "Europe/London" },
-  { value: "Europe/Berlin", label: "Europe/Berlin" },
-  { value: "Asia/Tokyo", label: "Asia/Tokyo" },
-];
-
-const DATE_FORMAT_OPTIONS = [
-  { value: "MM/DD/YYYY", label: "MM/DD/YYYY" },
-  { value: "DD/MM/YYYY", label: "DD/MM/YYYY" },
-  { value: "YYYY-MM-DD", label: "YYYY-MM-DD" },
-];
-
-const TIME_FORMAT_OPTIONS = [
-  { value: "12h", label: "12-hour" },
-  { value: "24h", label: "24-hour" },
-];
-
-const NUMBER_FORMAT_OPTIONS = [
-  { value: "en-US", label: "1,234.56 (en-US)" },
-  { value: "de-DE", label: "1.234,56 (de-DE)" },
-  { value: "fr-FR", label: "1 234,56 (fr-FR)" },
-];
-
-/** Accessibility toggle definitions: key + label + description. */
-const ACCESSIBILITY_TOGGLES: {
-  key: keyof Pick<
-    Preferences,
-    "animations" | "reducedMotion" | "highContrast" | "screenReader" | "keyboardShortcuts"
-  >;
-  label: string;
-  description: string;
-}[] = [
+const SECTIONS: { id: string; title: string; rows: Row[] }[] = [
   {
-    key: "animations",
-    label: "Animations",
-    description: "Enable CSS transitions and motion across the interface.",
+    id: "appearance",
+    title: "Appearance",
+    rows: [
+      {
+        kind: "select",
+        key: "theme",
+        title: "Theme",
+        description: "Color scheme used across the interface.",
+        options: [
+          { value: "light", label: "Light" },
+          { value: "dark", label: "Dark" },
+          { value: "system", label: "System" },
+        ],
+      },
+      {
+        kind: "color",
+        key: "accentColor",
+        title: "Accent color",
+        description: "Hex accent applied to highlights and primary actions.",
+      },
+      {
+        kind: "select",
+        key: "fontSize",
+        title: "Font size",
+        description: "Base font size token.",
+        options: [
+          { value: "sm", label: "Small" },
+          { value: "md", label: "Medium" },
+          { value: "lg", label: "Large" },
+        ],
+      },
+      {
+        kind: "select",
+        key: "density",
+        title: "Density",
+        description: "Spacing between interface elements.",
+        options: [
+          { value: "compact", label: "Compact" },
+          { value: "comfortable", label: "Comfortable" },
+          { value: "spacious", label: "Spacious" },
+        ],
+      },
+    ],
   },
   {
-    key: "reducedMotion",
-    label: "Reduced motion",
-    description: "Honor the operating system's reduced-motion preference.",
+    id: "region",
+    title: "Language & region",
+    rows: [
+      {
+        kind: "select",
+        key: "language",
+        title: "Language",
+        description: "Interface language.",
+        options: [
+          { value: "en", label: "English" },
+          { value: "fr", label: "Français" },
+          { value: "de", label: "Deutsch" },
+          { value: "es", label: "Español" },
+          { value: "ja", label: "日本語" },
+        ],
+      },
+      {
+        kind: "select",
+        key: "timezone",
+        title: "Timezone",
+        description: "Used to render dates and times.",
+        options: [
+          { value: "UTC", label: "UTC" },
+          { value: "America/New_York", label: "New York" },
+          { value: "America/Los_Angeles", label: "Los Angeles" },
+          { value: "Europe/London", label: "London" },
+          { value: "Europe/Berlin", label: "Berlin" },
+          { value: "Asia/Tokyo", label: "Tokyo" },
+        ],
+      },
+      {
+        kind: "select",
+        key: "dateFormat",
+        title: "Date format",
+        description: "How calendar dates are displayed.",
+        options: [
+          { value: "MM/DD/YYYY", label: "MM/DD/YYYY" },
+          { value: "DD/MM/YYYY", label: "DD/MM/YYYY" },
+          { value: "YYYY-MM-DD", label: "YYYY-MM-DD" },
+        ],
+      },
+      {
+        kind: "select",
+        key: "timeFormat",
+        title: "Time format",
+        description: "12- or 24-hour clock.",
+        options: [
+          { value: "12h", label: "12-hour" },
+          { value: "24h", label: "24-hour" },
+        ],
+      },
+      {
+        kind: "select",
+        key: "numberFormat",
+        title: "Number format",
+        description: "Locale used for grouping and decimals.",
+        options: [
+          { value: "en-US", label: "1,234.56" },
+          { value: "de-DE", label: "1.234,56" },
+          { value: "fr-FR", label: "1 234,56" },
+        ],
+      },
+    ],
   },
   {
-    key: "highContrast",
-    label: "High contrast",
-    description: "Increase contrast of text and controls for legibility.",
-  },
-  {
-    key: "screenReader",
-    label: "Screen reader optimizations",
-    description: "Emit richer ARIA markup tuned for assistive technology.",
-  },
-  {
-    key: "keyboardShortcuts",
-    label: "Keyboard shortcuts",
-    description: "Enable global keyboard shortcut bindings.",
+    id: "accessibility",
+    title: "Accessibility",
+    rows: [
+      {
+        kind: "switch",
+        key: "animations",
+        title: "Animations",
+        description: "Enable transitions and motion across the interface.",
+      },
+      {
+        kind: "switch",
+        key: "reducedMotion",
+        title: "Reduced motion",
+        description: "Honor the operating system's reduced-motion preference.",
+      },
+      {
+        kind: "switch",
+        key: "highContrast",
+        title: "High contrast",
+        description: "Increase contrast of text and controls for legibility.",
+      },
+      {
+        kind: "switch",
+        key: "screenReader",
+        title: "Screen reader optimizations",
+        description: "Emit richer ARIA markup tuned for assistive technology.",
+      },
+      {
+        kind: "switch",
+        key: "keyboardShortcuts",
+        title: "Keyboard shortcuts",
+        description: "Enable global keyboard shortcut bindings.",
+      },
+    ],
   },
 ];
 
 // ---------------------------------------------------------------------------
-// A reusable labeled <Select> row bound to a preferences field.
+// Row control
 // ---------------------------------------------------------------------------
 
-function SelectRow({
-  id,
-  label,
-  description,
-  value,
-  options,
-  onChange,
+function RowControl({
+  row,
+  prefs,
+  update,
 }: {
-  id: string;
-  label: string;
-  description?: string;
-  value: string;
-  options: { value: string; label: string }[];
-  onChange: (value: string) => void;
+  row: Row;
+  prefs: Editable;
+  update: (patch: Partial<Editable>) => void;
 }) {
+  if (row.kind === "switch") {
+    return (
+      <Switch
+        aria-label={row.title}
+        checked={prefs[row.key]}
+        onCheckedChange={(checked) => update({ [row.key]: checked })}
+      />
+    );
+  }
+  if (row.kind === "color") {
+    return (
+      <div className="flex items-center gap-2">
+        <input
+          type="color"
+          aria-label="Accent color"
+          value={prefs.accentColor}
+          onChange={(e) => update({ accentColor: e.target.value })}
+          className="size-9 cursor-pointer rounded-md border bg-transparent"
+        />
+        <Input
+          aria-label="Accent color hex"
+          value={prefs.accentColor}
+          onChange={(e) => update({ accentColor: e.target.value })}
+          spellCheck={false}
+          className="w-28 font-mono"
+        />
+      </div>
+    );
+  }
   return (
-    <SettingsRow
-      label={label}
-      description={description}
-      htmlFor={id}
-      control={
-        <Select
-          value={value}
-          onValueChange={(next) => {
-            if (typeof next === "string") onChange(next);
-          }}
-        >
-          <SelectTrigger id={id} className="w-48">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {options.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      }
-    />
+    <Select
+      items={row.options}
+      value={prefs[row.key]}
+      onValueChange={(next) => {
+        if (typeof next === "string") update({ [row.key]: next });
+      }}
+    >
+      <SelectTrigger className="w-40" aria-label={row.title}>
+        <SelectValue placeholder={`Select ${row.title.toLowerCase()}`} />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectGroup>
+          {row.options.map((opt) => (
+            <SelectItem key={opt.value} value={opt.value}>
+              {opt.label}
+            </SelectItem>
+          ))}
+        </SelectGroup>
+      </SelectContent>
+    </Select>
   );
 }
 
@@ -217,7 +307,8 @@ function SelectRow({
 // ---------------------------------------------------------------------------
 
 export function PreferencesForm() {
-  const [prefs, setPrefs] = useState<Preferences | null>(null);
+  const [savedPrefs, setSavedPrefs] = useState<Editable | null>(null);
+  const [prefs, setPrefs] = useState<Editable | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -227,10 +318,15 @@ export function PreferencesForm() {
     setLoading(true);
     setError(null);
     try {
-      const row = await apiGet<Preferences>("settings/preferences");
+      const row = editable(await apiGet<Preferences>("settings/preferences"));
+      setSavedPrefs(row);
       setPrefs(row);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Failed to load preferences.");
+      setError(
+        e instanceof ApiError
+          ? e.message
+          : "Couldn't load preferences. Refresh the page to try again.",
+      );
     } finally {
       setLoading(false);
     }
@@ -240,204 +336,86 @@ export function PreferencesForm() {
     void load();
   }, [load]);
 
-  /** Apply a partial patch to the in-memory working copy. */
-  const update = useCallback((patch: PreferencesPatch) => {
+  const update = useCallback((patch: Partial<Editable>) => {
     setPrefs((prev) => (prev ? { ...prev, ...patch } : prev));
   }, []);
+
+  const dirty = useMemo(
+    () => JSON.stringify(prefs) !== JSON.stringify(savedPrefs),
+    [prefs, savedPrefs],
+  );
 
   const save = useCallback(async () => {
     if (!prefs) return;
     setSaving(true);
     setError(null);
     try {
-      const body: PreferencesPatch = {
-        theme: prefs.theme,
-        accentColor: prefs.accentColor,
-        fontSize: prefs.fontSize,
-        density: prefs.density,
-        language: prefs.language,
-        timezone: prefs.timezone,
-        dateFormat: prefs.dateFormat,
-        timeFormat: prefs.timeFormat,
-        numberFormat: prefs.numberFormat,
-        animations: prefs.animations,
-        reducedMotion: prefs.reducedMotion,
-        highContrast: prefs.highContrast,
-        screenReader: prefs.screenReader,
-        keyboardShortcuts: prefs.keyboardShortcuts,
-      };
-      const updated = await apiSend<Preferences>("PUT", "settings/preferences", body);
-      setPrefs(updated);
+      const row = editable(
+        await apiSend<Preferences>("PUT", "settings/preferences", prefs),
+      );
+      setSavedPrefs(row);
+      setPrefs(row);
       flashSaved();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Failed to save preferences.");
+      setError(
+        e instanceof ApiError
+          ? e.message
+          : "Couldn't save preferences. Check your connection and try again.",
+      );
     } finally {
       setSaving(false);
     }
   }, [prefs, flashSaved]);
 
   return (
-    <Card className="bg-card ring-1 ring-border/40">
-      <CardHeader className="flex flex-row items-start justify-between gap-4">
-        <div className="space-y-1">
-          <CardTitle>Preferences</CardTitle>
-          <CardDescription>
-            Tune the appearance, locale, and accessibility of your workspace.
-          </CardDescription>
-        </div>
-        <div className="flex shrink-0 items-center gap-3">
-          <SavedFlash show={saved} />
-          <Button onClick={save} disabled={saving || loading || !prefs} size="sm">
-            {saving ? "Saving…" : "Save Changes"}
-          </Button>
-        </div>
-      </CardHeader>
+    <div className="flex w-full max-w-2xl flex-col gap-5">
+      <InlineError message={error} />
 
-      <CardContent className="flex flex-col gap-10">
-        <InlineError message={error} />
-
-        {loading || !prefs ? (
-          <div className="divide-y divide-border/40">
-            <RowSkeleton />
-            <RowSkeleton />
-            <RowSkeleton />
-          </div>
-        ) : (
-          <>
-            {/* Appearance ---------------------------------------------------- */}
-            <section className="space-y-2">
-              <SectionHeader
-                title="Appearance"
-                description="Theme, accent, and layout density."
-              />
-              <SettingsRowGroup>
-                <SelectRow
-                  id="pref-theme"
-                  label="Theme"
-                  description="Color scheme used across the interface."
-                  value={prefs.theme}
-                  options={THEME_OPTIONS}
-                  onChange={(theme) => update({ theme })}
+      {SECTIONS.map((section) => (
+        <Frame key={section.id} stacked dense spacing="sm">
+          <Collapsible defaultOpen>
+            <CollapsibleTrigger className="flex w-full">
+              <FrameHeader className="flex grow flex-row items-center justify-between gap-2 px-4 py-2">
+                <FrameTitle>{section.title}</FrameTitle>
+                <ChevronRightIcon
+                  className="text-muted-foreground mr-2 size-4 transition-transform in-data-open:rotate-90"
+                  aria-hidden="true"
                 />
-                <SettingsRow
-                  label="Accent color"
-                  description="Hex accent applied to highlights and primary actions."
-                  htmlFor="pref-accent"
-                  control={
-                    <div className="flex items-center gap-2">
-                      <input
-                        id="pref-accent"
-                        type="color"
-                        aria-label="Accent color"
-                        value={prefs.accentColor}
-                        onChange={(e) => update({ accentColor: e.target.value })}
-                        className="size-9 cursor-pointer rounded-md bg-transparent ring-1 ring-border/40"
+              </FrameHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <FramePanel className="p-0!">
+                {loading || !prefs ? (
+                  <SettingsRows>
+                    <RowSkeleton />
+                    <RowSkeleton />
+                  </SettingsRows>
+                ) : (
+                  <SettingsRows>
+                    {section.rows.map((row) => (
+                      <SettingRow
+                        key={row.key}
+                        title={row.title}
+                        description={row.description}
+                        control={<RowControl row={row} prefs={prefs} update={update} />}
                       />
-                      <Input
-                        aria-label="Accent color hex"
-                        value={prefs.accentColor}
-                        onChange={(e) => update({ accentColor: e.target.value })}
-                        spellCheck={false}
-                        className="w-28 font-mono"
-                      />
-                    </div>
-                  }
-                />
-                <SelectRow
-                  id="pref-fontsize"
-                  label="Font size"
-                  description="Base font size token."
-                  value={prefs.fontSize}
-                  options={FONT_SIZE_OPTIONS}
-                  onChange={(fontSize) => update({ fontSize })}
-                />
-                <SelectRow
-                  id="pref-density"
-                  label="Density"
-                  description="Spacing between interface elements."
-                  value={prefs.density}
-                  options={DENSITY_OPTIONS}
-                  onChange={(density) => update({ density })}
-                />
-              </SettingsRowGroup>
-            </section>
+                    ))}
+                  </SettingsRows>
+                )}
+              </FramePanel>
+            </CollapsibleContent>
+          </Collapsible>
+        </Frame>
+      ))}
 
-            {/* Language & Region -------------------------------------------- */}
-            <section className="space-y-2">
-              <SectionHeader
-                title="Language & Region"
-                description="Locale, timezone, and formatting."
-              />
-              <SettingsRowGroup>
-                <SelectRow
-                  id="pref-language"
-                  label="Language"
-                  description="Interface language."
-                  value={prefs.language}
-                  options={LANGUAGE_OPTIONS}
-                  onChange={(language) => update({ language })}
-                />
-                <SelectRow
-                  id="pref-timezone"
-                  label="Timezone"
-                  description="Used to render dates and times."
-                  value={prefs.timezone}
-                  options={TIMEZONE_OPTIONS}
-                  onChange={(timezone) => update({ timezone })}
-                />
-                <SelectRow
-                  id="pref-dateformat"
-                  label="Date format"
-                  description="How calendar dates are displayed."
-                  value={prefs.dateFormat}
-                  options={DATE_FORMAT_OPTIONS}
-                  onChange={(dateFormat) => update({ dateFormat })}
-                />
-                <SelectRow
-                  id="pref-timeformat"
-                  label="Time format"
-                  description="12- or 24-hour clock."
-                  value={prefs.timeFormat}
-                  options={TIME_FORMAT_OPTIONS}
-                  onChange={(timeFormat) => update({ timeFormat })}
-                />
-                <SelectRow
-                  id="pref-numberformat"
-                  label="Number format"
-                  description="Locale used for grouping and decimals."
-                  value={prefs.numberFormat}
-                  options={NUMBER_FORMAT_OPTIONS}
-                  onChange={(numberFormat) => update({ numberFormat })}
-                />
-              </SettingsRowGroup>
-            </section>
-
-            {/* Accessibility ------------------------------------------------- */}
-            <section className="space-y-2">
-              <SectionHeader
-                title="Accessibility"
-                description="Motion, contrast, and assistive technology support."
-              />
-              <SettingsRowGroup>
-                {ACCESSIBILITY_TOGGLES.map((toggle) => (
-                  <SettingsRow
-                    key={toggle.key}
-                    label={toggle.label}
-                    description={toggle.description}
-                    control={
-                      <Switch
-                        aria-label={toggle.label}
-                        checked={prefs[toggle.key]}
-                        onCheckedChange={(checked) => update({ [toggle.key]: checked })}
-                      />
-                    }
-                  />
-                ))}
-              </SettingsRowGroup>
-            </section>
-          </>
-        )}
-      </CardContent>
-    </Card>
+      <SaveBar
+        dirty={dirty}
+        saving={saving}
+        saved={saved}
+        disabled={!prefs}
+        onSave={save}
+        onDiscard={() => setPrefs(savedPrefs)}
+      />
+    </div>
   );
 }

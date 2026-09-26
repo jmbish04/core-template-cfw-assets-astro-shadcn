@@ -18,6 +18,7 @@
  * Validation errors and API failures are surfaced inline (no alert()).
  */
 
+import { cn } from "@/lib/utils";
 import { useEffect, useState, type ReactElement } from "react";
 
 import {
@@ -41,7 +42,7 @@ import {
 } from "@/components/ui/select";
 import { apiSend, ApiError } from "@/lib/api";
 
-import { ErrorState } from "./Shared";
+import { ErrorState, MOBILE_SHEET_DIALOG } from "./Shared";
 import { TaskRichEditor } from "./TaskRichEditor";
 import { useProjects } from "./useProjects";
 import {
@@ -160,7 +161,7 @@ export function TaskDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={trigger} />
-      <DialogContent className="max-w-xl">
+      <DialogContent className={cn("max-w-xl", MOBILE_SHEET_DIALOG)}>
         <DialogHeader>
           <DialogTitle>
             {editing ? "Edit task" : parentId ? "New subtask" : "New task"}

@@ -1,30 +1,27 @@
 ---
 /**
- * Team analytics — summary cards and breakdowns aggregated client-side from
- * `GET /api/tasks` and `GET /api/projects`. Lighter than the admin dashboard.
- * Mounts the TeamAnalytics island (client:load).
+ * RESPONSIVE STRATEGY
+ * desktop: 3-cell metric row → status distribution | priority ranking → per-project progress Data Grid.
+ * mobile (390px): metric cells collapse to dense label | value rows; panels stack; the grid becomes a 2-column summary list linking to /tasks?projectId=.
+ * vehicle: not a target surface — the mobile layout applies.
+ *
+ * Team analytics — all-time aggregates from `GET /api/tasks` + `GET /api/projects`.
+ * Mounts the TeamAnalyticsView island (client:load, fetch-based).
  */
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import { TeamAnalytics } from "@/components/tasks/TeamAnalytics";
+import { PageBody, PageToolbar } from "@/components/blocks/app-shell-12/components/page-toolbar";
+import { TeamAnalyticsView } from "@/components/dashboard";
 ---
 
 <BaseLayout
   title="Team Analytics"
-  description="At-a-glance task and project metrics: completion rate, status and priority breakdowns, overdue counts, and per-project progress."
+  description="Completion rate, status and priority breakdowns, overdue counts and per-project progress."
 >
-  <div class="container mx-auto flex max-w-7xl flex-col gap-8 px-4 py-12">
-    <header class="flex flex-col gap-2">
-      <div class="flex items-center gap-3">
-        <span class="text-4xl">📊</span>
-        <h1 class="text-3xl font-semibold tracking-tight">Team Analytics</h1>
-      </div>
-      <p class="max-w-3xl text-base text-muted-foreground">
-        A focused read on throughput: how tasks split across status and
-        priority, what's overdue, and how each project is progressing toward
-        done.
-      </p>
-    </header>
-
-    <TeamAnalytics client:load />
-  </div>
+  <PageBody>
+    <PageToolbar
+      title="Team analytics"
+      description="How work splits across status and priority, what's overdue, and how each project is progressing."
+    />
+    <TeamAnalyticsView client:load />
+  </PageBody>
 </BaseLayout>

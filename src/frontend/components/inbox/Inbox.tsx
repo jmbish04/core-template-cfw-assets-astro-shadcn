@@ -1,69 +1,85 @@
 /**
- * @fileoverview Inbox — the two-pane Email Routing showcase island.
+ * @fileoverview Inbox — the two-pane Email Routing island.
  *
- * LEFT pane: view switcher (Inbox / Starred / Archive), search box, and the
- * message list. RIGHT pane: the full reading view of the selected message.
+ * Layout comes from ReUI `app-shell-4`'s content area, rendered INSIDE the
+ * global app-shell-12 (no second sidebar): a 440px message list column
+ * (`MessageList`) beside a reading pane with an action header (`MessageView`),
+ * both inside one dense ReUI Frame. The empty state reuses `empty-state-1`'s
+ * records illustration.
  *
- * Data comes exclusively from the real Hono API (`/api/inbox`) via `@/lib/api`
- * — every row is an email stored by the Worker `email()` handler. On first load,
- * if the inbox is empty, we offer a clearly-labeled "Load demo data" action that
- * seeds ~12 realistic emails (`POST /api/inbox/seed`) so the showcase is alive
- * before any live mail arrives.
+ * Data comes exclusively from `/api/inbox` via `@/lib/api` — every row is an
+ * email stored by the Worker `email()` handler. When the inbox is empty we offer
+ * "Load demo data" (`POST /api/inbox/seed`).
  *
- * Responsive behavior: on desktop (md+) both panes are visible side-by-side. On
- * mobile only one pane shows at a time — selecting a message swaps to the
- * reading pane, and a Back button returns to the list.
+ * Mobile (<768px): the list fills the frame; tapping a row opens the reader in
+ * a full-width Sheet. Errors go through the centralized frontend error handler.
  */
 
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { MailIcon, SearchIcon, SparklesIcon } from "lucide-react";
+import { SparklesIcon } from "lucide-react";
 
+import { RecordsEmptyIllustration } from "@/components/blocks/empty-state-1/components/records-empty-illustration";
+import { FrontendErrorDialog } from "@/components/FrontendErrorDialog";
+import { Frame, FramePanel } from "@/components/reui/frame";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { apiGet, apiSend, ApiError } from "@/lib/api";
-import { cn } from "@/lib/utils";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { apiGet, apiSend } from "@/lib/api";
+import { useFrontendErrorHandler } from "@/lib/error-handler";
 
-import { EmptyState, ErrorState } from "./states";
-import { FolderNav } from "./FolderNav";
 import { MessageList } from "./MessageList";
 import { MessageView } from "./MessageView";
 import type { EmailFolder, EmailMessage, InboxEnvelope, InboxView, SeedResponse } from "./types";
 import { viewToQuery } from "./types";
 
-const VIEW_TITLES: Record<InboxView, string> = {
-  inbox: "Inbox",
-  starred: "Starred",
-  archive: "Archive",
-};
+const SOURCE_PAGE = { url: "/inbox", file: "src/frontend/pages/inbox.astro" };
+const FILE = "src/frontend/components/inbox/Inbox.tsx";
 
 export function Inbox() {
+  const isMobile = useIsMobile();
+  const { activeError, copyState, clearError, copyErrorPrompt, handleError } =
+    useFrontendErrorHandler();
+
   const [view, setView] = useState<InboxView>("inbox");
   const [messages, setMessages] = useState<EmailMessage[]>([]);
   const [unread, setUnread] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [seeding, setSeeding] = useState(false);
-
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
-
-  // Mobile: which pane is visible. Desktop shows both via CSS regardless.
-  const [mobilePane, setMobilePane] = useState<"list" | "reading">("list");
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(q), 300);
     return () => clearTimeout(t);
   }, [q]);
 
+  /** Route a failed action through the central error handler. */
+  const report = useCallback(
+    (functionName: string, description: string, friendlyError: string, serverError: unknown) =>
+      handleError({
+        sourcePage: SOURCE_PAGE,
+        codeSource: { file: FILE, functionName, description },
+        errorDetails: { friendlyError, serverError },
+      }),
+    [handleError],
+  );
+
   const reqId = useRef(0);
   const load = useCallback(async () => {
     const id = ++reqId.current;
     setLoading(true);
-    setError(null);
     try {
       const res = await apiGet<InboxEnvelope>("inbox", {
         ...viewToQuery(view),
@@ -73,212 +89,201 @@ export function Inbox() {
       if (id !== reqId.current) return;
       setMessages(res.data);
       setUnread(res.unread);
+      setLoadFailed(false);
     } catch (e) {
       if (id !== reqId.current) return;
-      setError(e instanceof ApiError ? e.message : "Failed to load mailbox.");
+      setLoadFailed(true);
+      report("load", "Fetches the mailbox from GET /api/inbox.", "Couldn't load your mail. Check your connection and retry.", e);
     } finally {
       if (id === reqId.current) setLoading(false);
     }
-  }, [view, debouncedQ]);
+  }, [view, debouncedQ, report]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const selected = messages.find((m) => m.id === selectedId) ?? null;
-
-  // --- Selection + mark-as-read ---------------------------------------------
-  const handleSelect = useCallback(
-    async (msg: EmailMessage) => {
-      setSelectedId(msg.id);
-      setMobilePane("reading");
-      if (msg.read) return;
-      // Optimistically mark read + decrement the inbox unread badge.
-      setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, read: true } : m)));
-      if (msg.folder === "inbox") setUnread((u) => Math.max(0, u - 1));
+  /** PATCH one message; on failure revert via `rollback` and report. */
+  const patch = useCallback(
+    async (msg: EmailMessage, body: Partial<Pick<EmailMessage, "read" | "starred" | "folder">>, rollback: () => void) => {
       try {
-        await apiSend<EmailMessage>("PATCH", `inbox/${msg.id}`, { read: true });
-      } catch {
-        // Non-fatal: revert the read flag, leave the badge optimistic-safe.
-        setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, read: false } : m)));
-        if (msg.folder === "inbox") setUnread((u) => u + 1);
+        await apiSend<EmailMessage>("PATCH", `inbox/${msg.id}`, body);
+        return true;
+      } catch (e) {
+        rollback();
+        report("patch", "Updates a message via PATCH /api/inbox/{id}.", "Couldn't update that message. Retry in a moment.", e);
+        return false;
       }
     },
-    [],
+    [report],
   );
 
-  // --- Star toggle (optimistic) ---------------------------------------------
+  const setRead = useCallback(
+    (msg: EmailMessage, read: boolean) => {
+      const apply = (r: boolean) => {
+        setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, read: r } : m)));
+        if (msg.folder === "inbox") setUnread((u) => Math.max(0, u + (r ? -1 : 1)));
+      };
+      apply(read);
+      void patch(msg, { read }, () => apply(!read));
+    },
+    [patch],
+  );
+
+  const handleSelect = useCallback(
+    (msg: EmailMessage) => {
+      setSelectedId(msg.id);
+      if (!msg.read) setRead(msg, true);
+    },
+    [setRead],
+  );
+
+  const markUnread = useCallback(
+    (msg: EmailMessage) => {
+      setSelectedId(null);
+      setRead(msg, false);
+    },
+    [setRead],
+  );
+
   const toggleStar = useCallback(
     async (msg: EmailMessage) => {
       const next = !msg.starred;
-      setMessages((prev) =>
-        prev.map((m) => (m.id === msg.id ? { ...m, starred: next } : m)),
-      );
-      try {
-        await apiSend<EmailMessage>("PATCH", `inbox/${msg.id}`, { starred: next });
-        // In the Starred view, un-starring removes the row.
-        if (view === "starred" && !next) {
-          setMessages((prev) => prev.filter((m) => m.id !== msg.id));
-          if (selectedId === msg.id) setSelectedId(null);
-        }
-      } catch (e) {
-        setMessages((prev) =>
-          prev.map((m) => (m.id === msg.id ? { ...m, starred: msg.starred } : m)),
-        );
-        setError(e instanceof ApiError ? e.message : "Failed to update star.");
+      const set = (s: boolean) =>
+        setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, starred: s } : m)));
+      set(next);
+      const ok = await patch(msg, { starred: next }, () => set(msg.starred));
+      // In the Starred view, un-starring removes the row.
+      if (ok && view === "starred" && !next) {
+        setMessages((prev) => prev.filter((m) => m.id !== msg.id));
+        setSelectedId((id) => (id === msg.id ? null : id));
       }
     },
-    [view, selectedId],
+    [patch, view],
   );
 
-  // --- Move folder (archive / back to inbox) --------------------------------
   const moveFolder = useCallback(
     async (msg: EmailMessage, folder: EmailFolder) => {
       setMessages((prev) => prev.filter((m) => m.id !== msg.id));
-      if (selectedId === msg.id) {
-        setSelectedId(null);
-        setMobilePane("list");
-      }
-      try {
-        await apiSend<EmailMessage>("PATCH", `inbox/${msg.id}`, { folder });
-        void load();
-      } catch (e) {
-        setError(e instanceof ApiError ? e.message : "Failed to move message.");
-        void load();
-      }
+      setSelectedId((id) => (id === msg.id ? null : id));
+      await patch(msg, { folder }, () => {});
+      void load();
     },
-    [selectedId, load],
+    [patch, load],
   );
 
-  // --- Seed demo data -------------------------------------------------------
   const seed = useCallback(async () => {
     setSeeding(true);
-    setError(null);
     try {
       await apiSend<SeedResponse>("POST", "inbox/seed");
       await load();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Failed to load demo data.");
+      report("seed", "Seeds demo mail via POST /api/inbox/seed.", "Couldn't load demo data. Retry in a moment.", e);
     } finally {
       setSeeding(false);
     }
-  }, [load]);
+  }, [load, report]);
 
-  const isEmpty = !loading && messages.length === 0;
-  const showSeed = isEmpty && view === "inbox" && !debouncedQ;
-
-  return (
-    <div className="flex h-[calc(100svh-var(--header-height)-2rem)] min-h-[32rem] flex-col gap-4">
-      {error ? <ErrorState message={error} onRetry={load} /> : null}
-
-      <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden rounded-xl bg-card ring-1 ring-border/40 md:grid-cols-[16rem_minmax(20rem,24rem)_1fr]">
-        {/* Sidebar (desktop only) */}
-        <aside className="hidden flex-col gap-4 border-r border-border/40 p-4 md:flex">
-          <FolderNav active={view} unread={unread} onChange={switchView(setView, setSelectedId, setMobilePane)} />
-        </aside>
-
-        {/* List pane */}
-        <section
-          className={cn(
-            "min-h-0 flex-col border-border/40 md:flex md:border-r",
-            mobilePane === "list" ? "flex" : "hidden md:flex",
-          )}
-        >
-          <div className="flex flex-col gap-3 p-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold">{VIEW_TITLES[view]}</h2>
-              <span className="text-xs text-muted-foreground">
-                {messages.length} {messages.length === 1 ? "message" : "messages"}
-              </span>
-            </div>
-            {/* Mobile view switcher */}
-            <div className="md:hidden">
-              <FolderNav
-                active={view}
-                unread={unread}
-                orientation="segmented"
-                onChange={switchView(setView, setSelectedId, setMobilePane)}
-              />
-            </div>
-            <div className="relative">
-              <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Search mail…"
-                className="pl-8"
-                aria-label="Search mail"
-              />
-            </div>
-          </div>
-
-          <div className="min-h-0 flex-1">
-            {isEmpty ? (
-              <div className="p-4">
-                <EmptyState
-                  icon={<MailIcon />}
-                  title={debouncedQ ? "No matching mail" : `No mail in ${VIEW_TITLES[view]}`}
-                  description={
-                    showSeed
-                      ? "This inbox is wired to Cloudflare Email Routing. Load demo data to explore the showcase, or send a real email to a routed address."
-                      : debouncedQ
-                        ? "Try a different search term."
-                        : "Messages you receive will appear here."
-                  }
-                  action={
-                    showSeed ? (
-                      <Button onClick={seed} disabled={seeding}>
-                        <SparklesIcon className="size-4" />
-                        {seeding ? "Loading…" : "Load demo data"}
-                      </Button>
-                    ) : undefined
-                  }
-                />
-              </div>
-            ) : (
-              <MessageList
-                messages={messages}
-                selectedId={selectedId}
-                loading={loading}
-                onSelect={handleSelect}
-                onToggleStar={toggleStar}
-              />
-            )}
-          </div>
-        </section>
-
-        {/* Reading pane */}
-        <section
-          className={cn(
-            "min-h-0 flex-col md:flex",
-            mobilePane === "reading" ? "flex" : "hidden md:flex",
-          )}
-        >
-          <MessageView
-            message={selected}
-            onBack={() => setMobilePane("list")}
-            onToggleStar={toggleStar}
-            onArchive={(m) => moveFolder(m, "archive")}
-            onMoveToInbox={(m) => moveFolder(m, "inbox")}
-          />
-        </section>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Build a view-change handler that also clears the current selection and
- * returns the mobile UI to the list pane.
- */
-function switchView(
-  setView: (v: InboxView) => void,
-  setSelectedId: (id: string | null) => void,
-  setMobilePane: (p: "list" | "reading") => void,
-) {
-  return (next: InboxView) => {
+  const changeView = useCallback((next: InboxView) => {
     setView(next);
     setSelectedId(null);
-    setMobilePane("list");
-  };
+  }, []);
+
+  const index = messages.findIndex((m) => m.id === selectedId);
+  const selected = index >= 0 ? messages[index]! : null;
+  const prev = index > 0 ? messages[index - 1] : undefined;
+  const next = index >= 0 && index < messages.length - 1 ? messages[index + 1] : undefined;
+  const showSeed = view === "inbox" && !debouncedQ && !loadFailed;
+
+  const empty = (
+    <Empty className="border-0 py-12">
+      <EmptyHeader>
+        <EmptyMedia>
+          <RecordsEmptyIllustration variant="compact" />
+        </EmptyMedia>
+        <EmptyTitle>
+          {loadFailed ? "Mail didn't load" : debouncedQ ? "No matching mail" : "Nothing here yet"}
+        </EmptyTitle>
+        <EmptyDescription>
+          {loadFailed
+            ? "The inbox API didn't respond. Retry to fetch your mail."
+            : showSeed
+              ? "This inbox is wired to Cloudflare Email Routing. Load demo data, or send an email to a routed address."
+              : debouncedQ
+                ? "Try a different search term."
+                : "Messages that match this view will appear here."}
+        </EmptyDescription>
+      </EmptyHeader>
+      <EmptyContent>
+        {loadFailed ? (
+          <Button variant="outline" size="sm" onClick={load}>
+            Retry
+          </Button>
+        ) : showSeed ? (
+          <Button size="sm" onClick={seed} disabled={seeding}>
+            <SparklesIcon data-icon="inline-start" aria-hidden="true" />
+            {seeding ? "Loading…" : "Load demo data"}
+          </Button>
+        ) : debouncedQ ? (
+          <Button variant="outline" size="sm" onClick={() => setQ("")}>
+            Clear search
+          </Button>
+        ) : null}
+      </EmptyContent>
+    </Empty>
+  );
+
+  const reader = (
+    <MessageView
+      message={selected}
+      onClose={isMobile ? () => setSelectedId(null) : undefined}
+      onPrev={prev ? () => handleSelect(prev) : undefined}
+      onNext={next ? () => handleSelect(next) : undefined}
+      onToggleStar={toggleStar}
+      onArchive={(m) => moveFolder(m, "archive")}
+      onMoveToInbox={(m) => moveFolder(m, "inbox")}
+      onMarkUnread={markUnread}
+    />
+  );
+
+  return (
+    <>
+      <Frame dense className="min-h-[32rem] md:h-[calc(100svh-10rem)]">
+        <FramePanel className="grid min-h-0 grid-cols-1 p-0 md:grid-cols-[440px_minmax(0,1fr)]">
+          <div className="border-border flex min-h-0 flex-col md:border-r">
+            <MessageList
+              view={view}
+              onViewChange={changeView}
+              query={q}
+              onQueryChange={setQ}
+              messages={messages}
+              unread={unread}
+              selectedId={selectedId}
+              loading={loading}
+              onRefresh={load}
+              onSelect={handleSelect}
+              onToggleStar={toggleStar}
+              empty={empty}
+            />
+          </div>
+          <div className="hidden min-h-0 flex-col md:flex">{reader}</div>
+        </FramePanel>
+      </Frame>
+
+      {/* Mobile: the reader is its own full-width view. */}
+      <Sheet open={isMobile && selected !== null} onOpenChange={(open) => !open && setSelectedId(null)}>
+        <SheetContent side="right" showCloseButton={false} className="w-full gap-0 p-0 sm:max-w-none">
+          <SheetTitle className="sr-only">{selected?.subject ?? "Message"}</SheetTitle>
+          {reader}
+        </SheetContent>
+      </Sheet>
+
+      <FrontendErrorDialog
+        error={activeError}
+        copyState={copyState}
+        onCopyPrompt={copyErrorPrompt}
+        onOpenChange={(open) => !open && clearError()}
+      />
+    </>
+  );
 }

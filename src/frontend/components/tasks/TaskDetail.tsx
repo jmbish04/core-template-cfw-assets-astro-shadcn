@@ -41,7 +41,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Frame, FrameHeader, FramePanel, FrameTitle } from "@/components/reui/frame";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiGet, apiSend, ApiError } from "@/lib/api";
@@ -152,8 +152,8 @@ export function TaskDetail({ id }: TaskDetailProps) {
       <div className="flex flex-col gap-4">
         <Skeleton className="h-9 w-2/3" />
         <div className="grid gap-6 lg:grid-cols-[1fr_264px]">
-          <Skeleton className="h-64 w-full rounded-xl" />
-          <Skeleton className="h-64 w-full rounded-xl" />
+          <Skeleton className="h-64 w-full rounded-lg" />
+          <Skeleton className="h-64 w-full rounded-lg" />
         </div>
       </div>
     );
@@ -275,10 +275,10 @@ export function TaskDetail({ id }: TaskDetailProps) {
         {/* Main column (below the sidebar on mobile). */}
         <div className="order-2 flex flex-col gap-6 lg:order-1">
           {/* Description */}
-          <Card>
-            <CardHeader className="pb-0">
+          <Frame spacing="sm">
+            <FrameHeader>
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm">Description</CardTitle>
+                <FrameTitle className="text-sm">Description</FrameTitle>
                 {!editingDesc ? (
                   <Button
                     size="icon-xs"
@@ -293,8 +293,8 @@ export function TaskDetail({ id }: TaskDetailProps) {
                   </Button>
                 ) : null}
               </div>
-            </CardHeader>
-            <CardContent>
+            </FrameHeader>
+            <FramePanel>
               {editingDesc && mounted ? (
                 <div className="flex flex-col gap-2">
                   <TaskRichEditor
@@ -327,8 +327,8 @@ export function TaskDetail({ id }: TaskDetailProps) {
               ) : (
                 <p className="text-sm italic text-muted-foreground/60">No description</p>
               )}
-            </CardContent>
-          </Card>
+            </FramePanel>
+          </Frame>
 
           {/* "Subtasks" card — child tasks drive derived completion: a plain
               "{done}/{total} completed" header, the child list (click → preview

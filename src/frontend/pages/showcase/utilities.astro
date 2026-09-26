@@ -87,7 +87,7 @@ const page = R.pipe(
       </div>
       <div class="flex flex-wrap gap-3 mt-6">
         <a href={REMEDA_REPO} target="_blank" rel="noopener noreferrer">
-          <Button size="sm" className="bg-orange-600 hover:bg-orange-700">remeda/remeda on GitHub ↗</Button>
+          <Button size="sm">remeda/remeda on GitHub ↗</Button>
         </a>
         <a href={REMEDA_DOCS} target="_blank" rel="noopener noreferrer">
           <Button size="sm" variant="outline">Full Remeda docs ↗</Button>
@@ -97,7 +97,7 @@ const page = R.pipe(
 
     <!-- Overview -->
     <section class="mb-12">
-      <Card class="border-zinc-800 bg-zinc-950">
+      <Card class="border-border bg-muted/40">
         <CardHeader>
           <CardTitle>Why this exists</CardTitle>
         </CardHeader>
@@ -106,28 +106,28 @@ const page = R.pipe(
             Every project re-implements the same fiddly data plumbing: find an item in an array, diff two
             arrays, group/index records, dedupe, toggle membership, reorder. This template ships those once,
             in a single isomorphic module powered by
-            <a href={REMEDA_REPO} target="_blank" rel="noopener noreferrer" class="text-orange-400 underline">Remeda</a>
+            <a href={REMEDA_REPO} target="_blank" rel="noopener noreferrer" class="text-warning-foreground underline">Remeda</a>
             — a TypeScript-first, tree-shakeable, data-first utility library that runs unchanged inside a Worker
             and in the browser bundle.
           </p>
           <div class="flex flex-wrap gap-2">
-            <Badge className="bg-blue-950 text-blue-400 border-blue-800">Isomorphic</Badge>
-            <Badge className="bg-purple-950 text-purple-400 border-purple-800">TypeScript-first</Badge>
-            <Badge className="bg-green-950 text-green-400 border-green-800">Tree-shakeable</Badge>
-            <Badge className="bg-orange-950 text-orange-400 border-orange-800">Zero-config</Badge>
+            <Badge className="bg-info/10 text-info-foreground border-info/30">Isomorphic</Badge>
+            <Badge className="bg-info/10 text-info-foreground border-info/30">TypeScript-first</Badge>
+            <Badge className="bg-success/10 text-success-foreground border-success/30">Tree-shakeable</Badge>
+            <Badge className="bg-warning/10 text-warning-foreground border-warning/30">Zero-config</Badge>
           </div>
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-            <div class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
-              <p class="text-xs font-mono text-zinc-500 mb-1">backend</p>
-              <code class="text-sm text-orange-400">@/backend/utils/data</code>
+            <div class="rounded-lg border border-border bg-muted/40 p-4">
+              <p class="text-xs font-mono text-muted-foreground mb-1">backend</p>
+              <code class="text-sm text-warning-foreground">@/backend/utils/data</code>
             </div>
-            <div class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
-              <p class="text-xs font-mono text-zinc-500 mb-1">frontend</p>
-              <code class="text-sm text-orange-400">@/lib/data</code>
+            <div class="rounded-lg border border-border bg-muted/40 p-4">
+              <p class="text-xs font-mono text-muted-foreground mb-1">frontend</p>
+              <code class="text-sm text-warning-foreground">@/lib/data</code>
             </div>
-            <div class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
-              <p class="text-xs font-mono text-zinc-500 mb-1">shared core</p>
-              <code class="text-sm text-orange-400">@/shared/data-utils</code>
+            <div class="rounded-lg border border-border bg-muted/40 p-4">
+              <p class="text-xs font-mono text-muted-foreground mb-1">shared core</p>
+              <code class="text-sm text-warning-foreground">@/shared/data-utils</code>
             </div>
           </div>
         </CardContent>
@@ -138,7 +138,7 @@ const page = R.pipe(
     <section class="mb-12">
       <h2 class="text-2xl font-bold mb-2">Live demos</h2>
       <p class="text-sm text-muted-foreground mb-6">
-        Every panel below imports the real helpers from <code class="text-orange-400">@/lib/data</code> and runs
+        Every panel below imports the real helpers from <code class="text-foreground bg-muted rounded-sm px-1">@/lib/data</code> and runs
         them in your browser. Edit the inputs — the output is computed live, not canned.
       </p>
       <UtilitiesDemo client:load />
@@ -169,24 +169,24 @@ const page = R.pipe(
     <section class="mb-12">
       <h2 class="text-2xl font-bold mb-6">What's supported</h2>
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card class="border-zinc-800 bg-zinc-950">
+        <Card class="border-border bg-muted/40">
           <CardHeader>
             <CardTitle class="text-base">Curated Remeda re-exports</CardTitle>
             <CardDescription>
               The high-frequency functions, re-exported by name. The full Remeda surface is on
-              <code class="text-orange-400">R</code> (e.g. <code class="text-orange-400">R.mapToObj</code>).
+              <code class="text-foreground bg-muted rounded-sm px-1">R</code> (e.g. <code class="text-foreground bg-muted rounded-sm px-1">R.mapToObj</code>).
             </CardDescription>
           </CardHeader>
           <CardContent class="space-y-2">
             {remedaExports.map((fn) => (
               <div class="flex items-start gap-3 text-sm">
-                <code class="shrink-0 text-orange-400 font-mono text-xs pt-0.5">{fn.name}</code>
+                <code class="shrink-0 text-warning-foreground font-mono text-xs pt-0.5">{fn.name}</code>
                 <span class="text-muted-foreground text-xs">{fn.desc}</span>
               </div>
             ))}
           </CardContent>
         </Card>
-        <Card class="border-zinc-800 bg-zinc-950">
+        <Card class="border-border bg-muted/40">
           <CardHeader>
             <CardTitle class="text-base">Template helpers</CardTitle>
             <CardDescription>Built on Remeda for the things it intentionally doesn't ship.</CardDescription>
@@ -194,7 +194,7 @@ const page = R.pipe(
           <CardContent class="space-y-2">
             {templateHelpers.map((fn) => (
               <div class="flex items-start gap-3 text-sm">
-                <code class="shrink-0 text-orange-400 font-mono text-xs pt-0.5">{fn.name}</code>
+                <code class="shrink-0 text-warning-foreground font-mono text-xs pt-0.5">{fn.name}</code>
                 <span class="text-muted-foreground text-xs">{fn.desc}</span>
               </div>
             ))}
@@ -205,7 +205,7 @@ const page = R.pipe(
 
     <!-- Links -->
     <section>
-      <Card class="border-zinc-800 bg-zinc-950">
+      <Card class="border-border bg-muted/40">
         <CardContent class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-6">
           <div>
             <h3 class="text-base font-semibold">Dig deeper</h3>
@@ -216,7 +216,7 @@ const page = R.pipe(
               <Button size="sm" variant="outline">GitHub ↗</Button>
             </a>
             <a href={REMEDA_DOCS} target="_blank" rel="noopener noreferrer">
-              <Button size="sm" className="bg-orange-600 hover:bg-orange-700">Docs &amp; REPL ↗</Button>
+              <Button size="sm">Docs &amp; REPL ↗</Button>
             </a>
           </div>
         </CardContent>

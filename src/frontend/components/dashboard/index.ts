@@ -6,3 +6,4 @@
  */
 
 export { AdminDashboard } from "./AdminDashboard";
+export { TeamAnalyticsView } from "./TeamAnalyticsView";

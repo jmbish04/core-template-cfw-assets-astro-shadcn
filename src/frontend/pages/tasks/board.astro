@@ -1,30 +1,26 @@
 ---
 /**
- * Task board — kanban view grouped into To Do / In Progress / In Review / Done
- * columns from `GET /api/tasks/board`. Drag-drop or per-card Move buttons issue
- * `PATCH /api/tasks/{id}`. Mounts the TaskBoard island (client:load).
+ * RESPONSIVE STRATEGY
+ * desktop: toolbar, then the ReUI Kanban — four Frame columns side by side; drag cards between them (status persists).
+ * mobile (390px): columns become a snap-scrolling carousel, one near-full-width column at a time; card tap opens the preview sheet.
+ * vehicle: same as mobile; cards are large tap targets, drag is optional (edit status in the preview).
+ *
+ * Task board — kanban over `GET /api/tasks/board`; moves PATCH `/api/tasks/{id}`.
  */
 import BaseLayout from "@/layouts/BaseLayout.astro";
+import { PageBody, PageToolbar } from "@/components/blocks/app-shell-12/components/page-toolbar";
 import { TaskBoard } from "@/components/tasks/TaskBoard";
 ---
 
 <BaseLayout
-  title="Task Board"
-  description="Kanban board across four workflow columns. Drag cards between columns or use the move controls; every change patches the task status in real time."
+  title="Task board"
+  description="Kanban across Not Started, In Progress, In Review and Done. Drag a card to another column and the status is saved."
 >
-  <div class="container mx-auto flex max-w-7xl flex-col gap-8 px-4 py-12">
-    <header class="flex flex-col gap-2">
-      <div class="flex items-center gap-3">
-        <span class="text-4xl">🗂️</span>
-        <h1 class="text-3xl font-semibold tracking-tight">Task Board</h1>
-      </div>
-      <p class="max-w-3xl text-base text-muted-foreground">
-        Visual kanban across To Do, In Progress, In Review, and Done. Move work
-        forward by dragging a card or using its move controls — each transition
-        is persisted immediately.
-      </p>
-    </header>
-
+  <PageBody>
+    <PageToolbar
+      title="Task board"
+      description="Drag a card to another column to change its status. It saves straight away."
+    />
     <TaskBoard client:load />
-  </div>
+  </PageBody>
 </BaseLayout>

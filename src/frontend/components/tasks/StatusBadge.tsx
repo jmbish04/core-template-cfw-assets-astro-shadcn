@@ -1,15 +1,12 @@
 /**
- * @fileoverview StatusBadge — pills for both task workflow status and project
- * lifecycle status. Two small components share one color vocabulary so the
- * "todo / in_progress / in_review / done" and "active / archived / on_hold"
- * states read identically across the board, list, detail, and project pages.
- *
- * Like {@link PriorityBadge} these use explicit dark-tuned `bg/text` pairs and
- * a transparent border (no 1px separators) to satisfy the Monolith rules.
+ * @fileoverview StatusBadge — pills for task workflow status and project
+ * lifecycle status, drawn with ReUI Badge `-light` variants so every colour is a
+ * design token (info / success / warning / primary) and reads in both themes.
  */
 
-import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
+import type { ComponentProps } from "react";
+
+import { Badge } from "@/components/reui/badge";
 
 import {
   PROJECT_STATUS_LABELS,
@@ -18,19 +15,28 @@ import {
   type TaskStatus,
 } from "./types";
 
-/** Task status → class pair. */
-const TASK_STATUS_CLASSES: Record<TaskStatus, string> = {
-  todo: "bg-muted text-muted-foreground",
-  in_progress: "bg-sky-500/15 text-sky-300",
-  in_review: "bg-violet-500/15 text-violet-300",
-  done: "bg-emerald-500/15 text-emerald-300",
+type BadgeVariant = ComponentProps<typeof Badge>["variant"];
+
+/** Task status → ReUI Badge variant. Also used for dots/tones elsewhere. */
+export const TASK_STATUS_VARIANT: Record<TaskStatus, BadgeVariant> = {
+  todo: "secondary",
+  in_progress: "info-light",
+  in_review: "primary-light",
+  done: "success-light",
 };
 
-/** Project status → class pair. */
-const PROJECT_STATUS_CLASSES: Record<ProjectStatus, string> = {
-  active: "bg-emerald-500/15 text-emerald-300",
-  on_hold: "bg-amber-500/15 text-amber-300",
-  archived: "bg-muted text-muted-foreground",
+/** Task status → token background for small status dots. */
+export const TASK_STATUS_DOT: Record<TaskStatus, string> = {
+  todo: "bg-muted-foreground/60",
+  in_progress: "bg-info",
+  in_review: "bg-primary",
+  done: "bg-success",
+};
+
+const PROJECT_STATUS_VARIANT: Record<ProjectStatus, BadgeVariant> = {
+  active: "success-light",
+  on_hold: "warning-light",
+  archived: "secondary",
 };
 
 export function TaskStatusBadge({
@@ -41,10 +47,7 @@ export function TaskStatusBadge({
   className?: string;
 }) {
   return (
-    <Badge
-      variant="outline"
-      className={cn("border-transparent", TASK_STATUS_CLASSES[status], className)}
-    >
+    <Badge variant={TASK_STATUS_VARIANT[status]} className={className}>
       {STATUS_LABELS[status]}
     </Badge>
   );
@@ -58,10 +61,7 @@ export function ProjectStatusBadge({
   className?: string;
 }) {
   return (
-    <Badge
-      variant="outline"
-      className={cn("border-transparent", PROJECT_STATUS_CLASSES[status], className)}
-    >
+    <Badge variant={PROJECT_STATUS_VARIANT[status]} className={className}>
       {PROJECT_STATUS_LABELS[status]}
     </Badge>
   );

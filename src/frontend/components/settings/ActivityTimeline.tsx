@@ -1,36 +1,63 @@
 /**
- * @fileoverview ActivityTimeline — filterable audit trail of recent actions.
+ * @fileoverview ActivityTimeline — filterable audit trail, built on ReUI
+ * solution-users-6 (day-grouped Timeline whose events expand into a
+ * Collapsible Frame of details).
  *
- * Reads from `GET /api/activity` (sorted newest-first server-side) with a debounced
- * full-text `q` search plus `entityType` and `actor` filters. Each entry shows
- * the actor avatar, the action verb, a human summary, an entity-type badge, and
- * a relative timestamp. Filter options are derived client-side from the loaded
- * rows so the controls stay populated without extra endpoints.
- *
- * Monolith dark profile: shadcn Card/Select/Avatar/Badge, divided by
- * `divide-border/40`, no traditional 1px borders.
+ * Reads `GET /api/activity` (newest first) with a debounced `q` search plus
+ * `entityType` and `actor` filters. Filter options accumulate from loaded rows
+ * so the selects don't collapse when a filter narrows the result set.
  */
 
 "use client";
 
+import * as React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { SearchIcon } from "lucide-react";
+import {
+  ActivityIcon,
+  BellIcon,
+  ChevronRightIcon,
+  FilterIcon,
+  FolderIcon,
+  ListChecksIcon,
+  type LucideIcon,
+  SearchIcon,
+  SettingsIcon,
+  StickyNoteIcon,
+  WebhookIcon,
+} from "lucide-react";
 
+import { Badge } from "@/components/reui/badge";
+import { Frame, FrameHeader, FramePanel } from "@/components/reui/frame";
+import {
+  Timeline,
+  TimelineContent,
+  TimelineHeader,
+  TimelineIndicator,
+  TimelineItem,
+  TimelineSeparator,
+  TimelineTitle,
+} from "@/components/reui/timeline";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -39,6 +66,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 import { apiGet, ApiError } from "@/lib/api";
 import { relativeTime, shortDate } from "@/lib/format";
+import { cn } from "@/lib/utils";
+
+import { InlineError } from "./shared";
 
 // ---------------------------------------------------------------------------
 // Wire types — mirror `selectActivityLogSchema`.
@@ -58,13 +88,19 @@ interface ActivityEntry {
 interface ActivityListResponse {
   data: ActivityEntry[];
   total: number;
-  limit: number;
-  offset: number;
 }
 
-/** Sentinel value used by the Selects to mean "no filter" (Base UI Select
- *  cannot use an empty string item value reliably). */
+/** "No filter" sentinel — Base UI Select can't use an empty-string value. */
 const ALL = "__all__";
+
+const ENTITY_ICON: Record<string, LucideIcon> = {
+  task: ListChecksIcon,
+  project: FolderIcon,
+  webhook: WebhookIcon,
+  settings: SettingsIcon,
+  notification: BellIcon,
+  note: StickyNoteIcon,
+};
 
 /** Derive up to two initials from an actor display name. */
 function initials(name: string): string {
@@ -72,6 +108,134 @@ function initials(name: string): string {
   if (parts.length === 0) return "?";
   if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
   return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase();
+}
+
+/** Group newest-first rows into day buckets, preserving order. */
+function groupByDay(rows: ActivityEntry[]): { day: string; events: ActivityEntry[] }[] {
+  const out: { day: string; events: ActivityEntry[] }[] = [];
+  for (const row of rows) {
+    const day = shortDate(row.createdAt);
+    const last = out[out.length - 1];
+    if (last && last.day === day) last.events.push(row);
+    else out.push({ day, events: [row] });
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Event row (solution-users-6 EventRow grammar)
+// ---------------------------------------------------------------------------
+
+function EventRow({ entry, step, isLast }: { entry: ActivityEntry; step: number; isLast: boolean }) {
+  const Icon = ENTITY_ICON[entry.entityType.toLowerCase()] ?? ActivityIcon;
+  const hasMetadata = entry.metadata && Object.keys(entry.metadata).length > 0;
+
+  return (
+    <TimelineItem step={step} className={cn("ms-10", isLast ? "pb-0" : "pb-6")}>
+      <TimelineHeader className="flex min-w-0 items-center justify-between gap-2.5">
+        <TimelineSeparator className="bg-border! group-data-[orientation=vertical]/timeline:-left-7 group-data-[orientation=vertical]/timeline:h-[calc(100%-1.5rem-0.5rem)] group-data-[orientation=vertical]/timeline:translate-y-7" />
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <TimelineTitle className="text-sm font-semibold">{entry.action}</TimelineTitle>
+          <Badge variant="outline">{entry.entityType}</Badge>
+          <span className="text-muted-foreground text-xs">{relativeTime(entry.createdAt)}</span>
+        </div>
+        <TimelineIndicator className="border-border bg-background text-muted-foreground flex size-6 items-center justify-center border shadow-xs group-data-[orientation=vertical]/timeline:-left-7 [&_svg]:size-3.5">
+          <Icon aria-hidden="true" />
+        </TimelineIndicator>
+      </TimelineHeader>
+
+      <TimelineContent className="mt-2">
+        <Frame stacked dense spacing="sm">
+          <Collapsible className="group/collapsible">
+            <CollapsibleTrigger
+              type="button"
+              className="flex w-full"
+              aria-label={`Toggle details for ${entry.action}`}
+            >
+              <FrameHeader className="flex min-w-0 grow flex-row items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-2">
+                  <Avatar className="size-5">
+                    <AvatarFallback className="text-[10px]">{initials(entry.actor)}</AvatarFallback>
+                  </Avatar>
+                  <span className="text-muted-foreground min-w-0 truncate text-left text-sm font-medium">
+                    {entry.actor}, {entry.summary}
+                  </span>
+                </div>
+                <ChevronRightIcon
+                  className="text-muted-foreground size-4 shrink-0 transition-transform duration-200 group-data-open/collapsible:rotate-90"
+                  aria-hidden="true"
+                />
+              </FrameHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <FramePanel className="space-y-3">
+                <dl className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                  <DetailRow label="Actor">{entry.actor}</DetailRow>
+                  <DetailRow label="When">
+                    {shortDate(entry.createdAt)} ({relativeTime(entry.createdAt)})
+                  </DetailRow>
+                  <DetailRow label="Entity type">{entry.entityType}</DetailRow>
+                  <DetailRow label="Entity id">
+                    <span className="truncate font-mono text-xs">{entry.entityId ?? "—"}</span>
+                  </DetailRow>
+                </dl>
+                <p className="text-muted-foreground text-xs leading-5">{entry.summary}</p>
+                {hasMetadata ? (
+                  <pre className="bg-muted/50 text-muted-foreground overflow-x-auto rounded-md p-2.5 font-mono text-xs">
+                    {JSON.stringify(entry.metadata, null, 2)}
+                  </pre>
+                ) : null}
+              </FramePanel>
+            </CollapsibleContent>
+          </Collapsible>
+        </Frame>
+      </TimelineContent>
+    </TimelineItem>
+  );
+}
+
+function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-0.5">
+      <dt className="text-muted-foreground text-xs">{label}</dt>
+      <dd className="text-foreground flex min-w-0 items-center truncate text-sm font-medium">
+        {children}
+      </dd>
+    </div>
+  );
+}
+
+/** A labelled filter Select with an "All …" option. */
+function FilterSelect({
+  label,
+  allLabel,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  allLabel: string;
+  value: string;
+  options: string[];
+  onChange: (v: string) => void;
+}) {
+  const items = [{ value: ALL, label: allLabel }, ...options.map((o) => ({ value: o, label: o }))];
+  return (
+    <Select items={items} value={value} onValueChange={(v) => typeof v === "string" && onChange(v)}>
+      <SelectTrigger className="w-full sm:w-44" aria-label={label}>
+        <SelectValue placeholder={allLabel} />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectGroup>
+          {items.map((it) => (
+            <SelectItem key={it.value} value={it.value}>
+              {it.label}
+            </SelectItem>
+          ))}
+        </SelectGroup>
+      </SelectContent>
+    </Select>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -84,13 +248,9 @@ export function ActivityTimeline() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Filter state.
   const [q, setQ] = useState("");
   const [entityType, setEntityType] = useState<string>(ALL);
   const [actor, setActor] = useState<string>(ALL);
-
-  // Stable list of filter options accumulated from everything we've loaded so
-  // the dropdowns don't collapse when an active filter narrows the result set.
   const [entityTypeOptions, setEntityTypeOptions] = useState<string[]>([]);
   const [actorOptions, setActorOptions] = useState<string[]>([]);
 
@@ -108,7 +268,6 @@ export function ActivityTimeline() {
       });
       setRows(res.data);
       setTotal(res.total);
-      // Accumulate filter options.
       setEntityTypeOptions((prev) =>
         Array.from(new Set([...prev, ...res.data.map((r) => r.entityType)])).sort(),
       );
@@ -116,14 +275,15 @@ export function ActivityTimeline() {
         Array.from(new Set([...prev, ...res.data.map((r) => r.actor)])).sort(),
       );
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Failed to load activity.");
+      setError(
+        e instanceof ApiError ? e.message : "Couldn't load activity. Refresh the page to try again.",
+      );
     } finally {
       setLoading(false);
     }
   }, [q, entityType, actor]);
 
-  // Debounce the query; entityType/actor changes apply immediately (load is in
-  // the dep array, so this effect re-runs whenever any filter changes).
+  // Debounce every filter change (load's deps cover q, entityType and actor).
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => void load(), 250);
@@ -139,119 +299,110 @@ export function ActivityTimeline() {
   }, []);
 
   const hasFilters = q !== "" || entityType !== ALL || actor !== ALL;
-
-  const headerCount = useMemo(
-    () => (loading ? "…" : `${rows.length} of ${total}`),
-    [loading, rows.length, total],
-  );
+  const days = useMemo(() => groupByDay(rows), [rows]);
 
   return (
-    <Card className="bg-card ring-1 ring-border/40">
-      <CardHeader className="space-y-1">
-        <CardTitle>Activity log</CardTitle>
-        <CardDescription>
-          Append-only audit trail of recent actions, newest first.
-        </CardDescription>
-      </CardHeader>
-
-      <CardContent className="flex flex-col gap-4">
-        {/* Filters ------------------------------------------------------- */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+    <section className="flex w-full max-w-2xl flex-col gap-6" aria-label="Activity log">
+      {/* Filters ------------------------------------------------------- */}
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="relative flex-1">
-            <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <SearchIcon
+              className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2"
+              aria-hidden="true"
+            />
             <Input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Search summary, action, or actor…"
+              placeholder="Search summary, action, or actor"
               className="pl-8"
               aria-label="Search activity"
             />
           </div>
-          <Select value={entityType} onValueChange={(v) => typeof v === "string" && setEntityType(v)}>
-            <SelectTrigger className="w-full sm:w-44" aria-label="Filter by entity type">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>All entity types</SelectItem>
-              {entityTypeOptions.map((et) => (
-                <SelectItem key={et} value={et}>
-                  {et}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={actor} onValueChange={(v) => typeof v === "string" && setActor(v)}>
-            <SelectTrigger className="w-full sm:w-44" aria-label="Filter by actor">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>All actors</SelectItem>
-              {actorOptions.map((a) => (
-                <SelectItem key={a} value={a}>
-                  {a}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="grid grid-cols-2 gap-2 sm:flex">
+            <FilterSelect
+              label="Filter by entity type"
+              allLabel="All entity types"
+              value={entityType}
+              options={entityTypeOptions}
+              onChange={setEntityType}
+            />
+            <FilterSelect
+              label="Filter by actor"
+              allLabel="All actors"
+              value={actor}
+              options={actorOptions}
+              onChange={setActor}
+            />
+          </div>
+        </div>
+        <div className="text-muted-foreground flex items-center justify-between text-xs">
+          <span>{loading ? "Loading…" : `${rows.length} of ${total} events`}</span>
           {hasFilters ? (
             <Button variant="ghost" size="sm" onClick={clearFilters}>
-              Clear
+              Clear filters
             </Button>
           ) : null}
         </div>
+      </div>
 
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>{headerCount} entries</span>
-        </div>
+      <InlineError message={error} />
 
-        {error ? <p className="text-sm text-destructive">{error}</p> : null}
-
-        {/* Timeline ------------------------------------------------------ */}
-        {loading ? (
-          <div className="space-y-3">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="flex items-start gap-3">
-                <Skeleton className="size-8 rounded-full" />
-                <div className="flex-1 space-y-2">
-                  <Skeleton className="h-4 w-3/4" />
-                  <Skeleton className="h-3 w-1/3" />
-                </div>
+      {/* Timeline ------------------------------------------------------ */}
+      {loading && rows.length === 0 ? (
+        <div className="space-y-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="flex items-start gap-3">
+              <Skeleton className="size-6 rounded-full" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-1/2" />
+                <Skeleton className="h-9 w-full" />
               </div>
-            ))}
-          </div>
-        ) : rows.length === 0 ? (
-          <div className="rounded-lg bg-muted/20 py-12 text-center">
-            <p className="text-sm text-muted-foreground">
-              {hasFilters ? "No activity matches these filters." : "No activity recorded yet."}
-            </p>
-          </div>
-        ) : (
-          <ul className="divide-y divide-border/40">
-            {rows.map((entry) => (
-              <li key={entry.id} className="flex items-start gap-3 py-3">
-                <Avatar size="sm" className="mt-0.5">
-                  <AvatarFallback>{initials(entry.actor)}</AvatarFallback>
-                </Avatar>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <span className="text-sm font-medium text-foreground">{entry.actor}</span>
-                    <span className="text-sm text-muted-foreground">{entry.action}</span>
-                    <Badge variant="outline" className="text-[10px]">
-                      {entry.entityType}
-                    </Badge>
-                  </div>
-                  <p className="mt-0.5 truncate text-sm text-muted-foreground">
-                    {entry.summary}
-                  </p>
-                  <p className="mt-1 text-[11px] text-muted-foreground">
-                    <time title={shortDate(entry.createdAt)}>{relativeTime(entry.createdAt)}</time>
-                  </p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </CardContent>
-    </Card>
+            </div>
+          ))}
+        </div>
+      ) : days.length === 0 ? (
+        <Empty className="min-h-[280px] border-0 bg-transparent">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <FilterIcon aria-hidden="true" />
+            </EmptyMedia>
+            <EmptyTitle>{hasFilters ? "No matching activity" : "No activity yet"}</EmptyTitle>
+            <EmptyDescription>
+              {hasFilters
+                ? "Nothing matches these filters. Try another search or clear them."
+                : "Actions across tasks, projects and settings will appear here."}
+            </EmptyDescription>
+          </EmptyHeader>
+          {hasFilters ? (
+            <EmptyContent>
+              <Button variant="outline" onClick={clearFilters}>
+                Clear filters
+              </Button>
+            </EmptyContent>
+          ) : null}
+        </Empty>
+      ) : (
+        <div className={cn("space-y-8", loading && "opacity-60")}>
+          {days.map((day) => (
+            <div key={day.day} className="space-y-4">
+              <h2 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+                {day.day}
+              </h2>
+              <Timeline>
+                {day.events.map((entry, index) => (
+                  <EventRow
+                    key={entry.id}
+                    entry={entry}
+                    step={index + 1}
+                    isLast={index === day.events.length - 1}
+                  />
+                ))}
+              </Timeline>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }

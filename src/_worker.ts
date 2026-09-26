@@ -1,19 +1,21 @@
 /**
- * @fileoverview Cloudflare Workers entry point for Astro SSR + Hono API +
- * Durable Objects (the `workerEntryPoint` for `@astrojs/cloudflare`).
+ * @fileoverview Cloudflare Workers entry point for Astro SSR + Hono API (the
+ * `workerEntryPoint` for `@astrojs/cloudflare`).
  *
  * The adapter's generated `dist/_worker.js/index.js`:
  *   1. calls `start(manifest, args)` (if exported) to hand us the SSR manifest,
- *   2. calls `createExports()` to get the default fetch handler + DO classes,
- *   3. re-exports those DO classes alongside the default handler.
+ *   2. calls `createExports()` to get the default fetch handler.
  *
  * Our handler routes:
- *   - `/agents/*`        → the Agents SDK router (`routeAgentRequest`)
  *   - `/api/*` + doc URLs → the Hono app
  *   - everything else    → Astro SSR via the adapter's `handle()` (which also
  *                          falls through to the `ASSETS` binding for static
  *                          files). This is the piece a naive `env.ASSETS.fetch`
  *                          custom entry forgets — without it, SSR pages 404.
+ *
+ * There are no Durable Objects / Agents SDK agents in this Worker. Every
+ * inference call routes through the `CORE_GUARDIAN` service binding (see
+ * `backend/ai/guardian.ts`); chat + notifications persist to D1 directly.
  *
  * In addition to `fetch`, the handler exports `email(message, env, ctx)` —
  * Cloudflare Email Routing's inbound entry point. It parses + stores received
@@ -25,42 +27,9 @@
 import { App } from "astro/app";
 import { handle } from "@astrojs/cloudflare/handler";
 import type { ExportedHandler } from "@cloudflare/workers-types";
-import { routeAgentRequest } from "agents";
 
 import { app as honoApp } from "./backend/api/index";
 import { handleInboundEmail } from "./backend/email/inbound";
-
-// Import Durable Object classes (the Agents SDK showcase + realtime agents)
-import { CodeModeAgent } from "./backend/ai/agents/CodeModeAgent";
-import { BrowserHitlAgent } from "./backend/ai/agents/BrowserHitlAgent";
-import { WorkflowsAgent } from "./backend/ai/agents/WorkflowsAgent";
-import { ArtifactAgent } from "./backend/ai/agents/ArtifactAgent";
-import { OrchestratorAgent } from "./backend/ai/agents/OrchestratorAgent";
-import { ResearcherAgent } from "./backend/ai/agents/ResearcherAgent";
-import { CoderAgent } from "./backend/ai/agents/CoderAgent";
-import { ChatBroker } from "./backend/ai/agents/ChatBroker";
-import { NotificationsAgent } from "./backend/ai/agents/NotificationsAgent";
-import { McpAgent } from "./backend/ai/agents/McpAgent";
-import { ThinkingAgent } from "./backend/ai/agents/ThinkingAgent";
-import { SkillsAgent } from "./backend/ai/agents/SkillsAgent";
-
-// Re-export Durable Object classes (Pattern B: the @astrojs/cloudflare adapter
-// re-exports these alongside the default handler so Cloudflare resolves every
-// DO binding declared in wrangler.jsonc).
-export {
-  CodeModeAgent,
-  BrowserHitlAgent,
-  WorkflowsAgent,
-  ArtifactAgent,
-  OrchestratorAgent,
-  ResearcherAgent,
-  CoderAgent,
-  ChatBroker,
-  NotificationsAgent,
-  McpAgent,
-  ThinkingAgent,
-  SkillsAgent,
-};
 
 /** True for paths the Hono API owns (REST + OpenAPI doc surfaces). */
 function isApiPath(pathname: string): boolean {
@@ -90,29 +59,23 @@ export function start(manifest: any, _args: unknown) {
 }
 
 /**
- * Build the worker's default fetch handler + the DO class exports. Invoked by
- * the adapter's generated entry (after `start`).
+ * Build the worker's default fetch handler. Invoked by the adapter's
+ * generated entry (after `start`).
  *
  * NOTE: `request as any` at the call sites bridges the lib.dom (Hono) vs
- * @cloudflare/workers-types (`agents` / ASSETS / Astro) `Request` type friction.
+ * @cloudflare/workers-types (ASSETS / Astro) `Request` type friction.
  */
 export function createExports() {
   const handler = {
     async fetch(request: Request, env: Env, ctx: ExecutionContext) {
       const url = new URL(request.url);
 
-      // 1. Agents SDK WebSocket/HTTP routing: /agents/:agent-name/:instance.
-      if (url.pathname.startsWith("/agents/")) {
-        const agentResponse = await routeAgentRequest(request as any, env);
-        if (agentResponse) return agentResponse;
-      }
-
-      // 2. REST API + OpenAPI docs → Hono.
+      // 1. REST API + OpenAPI docs → Hono.
       if (isApiPath(url.pathname)) {
         return honoApp.fetch(request as any, env, ctx);
       }
 
-      // 3. Everything else → Astro SSR (with static-asset fallthrough).
+      // 2. Everything else → Astro SSR (with static-asset fallthrough).
       if (astroApp) {
         return handle(astroManifest, astroApp, request as any, env as any, ctx as any);
       }
@@ -127,21 +90,7 @@ export function createExports() {
     },
   } as unknown as ExportedHandler<Env>;
 
-  return {
-    default: handler,
-    CodeModeAgent,
-    BrowserHitlAgent,
-    WorkflowsAgent,
-    ArtifactAgent,
-    OrchestratorAgent,
-    ResearcherAgent,
-    CoderAgent,
-    ChatBroker,
-    NotificationsAgent,
-    McpAgent,
-    ThinkingAgent,
-    SkillsAgent,
-  };
+  return { default: handler };
 }
 
 /**
@@ -152,10 +101,6 @@ export function createExports() {
 const handler = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext) {
     const url = new URL(request.url);
-    if (url.pathname.startsWith("/agents/")) {
-      const agentResponse = await routeAgentRequest(request as any, env);
-      if (agentResponse) return agentResponse;
-    }
     if (isApiPath(url.pathname)) {
       return honoApp.fetch(request as any, env, ctx);
     }

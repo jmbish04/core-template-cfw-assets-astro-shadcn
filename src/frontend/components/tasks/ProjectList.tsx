@@ -3,8 +3,8 @@
  * `GET /api/projects` with debounced search (`q`), status filter, starred
  * filter, and a sort selector. Supports a grid/list view toggle, optimistic
  * star toggling (`POST /api/projects/{id}/star`), and a "New project" Dialog
- * (`POST /api/projects`). Covers the hextaui project-list + team-projects
- * blocks.
+ * (`POST /api/projects`). Laid out as one ReUI Frame (header + toolbar) around
+ * a `card-21` style tile grid (see ProjectCard).
  *
  * Every async path renders LOADING (skeletons), EMPTY, and inline ERROR states.
  */
@@ -14,8 +14,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FolderPlusIcon, LayoutGridIcon, ListIcon, SearchIcon } from "lucide-react";
 
+import {
+  Frame,
+  FrameDescription,
+  FrameHeader,
+  FramePanel,
+  FrameTitle,
+} from "@/components/reui/frame";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiGet, apiSend, ApiError } from "@/lib/api";
 
@@ -137,132 +144,127 @@ export function ProjectList() {
   }, []);
 
   const hasFilters = Boolean(debouncedQ || status || starred);
+  // card-21 grid: one Frame, tiles 3-up at container width ≥ 2xl, 1-up in list view.
   const gridClass = useMemo(
-    () =>
-      view === "grid"
-        ? "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
-        : "grid grid-cols-1 gap-3",
+    () => (view === "grid" ? "grid gap-1 @2xl:grid-cols-2 @4xl:grid-cols-3" : "grid gap-1"),
     [view],
   );
 
-  return (
-    <div className="flex flex-col gap-6">
-      {/* Filter bar */}
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative min-w-[12rem] flex-1">
-            <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Search projects…"
-              className="pl-8"
-              aria-label="Search projects"
-            />
-          </div>
-          <ProjectDialog
-            onSaved={handleCreated}
-            trigger={
-              <Button>
-                <FolderPlusIcon className="size-4" />
-                New project
-              </Button>
-            }
-          />
-        </div>
+  const newProjectButton = (variant: "default" | "outline") => (
+    <ProjectDialog
+      onSaved={handleCreated}
+      trigger={
+        <Button variant={variant}>
+          <FolderPlusIcon className="size-4" aria-hidden />
+          New project
+        </Button>
+      }
+    />
+  );
 
-        <div className="flex flex-wrap items-center gap-2">
-          <FilterSelect
-            value={status}
-            onChange={setStatus}
-            options={STATUS_OPTIONS}
-            allLabel="All statuses"
-            aria-label="Filter by status"
+  return (
+    <Frame spacing="sm" className="@container w-full">
+      <FrameHeader className="flex-row items-center justify-between gap-3">
+        <div className="flex flex-col gap-px">
+          <FrameTitle>All projects</FrameTitle>
+          <FrameDescription className="text-xs">
+            {loading
+              ? "Loading…"
+              : `Showing ${projects.length} of ${total} ${total === 1 ? "project" : "projects"}`}
+          </FrameDescription>
+        </div>
+        {newProjectButton("default")}
+      </FrameHeader>
+
+      <div className="flex flex-wrap items-center gap-2 px-(--frame-panel-header-px) pb-2">
+        <InputGroup className="w-full sm:w-64">
+          <InputGroupAddon>
+            <SearchIcon className="size-4" aria-hidden />
+          </InputGroupAddon>
+          <InputGroupInput
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search projects…"
+            aria-label="Search projects"
           />
-          <FilterSelect
-            value={starred}
-            onChange={setStarred}
-            options={STARRED_OPTIONS}
-            allLabel="All projects"
-            aria-label="Filter by starred"
-          />
-          <FilterSelect
-            value={sort}
-            onChange={(v) => setSort(v ?? "updatedAt")}
-            options={SORT_OPTIONS}
-            allLabel="Recently updated"
-            aria-label="Sort projects"
-          />
-          <div className="ml-auto flex items-center gap-1">
-            <Button
-              size="icon-sm"
-              variant={view === "grid" ? "secondary" : "ghost"}
-              aria-label="Grid view"
-              aria-pressed={view === "grid"}
-              onClick={() => setView("grid")}
-            >
-              <LayoutGridIcon className="size-4" />
-            </Button>
-            <Button
-              size="icon-sm"
-              variant={view === "list" ? "secondary" : "ghost"}
-              aria-label="List view"
-              aria-pressed={view === "list"}
-              onClick={() => setView("list")}
-            >
-              <ListIcon className="size-4" />
-            </Button>
-          </div>
+        </InputGroup>
+        <FilterSelect
+          value={status}
+          onChange={setStatus}
+          options={STATUS_OPTIONS}
+          allLabel="All statuses"
+          aria-label="Filter by status"
+        />
+        <FilterSelect
+          value={starred}
+          onChange={setStarred}
+          options={STARRED_OPTIONS}
+          allLabel="All projects"
+          aria-label="Filter by starred"
+        />
+        <FilterSelect
+          value={sort}
+          onChange={(v) => setSort(v ?? "updatedAt")}
+          options={SORT_OPTIONS}
+          allLabel="Recently updated"
+          aria-label="Sort projects"
+        />
+        <div className="ml-auto flex items-center gap-1 max-md:hidden">
+          <Button
+            size="icon-sm"
+            variant={view === "grid" ? "secondary" : "ghost"}
+            aria-label="Grid view"
+            aria-pressed={view === "grid"}
+            onClick={() => setView("grid")}
+          >
+            <LayoutGridIcon className="size-4" aria-hidden />
+          </Button>
+          <Button
+            size="icon-sm"
+            variant={view === "list" ? "secondary" : "ghost"}
+            aria-label="List view"
+            aria-pressed={view === "list"}
+            onClick={() => setView("list")}
+          >
+            <ListIcon className="size-4" aria-hidden />
+          </Button>
         </div>
       </div>
 
-      {error ? <ErrorState message={error} onRetry={load} /> : null}
+      {error ? <ErrorState message={error} onRetry={load} className="mx-1 mb-1" /> : null}
 
-      {/* Body */}
       {loading ? (
         <div className={gridClass}>
           {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-40 w-full rounded-xl" />
+            <Skeleton key={i} className="h-36 w-full rounded-lg" />
           ))}
         </div>
       ) : projects.length === 0 ? (
-        <EmptyState
-          icon={<FolderPlusIcon />}
-          title={hasFilters ? "No projects match your filters" : "No projects yet"}
-          description={
-            hasFilters
-              ? "Try clearing the search or filters above."
-              : "Create your first project to start grouping tasks and notes."
-          }
-          action={
-            <ProjectDialog
-              onSaved={handleCreated}
-              trigger={
-                <Button variant="outline">
-                  <FolderPlusIcon className="size-4" />
-                  New project
-                </Button>
-              }
-            />
-          }
-        />
+        <FramePanel>
+          <EmptyState
+            icon={<FolderPlusIcon />}
+            title={hasFilters ? "No projects match your filters" : "No projects yet"}
+            description={
+              hasFilters
+                ? "Clear the search or filters to see more projects."
+                : "Create your first project to start grouping tasks and notes."
+            }
+            action={newProjectButton("outline")}
+            className="bg-transparent ring-0"
+          />
+        </FramePanel>
       ) : (
-        <>
-          <p className="text-xs text-muted-foreground">
-            Showing {projects.length} of {total} {total === 1 ? "project" : "projects"}
-          </p>
-          <div className={gridClass}>
-            {projects.map((project) => (
-              <ProjectCard
-                key={project.id}
-                project={project}
-                onToggleStar={toggleStar}
-                onOpen={openPreview}
-                starPending={pendingStarId === project.id}
-              />
-            ))}
-          </div>
-        </>
+        <div className={gridClass}>
+          {projects.map((project) => (
+            <ProjectCard
+              key={project.id}
+              project={project}
+              onToggleStar={toggleStar}
+              onOpen={openPreview}
+              starPending={pendingStarId === project.id}
+            />
+          ))}
+        </div>
       )}
 
       <ProjectPreviewDialog
@@ -271,6 +273,6 @@ export function ProjectList() {
         onOpenChange={setPreviewOpen}
         onSaved={handleUpdated}
       />
-    </div>
+    </Frame>
   );
 }

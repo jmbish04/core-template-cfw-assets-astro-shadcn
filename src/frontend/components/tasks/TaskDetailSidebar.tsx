@@ -30,7 +30,7 @@ import { CalendarIcon, CheckIcon, PencilIcon, XIcon } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Frame, FramePanel } from "@/components/reui/frame";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -103,8 +103,8 @@ export function TaskDetailSidebar({ task, saving, onPatch }: TaskDetailSidebarPr
   const [assigneeDraft, setAssigneeDraft] = useState("");
 
   return (
-    <Card>
-      <CardContent className="flex flex-col gap-4">
+    <Frame spacing="sm">
+      <FramePanel className="flex flex-col gap-4">
         <h2 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
           Properties
         </h2>
@@ -326,7 +326,7 @@ export function TaskDetailSidebar({ task, saving, onPatch }: TaskDetailSidebarPr
             </button>
           )}
         </PropertyRow>
-      </CardContent>
-    </Card>
+      </FramePanel>
+    </Frame>
   );
 }

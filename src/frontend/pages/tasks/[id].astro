@@ -1,5 +1,10 @@
 ---
 /**
+ * RESPONSIVE STRATEGY
+ * desktop: breadcrumbs + title row, then two columns — Frames for description, subtasks, comments, attachments; a 264px rail with progress and properties.
+ * mobile (390px): one column; the progress + properties rail stacks above the content as dense label|value rows; no horizontal scroll.
+ * vehicle: same as mobile; status/priority edits stay in large select controls.
+ *
  * Task detail — dynamic route reading the task `id` from the path and mounting
  * the TaskDetail island. Shows editable title/description, status/priority,
  * a progress stepper, metadata, and a delete confirmation.
@@ -9,6 +14,7 @@
  * prerender it (prerender = false) so any task id resolves at request time.
  */
 import BaseLayout from "@/layouts/BaseLayout.astro";
+import { PageBody } from "@/components/blocks/app-shell-12/components/page-toolbar";
 import { TaskDetail } from "@/components/tasks/TaskDetail";
 
 export const prerender = false;
@@ -25,7 +31,7 @@ if (!id) {
   title="Task detail"
   description="View and edit a single task: title, description, status, priority, progress, assignee, labels, due date, and history."
 >
-  <div class="container mx-auto flex max-w-5xl flex-col gap-8 px-4 py-12">
+  <PageBody>
     <TaskDetail client:load id={id} />
-  </div>
+  </PageBody>
 </BaseLayout>

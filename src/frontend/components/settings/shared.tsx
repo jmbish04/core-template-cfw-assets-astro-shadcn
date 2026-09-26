@@ -1,134 +1,165 @@
 /**
- * @fileoverview Shared presentational primitives for the settings islands.
+ * @fileoverview Shared primitives for the settings islands (ReUI Frame surface).
  *
- * These are intentionally small, local-to-settings building blocks (not part of
- * the global `ui/` design system) that encode the Monolith "settings row"
- * pattern: a label + description on the left, a control on the right, sections
- * divided by `divide-border/40` with no traditional 1px borders.
+ * The rows follow ReUI settings-9 / settings-10: a `Frame` holding one
+ * `FramePanel` whose children are shadcn `Item` rows split by `Separator`.
  *
  * Exports:
- *   - SettingsRow       – one label/description + control row
- *   - SettingsRowGroup  – a vertically divided group of rows
- *   - SectionHeader     – a section title + optional description
- *   - SavedFlash        – a transient "Saved" inline confirmation
- *   - InlineError       – a destructive inline error line (ApiError.message)
- *   - RowSkeleton       – a loading placeholder for a settings row
+ *   - SettingRow     – one Item row: title + description left, control right
+ *   - SettingsRows   – joins rows with Separators (settings-9 panel body)
+ *   - SaveBar        – footer save + discard bar with an unsaved-changes badge
+ *   - SavedFlash     – a transient "Saved" success badge
+ *   - InlineError    – a destructive inline error line (ApiError.message)
+ *   - RowSkeleton    – a loading placeholder shaped like a SettingRow
+ *   - useSavedFlash  – `[show, flash]` pair driving SavedFlash
+ *   - optionLabel    – value → label lookup for Select option lists
  */
 
 "use client";
 
-import { CheckCircle2Icon } from "lucide-react";
 import * as React from "react";
 
+import { Badge } from "@/components/reui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemTitle,
+} from "@/components/ui/item";
+import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
-/** A single settings control row: text on the left, control on the right. */
-export function SettingsRow({
-  label,
+/** A select option: stored value + visible label. */
+export interface Option {
+  value: string;
+  label: string;
+}
+
+/** Resolve an option's label; never show a raw value when a label exists. */
+export function optionLabel(options: readonly Option[], value: string): string {
+  return options.find((o) => o.value === value)?.label ?? value;
+}
+
+/** One settings row (settings-9 PreferenceRow grammar). */
+export function SettingRow({
+  title,
   description,
-  htmlFor,
   control,
   className,
 }: {
-  label: React.ReactNode;
+  title: React.ReactNode;
   description?: React.ReactNode;
-  /** When the control is a labelable element, wire the label to it. */
-  htmlFor?: string;
   control: React.ReactNode;
   className?: string;
 }) {
   return (
-    <div
-      className={cn(
-        "flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6",
-        className,
-      )}
-    >
-      <div className="min-w-0 space-y-0.5">
-        {htmlFor ? (
-          <label htmlFor={htmlFor} className="text-sm font-medium text-foreground">
-            {label}
-          </label>
-        ) : (
-          <p className="text-sm font-medium text-foreground">{label}</p>
-        )}
-        {description ? (
-          <p className="text-xs text-muted-foreground">{description}</p>
-        ) : null}
-      </div>
-      <div className="flex shrink-0 items-center sm:justify-end">{control}</div>
-    </div>
+    <Item className={cn("px-4", className)}>
+      <ItemContent className="min-w-0">
+        <ItemTitle className="gap-2">{title}</ItemTitle>
+        {description ? <ItemDescription>{description}</ItemDescription> : null}
+      </ItemContent>
+      <ItemActions>{control}</ItemActions>
+    </Item>
   );
 }
 
-/** A vertically divided group of settings rows (no outer border). */
-export function SettingsRowGroup({
-  children,
-  className,
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
+/** Joins children with Separators, like the settings-9 panel body. */
+export function SettingsRows({ children }: { children: React.ReactNode }) {
+  const rows = React.Children.toArray(children);
   return (
-    <div className={cn("divide-y divide-border/40", className)}>{children}</div>
-  );
-}
-
-/** A titled section header with an optional supporting description. */
-export function SectionHeader({
-  title,
-  description,
-}: {
-  title: React.ReactNode;
-  description?: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-1">
-      <h2 className="text-sm font-semibold tracking-tight text-foreground">{title}</h2>
-      {description ? (
-        <p className="text-xs text-muted-foreground">{description}</p>
-      ) : null}
-    </div>
+    <>
+      {rows.map((row, i) => (
+        <React.Fragment key={i}>
+          {i > 0 ? <Separator /> : null}
+          {row}
+        </React.Fragment>
+      ))}
+    </>
   );
 }
 
 /**
- * A transient inline "Saved" confirmation. Render conditionally on `show`; the
- * caller is responsible for flipping it back off (typically on a timer).
+ * Footer save + discard bar. Sticks to the bottom of the viewport while the
+ * form is dirty so the save action is always reachable on long forms.
  */
+export function SaveBar({
+  dirty,
+  saving,
+  saved,
+  disabled,
+  onSave,
+  onDiscard,
+}: {
+  dirty: boolean;
+  saving: boolean;
+  saved: boolean;
+  disabled?: boolean;
+  onSave: () => void;
+  onDiscard: () => void;
+}) {
+  return (
+    <div
+      className={cn(
+        "bg-background/95 flex flex-wrap items-center justify-end gap-2 rounded-lg border px-4 py-2.5 backdrop-blur",
+        dirty && "sticky bottom-4 z-10 shadow-sm",
+      )}
+    >
+      <div className="mr-auto flex items-center gap-2 text-sm">
+        {dirty ? (
+          <Badge variant="warning-light">Unsaved changes</Badge>
+        ) : (
+          <SavedFlash show={saved} />
+        )}
+      </div>
+      <Button variant="ghost" onClick={onDiscard} disabled={!dirty || saving}>
+        Discard
+      </Button>
+      <Button onClick={onSave} disabled={!dirty || saving || disabled}>
+        {saving ? "Saving…" : "Save changes"}
+      </Button>
+    </div>
+  );
+}
+
+/** A transient success badge. The caller flips `show` off (see useSavedFlash). */
 export function SavedFlash({ show, label = "Saved" }: { show: boolean; label?: string }) {
   if (!show) return null;
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs text-emerald-400">
-      <CheckCircle2Icon className="size-3.5" />
+    <Badge variant="success-light" role="status">
       {label}
-    </span>
+    </Badge>
   );
 }
 
 /** A destructive inline error line, typically fed `ApiError.message`. */
 export function InlineError({ message }: { message?: string | null }) {
   if (!message) return null;
-  return <p className="text-sm text-destructive">{message}</p>;
+  return (
+    <p role="alert" className="text-destructive text-sm">
+      {message}
+    </p>
+  );
 }
 
-/** A loading placeholder shaped like a settings row. */
+/** A loading placeholder shaped like a SettingRow. */
 export function RowSkeleton() {
   return (
-    <div className="flex items-center justify-between py-4">
+    <div className="flex items-center justify-between px-4 py-3.5">
       <div className="space-y-2">
         <Skeleton className="h-4 w-40" />
         <Skeleton className="h-3 w-56" />
       </div>
-      <Skeleton className="h-6 w-16" />
+      <Skeleton className="h-8 w-24" />
     </div>
   );
 }
 
 /**
- * Small hook that returns a `[show, flash]` pair. Calling `flash()` sets `show`
- * true for `ms` milliseconds then clears it — used for the "Saved" confirmation.
+ * Returns a `[show, flash]` pair. Calling `flash()` sets `show` true for `ms`
+ * milliseconds then clears it — used for the "Saved" confirmation.
  */
 export function useSavedFlash(ms = 2500): [boolean, () => void] {
   const [show, setShow] = React.useState(false);
@@ -148,3 +179,6 @@ export function useSavedFlash(ms = 2500): [boolean, () => void] {
 
   return [show, flash];
 }
+
+/** Browser event fired after any mutation of the notifications feed. */
+export const NOTIFICATIONS_CHANGED = "notifications:changed";

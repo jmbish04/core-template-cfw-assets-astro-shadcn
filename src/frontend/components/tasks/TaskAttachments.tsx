@@ -30,7 +30,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Frame, FrameHeader, FramePanel, FrameTitle } from "@/components/reui/frame";
 import { Kbd } from "@/components/ui/kbd";
 import { apiGet, apiSend, ApiError } from "@/lib/api";
 import { humanSize } from "@/lib/format";
@@ -136,7 +136,7 @@ function NoFilesDropzone({
         if (file) onPick(file);
       }}
       className={cn(
-        "flex flex-col items-center justify-center rounded-2xl border-2 border-dashed",
+        "flex flex-col items-center justify-center rounded-lg border-2 border-dashed",
         "border-border/50 px-6 py-10 text-center transition-colors",
         "hover:border-primary/50 hover:bg-primary/5",
         dragOver && "border-primary bg-primary/10",
@@ -257,17 +257,17 @@ export function TaskAttachments({ taskId }: TaskAttachmentsProps) {
   );
 
   return (
-    <Card>
-      <CardHeader>
+    <Frame spacing="sm">
+      <FrameHeader>
         <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-sm">
+          <FrameTitle className="text-sm">
             Attachments
             {attachments.length > 0 ? (
               <span className="ml-2 text-xs font-normal text-muted-foreground">
                 {attachments.length}
               </span>
             ) : null}
-          </CardTitle>
+          </FrameTitle>
           <input
             ref={inputRef}
             type="file"
@@ -297,8 +297,8 @@ export function TaskAttachments({ taskId }: TaskAttachmentsProps) {
             </Button>
           ) : null}
         </div>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-2">
+      </FrameHeader>
+      <FramePanel className="flex flex-col gap-2">
         {error ? <ErrorState message={error} onRetry={load} /> : null}
 
         {loading ? (
@@ -377,7 +377,7 @@ export function TaskAttachments({ taskId }: TaskAttachmentsProps) {
             })}
           </ul>
         )}
-      </CardContent>
-    </Card>
+      </FramePanel>
+    </Frame>
   );
 }

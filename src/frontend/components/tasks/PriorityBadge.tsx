@@ -1,30 +1,20 @@
 /**
- * @fileoverview PriorityBadge — a high-contrast, dark-theme pill conveying a
- * task's urgency. Used on board cards, task rows, and the detail view so the
- * priority color language stays consistent across every Tasks surface.
- *
- * Monolith color language (per spec):
- *   low    → muted  (neutral, de-emphasized)
- *   medium → blue   (chart-1 token family)
- *   high   → amber  (chart-4 token family)
- *   urgent → rose   (destructive / rose token family)
- *
- * Colors are expressed with explicit bg/text utility pairs tuned for the
- * dark surface rather than the generic Badge variants, so each level reads at a
- * glance without relying on the (banned) 1px border separators.
+ * @fileoverview PriorityBadge — a task's urgency as a ReUI Badge. Token-only
+ * colour language shared by the grid, board cards, and the detail view:
+ * low → secondary, medium → info, high → warning, urgent → destructive.
  */
 
-import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
+import type { ComponentProps } from "react";
+
+import { Badge } from "@/components/reui/badge";
 
 import { PRIORITY_LABELS, type TaskPriority } from "./types";
 
-/** Tailwind class pairs per priority — dark-surface tuned, high contrast. */
-const PRIORITY_CLASSES: Record<TaskPriority, string> = {
-  low: "bg-muted text-muted-foreground",
-  medium: "bg-sky-500/15 text-sky-300",
-  high: "bg-amber-500/15 text-amber-300",
-  urgent: "bg-rose-500/15 text-rose-300",
+const PRIORITY_VARIANT: Record<TaskPriority, ComponentProps<typeof Badge>["variant"]> = {
+  low: "secondary",
+  medium: "info-light",
+  high: "warning-light",
+  urgent: "destructive-light",
 };
 
 export interface PriorityBadgeProps {
@@ -32,13 +22,10 @@ export interface PriorityBadgeProps {
   className?: string;
 }
 
-/** Render a priority as a colored pill. */
+/** Render a priority as a coloured pill. */
 export function PriorityBadge({ priority, className }: PriorityBadgeProps) {
   return (
-    <Badge
-      variant="outline"
-      className={cn("border-transparent", PRIORITY_CLASSES[priority], className)}
-    >
+    <Badge variant={PRIORITY_VARIANT[priority]} className={className}>
       {PRIORITY_LABELS[priority]}
     </Badge>
   );

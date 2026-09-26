@@ -1,11 +1,17 @@
 ---
+/**
+ * /chat — AI chat on ReUI Pro block `ai-chat-1`, answered by core-guardian
+ * through the CORE_GUARDIAN service binding (POST /api/chat).
+ *
+ * RESPONSIVE STRATEGY — /chat
+ * desktop: header thread switcher · centred 3xl transcript · docked composer
+ * mobile:  same single column full-bleed; title moves into the transcript; switcher popover fits width
+ * vehicle: not a target — typing while driving is out of scope; transcript readable at lead size only
+ */
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import { AgentChat } from "@/components/AgentChat";
+import { AiChat } from "@/components/blocks/ai-chat-1/components/ai-chat";
 ---
 
-<BaseLayout
-  title="AI Assistant Chat"
-  description="Chat with AI agents powered by Cloudflare Agents SDK and Workers AI"
->
-  <AgentChat client:only="react" />
+<BaseLayout title="AI chat" description="Chat routed through the core-guardian AI router">
+  <AiChat client:only="react" />
 </BaseLayout>

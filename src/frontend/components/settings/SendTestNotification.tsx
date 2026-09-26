@@ -1,13 +1,10 @@
 /**
- * @fileoverview SendTestNotification — composer that POSTs to /api/notifications.
+ * @fileoverview SendTestNotification — composer that POSTs to /api/notifications,
+ * in a ReUI Frame (settings form grammar: FrameHeader + FramePanel fields).
  *
- * Because the notifications REST router proxies through the NotificationsAgent
- * Durable Object, a successful POST is reflected in realtime to every connected
- * WebSocket client — including the `<NotificationsFeed />` rendered alongside
- * this control on the notifications page. There is therefore no local state to
- * reconcile here; we just fire the request and let the DO push the update.
- *
- * Monolith dark profile: shadcn Card/Select/Input/Button, no 1px borders.
+ * After a successful POST it fires the `notifications:changed` window event so
+ * the NotificationsFeed on the same page refetches immediately instead of
+ * waiting for its next poll.
  */
 
 "use client";
@@ -16,19 +13,20 @@ import { useCallback, useState } from "react";
 
 import { SendIcon } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  Frame,
+  FrameDescription,
+  FrameHeader,
+  FramePanel,
+  FrameTitle,
+} from "@/components/reui/frame";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -36,7 +34,7 @@ import {
 
 import { apiSend, ApiError } from "@/lib/api";
 
-import { InlineError, SavedFlash, useSavedFlash } from "./shared";
+import { InlineError, NOTIFICATIONS_CHANGED, SavedFlash, useSavedFlash } from "./shared";
 
 type NotificationType = "info" | "success" | "warning" | "error" | "mention" | "system";
 
@@ -52,7 +50,7 @@ const TYPE_OPTIONS: { value: NotificationType; label: string }[] = [
 export function SendTestNotification() {
   const [type, setType] = useState<NotificationType>("info");
   const [title, setTitle] = useState("Test notification");
-  const [body, setBody] = useState("Streamed live from the NotificationsAgent DO.");
+  const [body, setBody] = useState("Sent from the notifications page.");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, flashSent] = useSavedFlash();
@@ -67,40 +65,43 @@ export function SendTestNotification() {
         body: body.trim() || null,
         actor: "you",
       });
+      window.dispatchEvent(new Event(NOTIFICATIONS_CHANGED));
       flashSent();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Failed to send notification.");
+      setError(
+        e instanceof ApiError ? e.message : "Couldn't send the notification. Try again.",
+      );
     } finally {
       setSending(false);
     }
   }, [type, title, body, flashSent]);
 
   return (
-    <Card className="bg-card ring-1 ring-border/40">
-      <CardHeader className="space-y-1">
-        <CardTitle className="text-base">Send a test notification</CardTitle>
-        <CardDescription>
-          POSTs to <code className="text-xs">/api/notifications</code>, which proxies to the
-          NotificationsAgent DO — the feed updates live over its WebSocket.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        <div className="grid gap-3 sm:grid-cols-[160px_1fr]">
+    <Frame>
+      <FrameHeader>
+        <FrameTitle>Send a test notification</FrameTitle>
+        <FrameDescription>Posts to the notifications API; it lands in the inbox right away.</FrameDescription>
+      </FrameHeader>
+      <FramePanel className="flex flex-col gap-3">
+        <div className="grid gap-3 sm:grid-cols-[140px_1fr]">
           <div className="grid gap-1.5">
             <Label htmlFor="notif-type">Type</Label>
             <Select
+              items={TYPE_OPTIONS}
               value={type}
               onValueChange={(v) => typeof v === "string" && setType(v as NotificationType)}
             >
               <SelectTrigger id="notif-type" className="w-full">
-                <SelectValue />
+                <SelectValue placeholder="Select a type" />
               </SelectTrigger>
               <SelectContent>
-                {TYPE_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
+                <SelectGroup>
+                  {TYPE_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               </SelectContent>
             </Select>
           </div>
@@ -127,13 +128,13 @@ export function SendTestNotification() {
         <InlineError message={error} />
 
         <div className="flex items-center gap-3">
-          <Button onClick={send} disabled={sending} size="sm">
-            <SendIcon className="size-3.5" />
+          <Button onClick={send} disabled={sending}>
+            <SendIcon aria-hidden="true" />
             {sending ? "Sending…" : "Send test notification"}
           </Button>
           <SavedFlash show={sent} label="Sent" />
         </div>
-      </CardContent>
-    </Card>
+      </FramePanel>
+    </Frame>
   );
 }

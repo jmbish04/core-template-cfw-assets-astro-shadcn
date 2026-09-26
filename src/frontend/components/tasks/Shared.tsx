@@ -16,6 +16,19 @@ import { cn } from "@/lib/utils";
 import { initials } from "./types";
 
 // ---------------------------------------------------------------------------
+// MOBILE_SHEET_DIALOG
+// ---------------------------------------------------------------------------
+
+/**
+ * Append to a `DialogContent` className: below `md` the centred modal becomes a
+ * bottom sheet (full width, pinned to the bottom edge, scrolls inside), which is
+ * the Frame design system's "modals → Sheet on mobile" rule without a second
+ * component tree.
+ */
+export const MOBILE_SHEET_DIALOG =
+  "max-md:top-auto max-md:bottom-0 max-md:left-0 max-md:max-w-none max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-b-none max-md:max-h-[90dvh] max-md:overflow-y-auto";
+
+// ---------------------------------------------------------------------------
 // EmptyState
 // ---------------------------------------------------------------------------
 
@@ -32,7 +45,7 @@ export function EmptyState({ icon, title, description, action, className }: Empt
   return (
     <div
       className={cn(
-        "flex flex-col items-center justify-center gap-3 rounded-xl bg-muted/20 px-6 py-16 text-center ring-1 ring-border/40",
+        "flex flex-col items-center justify-center gap-3 rounded-lg bg-muted/20 px-6 py-16 text-center ring-1 ring-border/40",
         className,
       )}
     >
