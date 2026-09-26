@@ -1,3 +1,5 @@
+"use client"
+
 import { useEffect, useRef, useState } from "react"
 import type {
   CSSProperties,
@@ -2195,7 +2197,7 @@ function DataGridCellSelection<TData extends object>({
   useEffect(() => {
     if (!viewportEl || !editorSession) return
     viewportEl.setAttribute("data-cell-editing", "")
-    return () => { viewportEl.removeAttribute("data-cell-editing") }
+    return () => viewportEl.removeAttribute("data-cell-editing")
   }, [viewportEl, editorSession])
 
   // Closing an editor the user finished with keys hands focus back to the

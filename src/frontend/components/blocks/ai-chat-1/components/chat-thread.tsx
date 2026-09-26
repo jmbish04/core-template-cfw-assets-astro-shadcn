@@ -70,7 +70,6 @@ import {
   type ThreadRecord,
   type TranscriptRecord,
 } from "./data"
-import { Markdown } from "@/components/ui/markdown"
 import { SparklesIcon, SearchIcon, CodeIcon, BookOpenIcon, FileTextIcon, DownloadIcon, CopyIcon, ThumbsUpIcon, ThumbsDownIcon, Pin, MessageSquareIcon, CornerDownLeftIcon } from "lucide-react"
 
 const STARTER_ICONS: Record<string, ReactNode> = {
@@ -418,10 +417,6 @@ const PartBody = memo(
         </Attachment>
       )
     }
-
-    // Settled replies are model markdown (lists, bold, tables): render them
-    // properly. Mid-reveal keeps the block's plain path so the caret works.
-    if (!streaming && !caret) return <Markdown className="text-sm">{part.text}</Markdown>
 
     // Split on backticks rather than match a closed pair: mid type the closer
     // has not arrived yet, and a lone backtick must never render as text.

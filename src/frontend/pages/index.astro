@@ -1,22 +1,9 @@
 ---
-/**
- * RESPONSIVE STRATEGY
- * desktop: toolbar, then the stats-7 metric row (3 cells), then card-20 area cards (3-up), then the template panel.
- * mobile (390px): metric cells stack as dense rows; area cards go 1-up with full-width link rows; no horizontal scroll.
- * vehicle: same as mobile; every link row is a full-width tap target.
- */
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import { PageBody, PageToolbar } from "@/components/blocks/app-shell-12/components/page-toolbar";
-import { TemplateLandingPage } from "@/components/TemplateLandingPage";
-import { siteConfig } from "@/lib/config";
+import { PageBody, PageToolbar } from "@/components/blocks/app-shell-2/components/page-shell";
 ---
-
-<BaseLayout title="Overview" description={siteConfig.description}>
+<BaseLayout title="Overview">
   <PageBody>
-    <PageToolbar
-      title={siteConfig.name}
-      description="A reference app on one Cloudflare Worker: Astro and React islands on the front, Hono, D1 and Workers AI behind. Every page below runs on live data."
-    />
-    <TemplateLandingPage client:load />
+    <PageToolbar title="Overview" description="Placeholder while the rebuild lands." />
   </PageBody>
 </BaseLayout>

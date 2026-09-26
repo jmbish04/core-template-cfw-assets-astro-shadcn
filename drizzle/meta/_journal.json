@@ -43,6 +43,13 @@
       "when": 1790405865387,
       "tag": "0005_eager_franklin_richards",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1790421888329,
+      "tag": "0006_fuzzy_otto_octavius",
+      "breakpoints": true
     }
   ]
 }

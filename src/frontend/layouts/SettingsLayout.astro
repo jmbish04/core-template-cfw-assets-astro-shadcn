@@ -1,25 +1,19 @@
 ---
 /**
  * RESPONSIVE STRATEGY
- * desktop: page toolbar, then a 200px vertical side-tab rail (ReUI profile-1 look) beside the section content.
+ * desktop: page toolbar, then a 200px vertical side-tab rail beside the section content.
  * mobile (390px): the rail becomes a horizontal scroll rail of line tabs above the content; no page scroll sideways.
- * vehicle: same as mobile; each tab is a 36px tap target.
  *
  * @fileoverview SettingsLayout — shared chrome for every /settings/* page.
  *
- * Wraps BaseLayout (app-shell-12) with PageBody + PageToolbar and the static
+ * Wraps BaseLayout (app-shell-2) with PageBody + PageToolbar and the static
  * SettingsNav rail. The active route comes from `Astro.url.pathname`, so the
  * rail renders correctly with no hydration.
- *
- * Usage (from a page):
- *   <SettingsLayout title="Preferences" description="…">
- *     <SomeIsland client:load />
- *   </SettingsLayout>
  */
 
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import { PageBody, PageToolbar } from "@/components/blocks/app-shell-12/components/page-toolbar";
-import { SettingsNav } from "@/components/settings/SettingsNav";
+import { PageBody, PageToolbar } from "@/components/blocks/app-shell-2/components/page-shell";
+import { SettingsNav } from "@/components/settings/settings-nav";
 
 interface Props {
   title: string;
