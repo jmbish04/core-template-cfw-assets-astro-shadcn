@@ -26,9 +26,11 @@ import { authMiddleware } from "./middleware/auth";
 import { errorHandler } from "./middleware/error";
 import { authRouter } from "./routes/auth";
 import { chatRouter } from "./routes/chat";
+import { chatDocumentsRouter } from "./routes/chat-documents";
 import { clientErrorRouter } from "./routes/client-error";
 import { adminRouter, configRouter } from "./routes/config";
 import { docsRouter } from "./routes/docs";
+import { filesRouter } from "./routes/files";
 import { healthRouter } from "./routes/health";
 import { inboxRouter } from "./routes/inbox";
 import { activityRouter } from "./routes/activity";
@@ -131,6 +133,8 @@ app.route("/api/tasks", taskDetailRouter);
 app.route("/api/tasks", taskHierarchyRouter);
 app.route("/api/team-notes", teamNotesRouter);
 app.route("/api/threads", threadsRouter);
+// Canvas document for a thread — same base, all paths are `/{id}/document…`.
+app.route("/api/threads", chatDocumentsRouter);
 app.route("/api/chat", chatRouter);
 app.route("/api/settings", settingsRouter);
 app.route("/api/webhooks", webhooksRouter);
@@ -138,6 +142,7 @@ app.route("/api/activity", activityRouter);
 app.route("/api/notifications", notificationsRouter);
 app.route("/api/dashboard", dashboardRouter);
 app.route("/api/inbox", inboxRouter);
+app.route("/api/files", filesRouter);
 app.route("/api/seed", seedRouter);
 
 app.route("/api/__client-error", clientErrorRouter);

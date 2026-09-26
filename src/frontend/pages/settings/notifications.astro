@@ -1,21 +1,20 @@
 ---
 /**
  * RESPONSIVE STRATEGY
- * desktop: one Frame holding the category × channel checkbox matrix (settings-11) with column and row toggles, footer save bar.
- * mobile (390px): category descriptions hide; five compact checkbox columns fit 390px without horizontal scroll.
- * vehicle: same as mobile; checkbox hit areas extend beyond the 16px box.
+ * desktop: one row per category with its four channel switches in a 2-up grid.
+ * mobile (390px): switches stack one per line under the category copy.
  *
- * @fileoverview /settings/notifications — channel × category delivery matrix,
- * backed by /api/settings/notification-prefs.
+ * @fileoverview /settings/notifications — the channel × category matrix from
+ * `notification_prefs`, saved through the bulk
+ * `PUT /api/settings/notification-prefs`.
  */
-
 import SettingsLayout from "@/layouts/SettingsLayout.astro";
-import { NotificationPrefsMatrix } from "@/components/settings";
+import { NotificationPrefsForm } from "@/components/settings/notification-prefs-form";
 ---
 
 <SettingsLayout
   title="Notifications"
-  description="Choose which notification categories reach you on each channel."
+  description="Choose which channels carry which events."
 >
-  <NotificationPrefsMatrix client:load />
+  <NotificationPrefsForm client:load />
 </SettingsLayout>

@@ -41,8 +41,16 @@ export interface GuardianChatResult {
 
 /** Thrown when core-guardian rejects or fails a run. `status` is the HTTP-shaped status core-guardian returned (422/429/other). */
 export class GuardianError extends Error {
-  constructor(public readonly status: number, public readonly body: unknown) {
+  // Written out rather than declared as constructor parameter properties, so
+  // this module can be imported directly by `scripts/selfcheck.mjs` under
+  // Node's strip-only TypeScript support.
+  readonly status: number;
+  readonly body: unknown;
+
+  constructor(status: number, body: unknown) {
     super(`core-guardian run failed (status ${status})`);
+    this.status = status;
+    this.body = body;
   }
 }
 
@@ -97,4 +105,175 @@ export async function guardianChat(
     costUsd: outer?.cost_usd ?? null,
     requestUuid: outer?.request_uuid ?? null,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Streaming
+// ---------------------------------------------------------------------------
+
+/**
+ * Run a chat completion through core-guardian and get the raw SSE `Response`
+ * back instead of a settled string.
+ *
+ * core-guardian answers `{ stream: Response }` when `stream: true` is set on
+ * the run payload; the body is an OpenAI-shaped `data: {...}` event stream
+ * terminated by `data: [DONE]`. Callers are expected to re-emit their own
+ * event shape rather than proxying this straight to the browser, so the
+ * server still sees every token and can persist the finished turn.
+ *
+ * @throws {GuardianError} when core-guardian answers with a status instead of
+ *   a stream (422 no model in budget, 429 breaker, anything else).
+ */
+export async function guardianStream(
+  env: Env,
+  { messages, task, useCase = "chat", importance = "low", complexity }: GuardianChatOptions,
+): Promise<Response> {
+  const guardian = env.CORE_GUARDIAN as unknown as {
+    run(payload: unknown): Promise<{ status: number; body: unknown } | { stream: Response }>;
+  };
+  const result = await guardian.run({
+    project: "core-template-cfw-assets-astro-shadcn",
+    importance,
+    use_case: useCase,
+    task,
+    complexity,
+    stream: true,
+    input: { messages },
+  });
+
+  if ("stream" in result) return result.stream;
+  throw new GuardianError(result.status, result.body);
+}
+
+/** Token accounting core-guardian reports on the final stream frame. */
+export interface GuardianUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
+/** One thing that happened on the wire while the model was answering. */
+export type GuardianStreamEvent =
+  /** A chunk of the visible answer. */
+  | { type: "delta"; text: string }
+  /** A chunk of the model's reasoning, when it is a thinking model. */
+  | { type: "reasoning"; text: string }
+  /** Final token counts. Arrives once, after the last delta. */
+  | { type: "usage"; usage: GuardianUsage };
+
+/**
+ * Which provider and model core-guardian actually routed this stream to.
+ *
+ * The router reports its decision in response HEADERS, because a stream body
+ * has no room for it before the first token. Reading it here is what lets a
+ * chat surface show the real model instead of a label the client guessed.
+ */
+export function guardianStreamMeta(stream: Response) {
+  return {
+    provider: stream.headers.get("x-guardian-provider"),
+    model: stream.headers.get("x-guardian-model"),
+    requestUuid: stream.headers.get("x-request-uuid"),
+  };
+}
+
+/**
+ * Read an OpenAI-shaped SSE body and yield what it carries.
+ *
+ * Three things come down this pipe, and conflating them is the usual bug:
+ *  - `delta.content` — the answer
+ *  - `delta.reasoning` — the thinking, on a reasoning model. It is NOT part of
+ *    the answer and must never be concatenated into it; surfaces that show a
+ *    "thinking" fold render this, and surfaces that do not simply ignore it.
+ *  - a trailing `usage` object with the token counts
+ *
+ * Tolerates a bare `{ text }` / `{ response }` payload too, because
+ * core-guardian normalises several upstream providers and not all of them use
+ * the chat-completions shape.
+ */
+export async function* readGuardianStream(stream: Response): AsyncGenerator<GuardianStreamEvent> {
+  const body = stream.body;
+  if (!body) return;
+
+  const reader = body.pipeThrough(new TextDecoderStream()).getReader();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += value;
+
+    // SSE frames are separated by a blank line; keep the trailing partial.
+    const frames = buffer.split("\n\n");
+    buffer = frames.pop() ?? "";
+
+    for (const frame of frames) {
+      for (const line of frame.split("\n")) {
+        if (!line.startsWith("data:")) continue;
+        const payload = line.slice(5).trim();
+        if (!payload || payload === "[DONE]") continue;
+
+        let json: any;
+        try {
+          json = JSON.parse(payload);
+        } catch {
+          // A non-JSON keepalive frame is normal; skip it.
+          continue;
+        }
+
+        const choice = json?.choices?.[0];
+        const reasoning = choice?.delta?.reasoning;
+        if (typeof reasoning === "string" && reasoning.length > 0) {
+          yield { type: "reasoning", text: reasoning };
+        }
+
+        const delta =
+          choice?.delta?.content ?? choice?.message?.content ?? json?.response ?? json?.text ?? "";
+        if (typeof delta === "string" && delta.length > 0) {
+          yield { type: "delta", text: delta };
+        }
+
+        const usage = json?.usage;
+        if (usage && typeof usage.total_tokens === "number") {
+          yield {
+            type: "usage",
+            usage: {
+              promptTokens: usage.prompt_tokens ?? 0,
+              completionTokens: usage.completion_tokens ?? 0,
+              totalTokens: usage.total_tokens,
+            },
+          };
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Ask core-guardian for a short chat title.
+ *
+ * Deliberately best-effort: a degraded router must never fail the chat turn
+ * that triggered the titling, so this returns `null` instead of throwing.
+ */
+export async function guardianTitle(env: Env, firstUserMessage: string): Promise<string | null> {
+  try {
+    const { text } = await guardianChat(env, {
+      task: "threads_title",
+      useCase: "chat",
+      importance: "low",
+      messages: [
+        {
+          role: "system",
+          content:
+            "You write a short chat title (3-7 words) summarising the user's message. " +
+            "Return ONLY the title — no quotes, no trailing punctuation, no preamble.",
+        },
+        { role: "user", content: firstUserMessage.slice(0, 800) },
+      ],
+    });
+    const title = text.replace(/^["'\s]+|["'\s]+$/g, "").slice(0, 80);
+    return title || null;
+  } catch (error) {
+    console.error("guardianTitle error:", error);
+    return null;
+  }
 }

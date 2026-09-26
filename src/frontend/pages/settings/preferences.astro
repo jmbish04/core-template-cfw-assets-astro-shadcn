@@ -1,21 +1,21 @@
 ---
 /**
  * RESPONSIVE STRATEGY
- * desktop: three collapsible Frame sections (settings-9) of label | control rows, footer save + discard bar.
- * mobile (390px): rows wrap so the control drops under its label; the save bar sticks to the bottom while dirty.
- * vehicle: same as mobile; switches and selects are 36px targets.
+ * desktop: section rail beside the preferences Frame.
+ * mobile (390px): the rail becomes a line-tab scroller above the Frame; each
+ * settings row stacks its control under the label.
  *
- * @fileoverview /settings/preferences — Appearance, Language & Region, and
- * Accessibility preferences, backed by /api/settings/preferences.
+ * @fileoverview /settings/preferences — the `preferences` D1 row, one
+ * settings-3 field row per column, read and written through
+ * `GET|PUT /api/settings/preferences`.
  */
-
 import SettingsLayout from "@/layouts/SettingsLayout.astro";
-import { PreferencesForm } from "@/components/settings";
+import { PreferencesForm } from "@/components/settings/preferences-form";
 ---
 
 <SettingsLayout
   title="Preferences"
-  description="Tune appearance, locale, and accessibility for your workspace."
+  description="Appearance, locale and accessibility for this workspace."
 >
   <PreferencesForm client:load />
 </SettingsLayout>

@@ -1,21 +1,19 @@
 ---
 /**
  * RESPONSIVE STRATEGY
- * desktop: stacked Frame cards (settings-10): system status, maintenance, and a danger zone with a confirm dialog.
- * mobile (390px): rows wrap so buttons drop under their descriptions; cards stay full width.
- * vehicle: same as mobile; the destructive action always needs a second confirm tap.
+ * desktop: maintenance rows with right-aligned buttons, health list below.
+ * mobile (390px): buttons go full width under their description.
  *
- * @fileoverview /settings/advanced — system info + danger zone, backed by
- * /api/ping and /api/notifications.
+ * @fileoverview /settings/advanced — seeding, clearing and the health readout.
+ * Every destructive action confirms first.
  */
-
 import SettingsLayout from "@/layouts/SettingsLayout.astro";
-import { AdvancedPanel } from "@/components/settings";
+import { AdvancedPanel } from "@/components/settings/advanced-panel";
 ---
 
 <SettingsLayout
   title="Advanced"
-  description="Read-only system status plus soft resets and destructive actions."
+  description="Maintenance actions and the last recorded health run."
 >
   <AdvancedPanel client:load />
 </SettingsLayout>

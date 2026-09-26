@@ -40,10 +40,10 @@ import { RecordsEmptyIllustration } from "@/components/blocks/empty-state-1/comp
 import { FrontendErrorDialog } from "@/components/FrontendErrorDialog";
 import { Badge } from "@/components/reui/badge";
 import { Frame, FramePanel } from "@/components/reui/frame";
-import { FilterSelect } from "@/components/tasks/FilterSelect";
-import { NoteDialog } from "@/components/tasks/NoteDialog";
-import type { ListEnvelope, TeamNote } from "@/components/tasks/types";
-import { useProjects } from "@/components/tasks/useProjects";
+import { FilterSelect } from "@/components/ui/option-select";
+import { NoteDialog } from "@/components/notes/NoteDialog";
+import type { ListEnvelope, TeamNote } from "@/components/common";
+import { useProjects } from "@/components/common";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -362,16 +362,16 @@ export function NotesWorkspace() {
               onChange={setPinned}
               options={PINNED_OPTIONS}
               allLabel="All notes"
-              aria-label="Filter by pinned"
-              triggerClassName="w-full"
+              ariaLabel="Filter by pinned"
+              className="w-full"
             />
             <FilterSelect
               value={projectId}
               onChange={setProjectId}
               options={projectOptions}
               allLabel="All projects"
-              aria-label="Filter by project"
-              triggerClassName="w-full"
+              ariaLabel="Filter by project"
+              className="w-full"
             />
           </PopoverContent>
         </Popover>

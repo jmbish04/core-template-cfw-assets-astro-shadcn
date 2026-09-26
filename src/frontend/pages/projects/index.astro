@@ -1,25 +1,26 @@
 ---
 /**
  * RESPONSIVE STRATEGY
- * desktop: toolbar, then one Frame — search, status/starred/sort selects, and a 3-up grid of project Frames (or a list view).
- * mobile (390px): filters wrap; project tiles go 1-up as compact rows; the preview and create dialogs open as bottom sheets.
- * vehicle: same as mobile; each project row is a full-width tap target.
+ * desktop: three project cards per row under a single filter bar.
+ * mobile (390px): one card per row; the filter bar wraps and the search box
+ *   takes the full width.
+ * vehicle: not targeted.
  *
- * Projects index — `GET /api/projects` with search, filters, stars and create.
+ * Projects — the project grid over `/api/projects`.
  */
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import { PageBody, PageToolbar } from "@/components/blocks/app-shell-12/components/page-toolbar";
-import { ProjectList } from "@/components/tasks/ProjectList";
+import { PageBody, PageToolbar } from "@/components/blocks/app-shell-2/components/page-shell";
+import { ProjectList } from "@/components/projects/project-list";
 ---
 
 <BaseLayout
   title="Projects"
-  description="Browse, search, star, and create projects. Each project groups tasks and notes under a named, colour-coded entity."
+  description="Every project, with search, a status filter, star toggles and task counts."
 >
   <PageBody>
     <PageToolbar
       title="Projects"
-      description="Search, filter by status, and star the ones you care about. Click a project for its details."
+      description="Every project in the workspace. Star the ones you are living in."
     />
     <ProjectList client:load />
   </PageBody>

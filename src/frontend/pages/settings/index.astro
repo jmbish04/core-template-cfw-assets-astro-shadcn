@@ -1,10 +1,7 @@
 ---
 /**
- * @fileoverview /settings — entry point that redirects to the first section.
- *
- * The settings area is split into per-section pages sharing a sub-nav; there is
- * no standalone landing content, so visiting /settings forwards to Preferences.
+ * @fileoverview /settings — no screen of its own; the first section is the
+ * landing page, so this redirects straight to it.
  */
-
-return Astro.redirect("/settings/preferences");
+return Astro.redirect("/settings/preferences", 302);
 ---

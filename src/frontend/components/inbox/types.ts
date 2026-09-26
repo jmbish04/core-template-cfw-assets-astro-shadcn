@@ -1,14 +1,15 @@
 /**
- * @fileoverview Shared types + small helpers for the Inbox island.
+ * @fileoverview Wire types for `/api/inbox`, mirroring the `email_messages`
+ * Drizzle row as it arrives over JSON.
  *
- * Mirrors the `email_messages` D1 table / `GET /api/inbox` response shape. The
- * API serializes `received_at` as epoch milliseconds (number) over the wire.
+ * `receivedAt` is an integer timestamp in D1, so it crosses the wire as a
+ * number (or an ISO string, depending on the serializer) — never a `Date`.
  */
 
-/** Folder buckets a message can live in (matches the D1 enum). */
+/** Folder buckets in `email_messages.folder`. */
 export type EmailFolder = "inbox" | "archive" | "spam";
 
-/** A single received email as returned by the inbox API. */
+/** One row of `email_messages`. */
 export interface EmailMessage {
   id: string;
   fromAddress: string;
@@ -26,51 +27,12 @@ export interface EmailMessage {
   rawSize: number;
 }
 
-/** `GET /api/inbox` paginated envelope (extends the standard list shape). */
-export interface InboxEnvelope {
+/** The envelope `GET /api/inbox` returns. */
+export interface InboxListResponse {
   data: EmailMessage[];
   total: number;
   limit: number;
   offset: number;
+  /** Unread count in the inbox folder, regardless of the current filter. */
   unread: number;
-}
-
-/** `POST /api/inbox/seed` response. */
-export interface SeedResponse {
-  seeded: boolean;
-  message: string;
-  count?: number;
-}
-
-/**
- * The list filter tabs (lifted from ReUI app-shell-4's filter tabs). Each tab is
- * a server-side query: "unread" is the inbox folder with `read=false`, and
- * "starred" is a cross-folder view.
- */
-export type InboxView = "inbox" | "unread" | "starred" | "archive";
-
-/** Map a view to the API query params it implies. */
-export function viewToQuery(view: InboxView): {
-  folder?: EmailFolder;
-  starred?: "true";
-  read?: "false";
-} {
-  if (view === "starred") return { starred: "true" };
-  if (view === "archive") return { folder: "archive" };
-  if (view === "unread") return { folder: "inbox", read: "false" };
-  return { folder: "inbox" };
-}
-
-/** Derive up-to-two-letter initials from a name or email address. */
-export function senderInitials(name: string | null, address: string): string {
-  const source = name?.trim() || address.split("@")[0] || address;
-  const parts = source.replace(/[._-]+/g, " ").trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
-  return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase();
-}
-
-/** Display label for a sender: name if present, else the address. */
-export function senderLabel(msg: Pick<EmailMessage, "fromName" | "fromAddress">): string {
-  return msg.fromName?.trim() || msg.fromAddress;
 }

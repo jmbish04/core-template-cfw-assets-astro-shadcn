@@ -50,11 +50,13 @@ const createThreadBody = insertChatThreadSchema
   .partial()
   .openapi("CreateThreadBody");
 
-/** PATCH body — title / model / archived. */
+/** PATCH body — title / model / parent / archived. */
 const patchThreadBody = z
   .object({
     title: z.string().min(1).optional(),
     model: z.string().nullable().optional(),
+    /** Root thread this one branched from; null detaches it into a root. */
+    parentThreadId: z.string().nullable().optional(),
     archived: z.boolean().optional(),
   })
   .openapi("PatchThreadBody");
@@ -156,6 +158,7 @@ threadsRouter.openapi(
       .values({
         title: body.title ?? "New chat",
         model: body.model ?? null,
+        parentThreadId: body.parentThreadId ?? null,
         archived: body.archived ?? false,
         createdAt: now,
         updatedAt: now,
@@ -405,10 +408,16 @@ threadsRouter.openapi(
     const db = getDb(c.env);
 
     const patch: Record<string, unknown> = { updatedAt: new Date() };
-    if (body.title !== undefined) patch.title = body.title;
+    // A deliberate rename settles the title, so the next turn does not
+    // generate over it — including a rename back to the placeholder text.
+    if (body.title !== undefined) {
+      patch.title = body.title;
+      patch.titled = true;
+    }
     if (body.archived !== undefined) patch.archived = body.archived;
-    // Model is validated against the offered set; an unknown id clears it.
+    // Model is free text; core-guardian picks the real one per request.
     if (body.model !== undefined) patch.model = body.model;
+    if (body.parentThreadId !== undefined) patch.parentThreadId = body.parentThreadId;
 
     const [row] = await db
       .update(chatThreads)

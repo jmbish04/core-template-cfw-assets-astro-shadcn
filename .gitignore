@@ -21,3 +21,7 @@ pnpm-debug.log*
 # macOS-specific files
 .DS_Store
 .reui-add.lock
+
+# local check output (scripts/check.sh)
+.check-*/
+dev_output.log

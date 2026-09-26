@@ -47,7 +47,7 @@ import {
   TimelineSeparator,
   TimelineTitle,
 } from "@/components/reui/timeline";
-import { NOTIFICATIONS_CHANGED } from "@/components/settings/shared";
+import { NOTIFICATIONS_CHANGED } from "@/lib/events";
 import { Button } from "@/components/ui/button";
 import {
   Empty,

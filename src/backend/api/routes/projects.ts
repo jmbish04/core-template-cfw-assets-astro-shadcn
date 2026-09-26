@@ -17,10 +17,51 @@
  */
 
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
-import { and, desc, eq, like, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, like, or, sql } from "drizzle-orm";
 
 import { getDb } from "../../db";
-import { insertProjectSchema, projects, selectProjectSchema } from "../../db/schema";
+import { insertProjectSchema, projects, selectProjectSchema, tasks } from "../../db/schema";
+
+/**
+ * Live task counts per project id.
+ *
+ * `projects.task_count` is a denormalized column that nothing maintains once
+ * the row exists: creating or deleting a task does not touch it, so a project
+ * created through the wizard reported "0 tasks" forever even though its
+ * starter tasks were written. A card reading zero looks like the create
+ * silently failed, which is the worst possible way to be wrong.
+ *
+ * One grouped count is always right and cannot drift. It is a separate query
+ * rather than a correlated subquery so the SQL is plain enough to read.
+ *
+ * @param db An open Drizzle client.
+ * @param ids Project ids to count for. An empty list short-circuits.
+ * @returns projectId → number of tasks. Ids with no tasks are absent.
+ */
+async function taskCountsFor(
+  db: ReturnType<typeof getDb>,
+  ids: string[],
+): Promise<Map<string, number>> {
+  if (ids.length === 0) return new Map();
+  const rows = await db
+    .select({ projectId: tasks.projectId, count: sql<number>`count(*)` })
+    .from(tasks)
+    .where(inArray(tasks.projectId, ids))
+    .groupBy(tasks.projectId);
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    if (row.projectId) counts.set(row.projectId, Number(row.count));
+  }
+  return counts;
+}
+
+/** Replace the stale stored count with the live one. */
+function withTaskCount<T extends { id: string; taskCount: number }>(
+  row: T,
+  counts: Map<string, number>,
+): T {
+  return { ...row, taskCount: counts.get(row.id) ?? 0 };
+}
 
 // ---------------------------------------------------------------------------
 // Shared schemas
@@ -121,14 +162,18 @@ projectsRouter.openapi(
       taskCount: projects.taskCount,
     } as const;
     const sortCol = sortMap[sort as keyof typeof sortMap] ?? projects.updatedAt;
+    // Newest-first is right for dates and counts, and wrong for a name: "sort
+    // by name" descending hands back Z->A, which reads as a bug.
+    const direction = sort === "name" ? asc : desc;
 
     const [rows, countResult] = await Promise.all([
-      db.select().from(projects).where(where).orderBy(desc(sortCol)).limit(limit).offset(offset),
+      db.select().from(projects).where(where).orderBy(direction(sortCol)).limit(limit).offset(offset),
       db.select({ count: sql<number>`count(*)` }).from(projects).where(where),
     ]);
 
     const total = countResult[0]?.count ?? 0;
-    return c.json({ data: rows, total, limit, offset }, 200);
+    const counts = await taskCountsFor(db, rows.map((r) => r.id));
+    return c.json({ data: rows.map((r) => withTaskCount(r, counts)), total, limit, offset }, 200);
   },
 );
 
@@ -196,7 +241,8 @@ projectsRouter.openapi(
     if (!row) {
       return c.json({ error: "Project not found." }, 404);
     }
-    return c.json(row, 200);
+    const counts = await taskCountsFor(db, [row.id]);
+    return c.json(withTaskCount(row, counts), 200);
   },
 );
 
@@ -238,7 +284,11 @@ projectsRouter.openapi(
     if (!row) {
       return c.json({ error: "Project not found." }, 404);
     }
-    return c.json(row, 200);
+    // Same derivation as the read paths: returning the row as stored would
+    // hand the caller taskCount 0 for a project full of tasks, and a card
+    // rendered from this response would read as though they were deleted.
+    const counts = await taskCountsFor(db, [row.id]);
+    return c.json(withTaskCount(row, counts), 200);
   },
 );
 

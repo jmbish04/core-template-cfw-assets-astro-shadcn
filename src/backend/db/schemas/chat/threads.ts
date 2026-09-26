@@ -28,6 +28,8 @@ export const CHAT_THREADS_COLUMN_DESCRIPTIONS: Record<string, string> = {
   id: "Thread id (UUID). Keys the associated chat_messages rows.",
   title: "Short conversation title. Defaults to 'New chat'; auto-generated from the first user turn.",
   model: "Legacy free-text model label. core-guardian now picks the provider/model dynamically per reply; this column is no longer validated against a fixed list.",
+  parent_thread_id: "Root thread this one was forked from, or null for a root. A regenerate/edit on the branching chat surface creates a sibling thread rather than overwriting a turn, so a version survives a reload.",
+  titled: "Boolean (0/1). True once the thread has a title someone chose — the model's on the first reply, or the user's rename. Guards against re-titling a thread the user deliberately named.",
   archived: "Boolean (0/1). Archived threads are hidden from the default thread list but not deleted.",
   created_at: "Unix timestamp (seconds) when the thread was created.",
   updated_at: "Unix timestamp (seconds) of the last activity (new message / rename / model change).",
@@ -43,6 +45,15 @@ export const chatThreads = sqliteTable("chat_threads", {
     .$defaultFn(() => crypto.randomUUID()),
   title: text("title").notNull().default("New chat"),
   model: text("model"),
+  // A forked thread points at the thread it branched from. Null for a root.
+  // Deliberately NOT a foreign key: deleting a root must not cascade away the
+  // branches taken from it, which are independent conversations.
+  parentThreadId: text("parent_thread_id"),
+  // Whether this thread's title is settled. Carried explicitly rather than
+  // inferred by comparing the title against the placeholder: a user who
+  // renames a thread to "New chat" means it, and inferring would silently
+  // overwrite them on the next turn.
+  titled: integer("titled", { mode: "boolean" }).notNull().default(false),
   archived: integer("archived", { mode: "boolean" }).notNull().default(false),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()

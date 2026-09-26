@@ -1,21 +1,19 @@
 ---
 /**
  * RESPONSIVE STRATEGY
- * desktop: one Frame of endpoint rows (settings-8): health alerts, status badge, copyable URL, enable switch, actions menu.
- * mobile (390px): the endpoint icon hides and rows stack name / URL / meta; add + edit opens as a bottom Sheet instead of a dialog.
- * vehicle: same as mobile; destructive actions stay behind the menu and a confirm dialog.
+ * desktop: one settings row per endpoint; secret and actions on the right.
+ * mobile (390px): actions wrap under the secret; the URL truncates.
  *
- * @fileoverview /settings/webhooks — CRUD + test surface for outbound webhooks,
- * backed by /api/webhooks.
+ * @fileoverview /settings/webhooks — CRUD over `/api/webhooks`, plus the real
+ * test fire at `POST /api/webhooks/{id}/test`.
  */
-
 import SettingsLayout from "@/layouts/SettingsLayout.astro";
-import { WebhooksTable } from "@/components/settings";
+import { WebhooksManager } from "@/components/settings/webhooks-manager";
 ---
 
 <SettingsLayout
   title="Webhooks"
-  description="Register, edit, test, and remove outbound webhook deliveries."
+  description="Outbound endpoints that receive event deliveries."
 >
-  <WebhooksTable client:load />
+  <WebhooksManager client:load />
 </SettingsLayout>

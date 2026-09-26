@@ -1,22 +1,27 @@
 ---
 /**
  * RESPONSIVE STRATEGY
- * desktop: toolbar, then the stats-7 metric row (3 cells), then card-20 area cards (3-up), then the template panel.
- * mobile (390px): metric cells stack as dense rows; area cards go 1-up with full-width link rows; no horizontal scroll.
- * vehicle: same as mobile; every link row is a full-width tap target.
+ * desktop: three-across area grid under a five-tile metric row.
+ * mobile (390px): metric tiles fall to two columns, area cards to one.
+ * vehicle: not targeted.
+ *
+ * Overview — what this template is, the live metric row, and a link grid built
+ * from `navGroups` / `chatSurfaces` / `devLinks` in `@/lib/config`.
  */
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import { PageBody, PageToolbar } from "@/components/blocks/app-shell-12/components/page-toolbar";
-import { TemplateLandingPage } from "@/components/TemplateLandingPage";
-import { siteConfig } from "@/lib/config";
+import { PageBody, PageToolbar } from "@/components/blocks/app-shell-2/components/page-shell";
+import { OverviewView } from "@/components/overview/overview-view";
 ---
 
-<BaseLayout title="Overview" description={siteConfig.description}>
+<BaseLayout
+  title="Overview"
+  description="Cloudflare Worker template on Astro, React and ReUI Pro blocks, with every page reading real rows from D1 through the Hono API."
+>
   <PageBody>
     <PageToolbar
-      title={siteConfig.name}
-      description="A reference app on one Cloudflare Worker: Astro and React islands on the front, Hono, D1 and Workers AI behind. Every page below runs on live data."
+      title="Overview"
+      description="Where everything lives, and how the template is doing right now."
     />
-    <TemplateLandingPage client:load />
+    <OverviewView client:load />
   </PageBody>
 </BaseLayout>

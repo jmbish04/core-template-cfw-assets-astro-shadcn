@@ -1,27 +1,27 @@
 ---
 /**
  * RESPONSIVE STRATEGY
- * desktop: 3-cell metric row → status distribution | priority ranking → per-project progress Data Grid.
- * mobile (390px): metric cells collapse to dense label | value rows; panels stack; the grid becomes a 2-column summary list linking to /tasks?projectId=.
- * vehicle: not a target surface — the mobile layout applies.
+ * desktop: full-width time series above a 2x2 grid of ranked breakdowns.
+ * mobile (390px): one chart per row.
+ * vehicle: not targeted — the charts expect a pointer for tooltips.
  *
- * Team analytics — all-time aggregates from `GET /api/tasks` + `GET /api/projects`.
- * Mounts the TeamAnalyticsView island (client:load, fetch-based).
+ * Analytics — the deeper cut of `/api/dashboard/*`, plus a per-project
+ * breakdown derived from the `taskCount` column on `/api/projects`.
  */
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import { PageBody, PageToolbar } from "@/components/blocks/app-shell-12/components/page-toolbar";
-import { TeamAnalyticsView } from "@/components/dashboard";
+import { PageBody, PageToolbar } from "@/components/blocks/app-shell-2/components/page-shell";
+import { AnalyticsView } from "@/components/dashboard/analytics-view";
 ---
 
 <BaseLayout
-  title="Team Analytics"
-  description="Completion rate, status and priority breakdowns, overdue counts and per-project progress."
+  title="Analytics"
+  description="Task flow over time, throughput, priority and lifecycle breakdowns, and the busiest projects."
 >
   <PageBody>
     <PageToolbar
-      title="Team analytics"
-      description="How work splits across status and priority, what's overdue, and how each project is progressing."
+      title="Analytics"
+      description="How work has moved over the selected window, broken down every way the API supports."
     />
-    <TeamAnalyticsView client:load />
+    <AnalyticsView client:load />
   </PageBody>
 </BaseLayout>

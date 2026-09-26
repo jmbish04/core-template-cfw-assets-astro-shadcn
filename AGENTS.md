@@ -2,7 +2,7 @@
 
 - At the start of every turn, use the `cloudflare-docs` MCP server to verify Cloudflare assumptions, architecture, and deprecations before writing or changing code.
 - Review and apply the best practices in `.agents/skills/` and `.github/skills/` before implementing changes.
-- Build new views as React islands inside the ReUI app shell, from ReUI blocks (surface `frame`), dark by default. See "ReUI design system" below.
+- Build new views as React islands inside the ReUI app shell, from ReUI Pro blocks, dark by default, one surface per screen. See "ReUI design system" below — including the Base UI select trap, which is the single most repeated bug in this repo.
 - Enforce Zod validation on backend endpoints, expose OpenAPI v3.1.0 at `/openapi.json`, `/swagger`, and `/scalar`, and keep endpoints strongly typed.
 - Every new service or view must expose `/health` and emit structured logs/metrics into the mirrored D1 logging layer.
 # Agent Workspace Overview
@@ -20,14 +20,14 @@ Welcome to the `core-template-cfw-assets-astro-shadcn` template. This is a unifi
 This repository relies heavily on AI agents for rapid prototyping and feature generation. If you are an AI agent, you must strictly follow these directives:
 
 1. **Read Startup Rules:** Immediately review `.agent/rules/startup.md` before writing any code. It contains critical instructions for your first steps.
-2. **Clean State Execution:** The template's default UI has been deliberately wiped clean and replaced with a temporary template-routing warning. Build the user's requested frontend directly from `src/frontend/pages/index.astro` or the route structure you introduce, and keep the shared header available on every page.
+2. **Reference App, Not a Blank Page:** The template ships a complete running app (see "Template App Surface" below) so a new project inherits working patterns. Build the user's frontend by REPLACING the parts they don't need, not by starting from an empty `index.astro`. Keep the app shell, the nav config, and the docs pointers on every page.
 3. **Environment Strictness:** We use `worker-configuration.d.ts` for Cloudflare types. Never manually define `interface Bindings`. Always use `Bindings: Env` on Hono applications.
 4. **Runtime Baseline:** Use Node.js 22+ when working with Wrangler or regenerating `worker-configuration.d.ts`.
 5. **Package Management:** Default to `pnpm` for package installation and script execution.
 6. **Authentication Rule:** Use the Secrets Store binding `WORKER_API_KEY` for protected API authentication and session creation. Do not add a `users` table back into this template.
 7. **Schema Layout:** Keep Drizzle tables under `db/schemas/${useCase}/${tableName}.ts` and use Drizzle-Zod for API typing where table schemas are involved.
 8. **Modularization:** Keep new code modular. Split helpers, components, routes, and persistence code by concern instead of adding large multipurpose files.
-9. **Template Replacement Prompt:** If the user gives you the landing-page replacement prompt, replace the starter frontend, preserve the shared header, and keep the dynamic docs pointers to `/openapi.json`, `/swagger`, and `/scalar`.
+9. **Template Replacement Prompt:** If the user gives you the landing-page replacement prompt, replace the starter frontend, preserve the app shell, and keep the dynamic docs pointers to `/openapi.json`, `/swagger`, and `/scalar`.
 10. **Frontend Errors:** Never use Chrome/browser alerts. Route every frontend error through the centralized frontend error handling utility and keep the copy-to-clipboard success/error feedback within shadcn components.
 11. **Dependency Hygiene:** Follow `.agent/rules/dependency-maintenance.md` whenever dependencies, Wrangler, or generated Cloudflare types may be stale.
 12. **Architecture Rules:** Follow `.agent/rules/architecture.md` and `.agent/rules/frontend-error-handling.md` for auth, modularization, and frontend error UX conventions.
@@ -39,83 +39,147 @@ This repository relies heavily on AI agents for rapid prototyping and feature ge
 
 ## ReUI design system
 
-Adopted 2026-09-25. Authority: the ReUI Astro React design system
+Adopted 2026-09-25; the frontend was rebuilt from the ground up on ReUI Pro
+blocks 2026-09-26. Authority: the ReUI Astro React design system
 (https://claude.ai/artifact/74kf88M44NMA7Xh769vJge) and `~/AGENTS-frontend.md`.
 
-- **Shell:** ReUI `app-shell-12`, adapted in `src/frontend/components/blocks/app-shell-12/`
+- **Shell:** ReUI `app-shell-2`, adapted in `src/frontend/components/blocks/app-shell-2/`
   and mounted once by `layouts/BaseLayout.astro` (one island; pages are its slot).
-  Nav is config-driven from `src/frontend/lib/config.ts` (`navGroups`, max two
-  levels; `devLinks` = `/docs`, `/openapi.json`, `/scalar`, `/swagger`, always in
-  the rail). Add a page = add a nav entry there; breadcrumb + ⌘K pick it up.
-- **Page chrome:** `PageBody` + `PageToolbar` from `blocks/app-shell-12/components/page-toolbar`,
-  rendered without a client directive. No emoji headings.
+  Two deliberate departures from the stock block: the sidebar-footer WORKSPACE
+  SWITCHER is removed (this template is single-tenant, and a tenant picker that
+  switches nothing is worse than none), and the header's WORKSPACE BREADCRUMB is
+  replaced by the current page's title from the route table. Do not reinstate
+  either without a real tenant model behind it.
+- **Nav:** config-driven from `src/frontend/lib/config.ts` — `navGroups` (max two
+  levels; a third level is a page, not a nav item), `chatSurfaces`, and
+  `devLinks` (`/docs`, `/openapi.json`, `/scalar`, `/swagger`, always in the
+  rail). Add a page = add an entry there; the header title and the ⌘K palette
+  (`allNavEntries()`) both read from it. Never hardcode a second copy of the
+  route list in a page.
+- **Page chrome:** `PageBody` + `PageToolbar` from
+  `blocks/app-shell-2/components/page-shell`, rendered without a client
+  directive. No emoji headings.
+- **SELECTS — the trap that keeps coming back.** These are **Base UI** selects,
+  not Radix. `Select.Value` renders the RAW VALUE unless `Select.Root` is given
+  an `items` prop, so a Radix-shaped `<SelectValue placeholder="All" />` shows
+  `__all__` or `in_progress` in the trigger on load. ALWAYS use `OptionSelect` /
+  `FilterSelect` from `@/components/ui/option-select` (promoted out of ReUI's
+  own `solution-files-1`, which composes it correctly). Never write a raw
+  `<Select>` + `<SelectValue placeholder>`.
 - **Tokens:** `styles/global.css` carries the design-system tokens incl. ReUI's
   extended `info`/`success`/`warning`/`destructive-foreground`/`invert`. Use a
   `*-foreground` state colour only on its tinted ground (`bg-success/10`). No raw
   hex, `rgb()`, or Tailwind palette utilities.
 - **Dark default:** `<html class="dark">`; the header toggle stores only an explicit "light".
-- **Surface `frame`** on every ReUI search / `compose_page`; never mix frame and card blocks on a screen.
+- **Surface:** hold ONE surface per screen — `frame` or `card`, never both.
+  Most screens are `frame`; `kanban-board-1`, `solution-files-1` and a few
+  ai-chat blocks are `card`, which is their own surface. Pass `surface` on every
+  ReUI search / `compose_page`.
 - **Install:** `bash scripts/reui-add.sh <item…>` — never raw `shadcn add`. The
   dual-root `@/*` tsconfig path makes the CLI write to `src/components` and leave
   `from "cn"` imports; the wrapper fixes both, never overwrites, reads
   `REUI_LICENSE_KEY` from the tokens CLI and serializes parallel installs.
   Blocks land in `components/blocks/<name>/`, ReUI primitives in `components/reui/`.
-- **Charts:** no pies; bars horizontal unless the x-axis is time; `chart-1..5` in order.
-  **Tables:** ReUI Data Grid. **Filters:** ReUI Filters builder.
+  **To let the CLI write a canonical primitive, DELETE the stale one first** —
+  the wrapper answers "n" to every overwrite prompt by design.
+- **Charts:** no pies, ever (the dashboard's "status pie" dataset renders as a
+  horizontal ranked bar); bars horizontal unless the x-axis is time; `chart-1..5`
+  in order. **Tables:** ReUI Data Grid. **Filters:** ReUI Filters builder.
+- **Verification:** `bash scripts/check.sh` builds into a throwaway directory, so
+  several agents can check in parallel without corrupting `./dist`. The Astro
+  build STRIPS types rather than checking them — always also run
+  `pnpm run typecheck`. `pnpm run selfcheck` runs the plain-assert checks in
+  `scripts/selfcheck.mjs`.
 - **Local UI dev without Cloudflare auth:** `CF_REMOTE_BINDINGS=0 pnpm exec astro dev`
   renders pages without remote bindings. `/api/*` is served by the Hono worker, so
   data and chat only work under `pnpm run build && pnpm exec wrangler dev`.
 
 ## Template App Surface (reference implementation)
 
-This template ships a real, running app so new projects inherit working patterns
-(extend or delete the pieces you don't need). All of it is wired to D1 via Hono;
-no mock data.
+This template ships a real, running app so new projects inherit working
+patterns (extend or delete the pieces you don't need). All of it is wired to D1
+via Hono; **there is no mock data anywhere and none may be added**. If a block
+decoration has no real backing, remove the decoration — do not fake it.
 
-- **AI = core-guardian, nothing else.** There are NO Durable Objects and NO Agents
-  SDK in this template (removed 2026-09-26; wrangler migration `v5` deletes the old
-  classes). Every model call goes through `src/backend/ai/guardian.ts#guardianChat`
-  over the `CORE_GUARDIAN` service binding (`service: core-guardian`,
-  `entrypoint: GuardianRpc`, `remote: true`). No `ai` binding, no provider SDKs.
-  Router 422 = no model in budget, 429 = breaker; map both to plain-language errors.
+- **AI = core-guardian, nothing else.** There are NO Durable Objects and NO
+  Agents SDK in this template (removed 2026-09-26; wrangler migration `v5`
+  deletes the old classes). Every model call goes through
+  `src/backend/ai/guardian.ts` over the `CORE_GUARDIAN` service binding
+  (`service: core-guardian`, `entrypoint: GuardianRpc`, `remote: true`). No `ai`
+  binding, no provider SDKs. Router 422 = no model in budget, 429 = breaker;
+  map both to plain-language errors.
+- **Chat is one backend behind twelve faces.** `POST /api/chat/stream` is the
+  endpoint; `src/frontend/lib/chat.ts` (`useChatThread`) is the only client.
+  SSE events, all measured against the live router: `meta`, `routed`
+  (provider/model from the response HEADERS, before the first token), `delta`
+  (the answer), `reasoning` (the model's THINKING — a separate channel that must
+  NEVER be appended to the answer), `usage` (token counts), `title` (the model
+  titles a new thread on its first reply), `done` (persisted row + measured
+  latency), `error`. D1 is the store: `chat_threads`, `chat_messages`,
+  `chat_documents` (one editable PlateJS canvas per thread).
+  **There is no model picker** — core-guardian chooses per request, so the UI
+  offers a ROUTING PROFILE (Fast / Balanced / Deep → importance+complexity) and
+  reports the model that actually served the turn.
 - **Pages** (Astro SSR + React islands inside the ReUI app shell):
-  - `/dashboard`, `/analytics` — metric row → metric-switcher chart → action Data
-    Grid (ReUI chart-28, dashboard-4, chart-9, data-grid-base-7 parts). No pies;
-    horizontal ranked bars. Components under `components/dashboard/`.
-  - `/projects`, `/tasks/board` (ReUI kanban), `/tasks` (ReUI Data Grid with grouping
-    + the ReUI **Filters** builder — `components/tasks/task-filtering.tsx`), `/tasks/[id]`.
-    Task/kanban/project cards open preview modals. Components under `components/tasks/`.
-  - `/notes` — **PlateJS** rich-text editor (`components/notes/`); bodies persist as
-    a versioned `{v,format:"plate",value}` JSON envelope in the team-notes `body`
-    column, with legacy plain-text fallback.
-  - `/inbox` — two-pane inbox backed by Cloudflare **Email Routing**: the Worker
-    `email()` handler (`backend/email/inbound.ts`) stores inbound mail in the
-    `email_messages` D1 table; UI under `components/inbox/`, API at `/api/inbox`.
-  - `/chat` — ReUI Pro block `ai-chat-1` (`components/blocks/ai-chat-1/`), threads in
-    `?t=<id>`, backed by `/api/threads` + `POST /api/chat` → core-guardian; history in
-    D1 `chat_threads` / `chat_messages`.
-  - `/docs` (docs home, bound to `/api/docs/*`) + `/playbook` — documentation using
-    the Shiki-backed `ui/code-block.tsx` (kibo-ui-style, base-ui, copy + tabs).
-  - `/settings/{preferences,notifications,webhooks,activity,advanced}` (shared
-    sub-nav) and `/notifications` (D1 REST, polled every 15s while visible). Components under `components/settings/`.
-- **Schemas** live in `db/schemas/{projects,tasks,stats,settings,notifications,chat}/`
-  (drizzle-zod + `*_TABLE_DESCRIPTION`/`*_COLUMN_DESCRIPTIONS` for `/docs`).
+  - `/`, `/dashboard`, `/analytics` — metric row, charts, and the core-guardian
+    insight. Components under `components/{overview,dashboard}/`.
+  - `/projects` (card grid), `/projects/new` (ReUI `wizard-2` — a real
+    multi-step create that also writes starter tasks).
+  - `/tasks` (ReUI `data-grid-grouping-4` — a TREE grid over the task hierarchy
+    with rolled-up measures and an ancestor-preserving search), `/tasks/board`
+    (ReUI `kanban-board-1`, drag writes a real PATCH), `/tasks/[id]`.
+  - `/files` — ReUI `solution-files-1` Drive Explorer over `/api/files`: the
+    tree is D1, the bytes are R2 (`R2_FILES_BUCKET`).
+  - `/inbox` — ReUI `app-shell-4` two-pane mail, backed by Cloudflare **Email
+    Routing**: the Worker `email()` handler (`backend/email/inbound.ts`) stores
+    inbound mail in `email_messages`.
+  - `/notes` — **PlateJS** rich-text editor; bodies persist as a versioned
+    `{v,format:"plate",value}` envelope.
+  - `/chat` — a gallery of twelve ReUI Pro `ai-chat-*` surfaces, each a real
+    conversation against core-guardian, all on one backend and one client
+    (`lib/chat.ts` + `components/chat/**`). `chatSurfaces` in `lib/config.ts`
+    is the route table; the gallery and the sidebar both render from it.
+    `/chat/copilot` (1) · `/chat/docked` (2, PlateJS canvas beside the thread)
+    · `/chat/welcome` (3) · `/chat/sidebar` (4, quote a sentence to reply to it)
+    · `/chat/sources` (5, six real collections set the answer scope)
+    · `/chat/agentic` (6, a real multi-turn plan that files a real task)
+    · `/chat/compare` (7, one prompt through two routing profiles, scored on
+    measured latency/tokens/cost) · `/chat/voice` (8, MediaRecorder +
+    SpeechRecognition, both feature-detected) · `/chat/branching` (9, a fork is
+    a real sibling thread via `parent_thread_id`) · `/chat/scoped` (10) ·
+    `/chat/stage` (11, framed receipts) · `/chat/support` (12, answers only
+    from `/api/docs` and the drive's text files, and files a task when they do
+    not cover the question).
+    **The rule every one of them follows: if a block decoration has no real
+    backing, it is removed, not faked.** No tool-calling layer exists, so no
+    tool trace is drawn; no votes table exists, so no thumbs are shown.
+  - `/activity` (ReUI `timeline-5`), `/notifications`,
+    `/settings/{preferences,notifications,webhooks,advanced}` (ReUI `settings-3`).
+  - `/docs` + `/playbook` — documentation using the Shiki-backed ReUI CodeBlock.
+- **Schemas** live in `db/schemas/{projects,tasks,stats,settings,notifications,
+  chat,inbox,files}/` (drizzle-zod + `*_TABLE_DESCRIPTION` /
+  `*_COLUMN_DESCRIPTIONS` consumed by `/docs`; register every new table in
+  `api/routes/docs.ts`).
+  **drizzle-zod maps a `timestamp` column to a bare `z.date()` with NO
+  coercion**, so a generated body schema silently rejects every date a JSON
+  client can send. Coerce at the route (see `jsonDate` in `routes/tasks.ts`)
+  whenever a date column must be writable over HTTP.
 - **APIs**: `/api/{projects,tasks,team-notes,settings,webhooks,activity,
-  notifications,dashboard,threads,chat}` — CRUD + `?q=` search + filters + pagination.
-  The dashboard exposes `/stats`, `/charts`, `/insights` (via `guardianChat`).
-  Health: `/api/health` (D1 + a no-spend `CORE_GUARDIAN.useCases()` check that fails
-  the verdict when the binding is down).
-- **Shared frontend helpers**: `lib/api.ts` (`apiGet`/`apiSend`/`ApiError`) and
-  `lib/format.ts` (`relativeTime`/`shortDate`/`compactNumber`). Charts use the
-  shadcn `ui/chart.tsx` wrapper + the OKLCH `--chart-1..5` palette in `global.css`.
+  notifications,dashboard,threads,chat,inbox,files}` — CRUD + `?q=` search +
+  filters + pagination. Health: `/api/health` (D1 + a no-spend
+  `CORE_GUARDIAN.useCases()` check that fails the verdict when the binding is
+  down).
+- **Shared frontend helpers**: `lib/api.ts` (`apiGet`/`apiSend`/`ApiError`),
+  `lib/format.ts`, `lib/chat.ts`, `lib/events.ts`, and `components/common/**`
+  (wire types, `useProjects`, the shared empty/error/chip/avatar primitives).
 - **Shared data toolkit** (isomorphic, Remeda-backed): one core at
-  `shared/data-utils.ts`, re-exported by `lib/data.ts` (frontend, `@/lib/data`)
-  and `backend/utils/data.ts` (`@/backend/utils/data`). Curated Remeda re-exports
-  + full `R` namespace + template helpers (`diffArrays`, `findWhere`,
-  `toggleInArray`, `moveItem`, `keyBy`, `compact`, `ensureArray`, `deal`,
-  `truncate`, `tryParseJson`). Live demo: `/showcase/utilities`.
-- **Seed demo data**: `POST /api/seed` (idempotent). Locally:
-  `pnpm run migrate:local` then `curl -X POST http://localhost:8787/api/seed`.
+  `shared/data-utils.ts`, re-exported by `lib/data.ts` (`@/lib/data`) and
+  `backend/utils/data.ts` (`@/backend/utils/data`). Live demo:
+  `/showcase/utilities`.
+- **Seed demo data**: `POST /api/seed` (idempotent) — projects, tasks, notes,
+  webhooks, activity, notifications, and a drive of folders and files with REAL
+  R2 objects behind them. `POST /api/inbox/seed` for demo mail. Locally:
+  `pnpm run migrate:local`, then POST to the running worker.
 - **SSR note**: `src/_worker.ts` exports `start(manifest)` + `createExports()`;
   page requests are rendered via `@astrojs/cloudflare/handler#handle`. Do NOT
   revert this to a bare `env.ASSETS.fetch()` fallback — that 404s every SSR page.

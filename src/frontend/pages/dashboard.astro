@@ -1,28 +1,26 @@
 ---
 /**
  * RESPONSIVE STRATEGY
- * desktop: metric row (4 cells) → hero chart → 3-up distribution row → open-tasks Data Grid → insights | activity.
- * mobile (390px): metric cells collapse to dense label | value rows; panels stack; the grid becomes a 2-column summary list linking to /tasks/[id].
- * vehicle: not a target surface — the mobile layout applies (large tap targets, no hover-only affordances).
+ * desktop: metric row, then two charts side by side, then the insight panel.
+ * mobile (390px): everything stacks; charts keep their own height.
+ * vehicle: not targeted — the charts expect a pointer for tooltips.
  *
- * Admin dashboard. Static PageToolbar chrome from app-shell-12, then the single
- * `<AdminDashboard>` island (`client:load`, fetch-based) which owns data
- * fetching, filters, charts, AI insights, the action grid and activity feed.
+ * Dashboard — the summary cut of `/api/dashboard/{stats,charts,insights}`.
  */
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import { PageBody, PageToolbar } from "@/components/blocks/app-shell-12/components/page-toolbar";
-import { AdminDashboard } from "@/components/dashboard";
+import { PageBody, PageToolbar } from "@/components/blocks/app-shell-2/components/page-shell";
+import { DashboardView } from "@/components/dashboard/dashboard-view";
 ---
 
 <BaseLayout
   title="Dashboard"
-  description="Live operational overview: project and task KPIs, trends, open work, Workers AI insights and recent activity."
+  description="Project and task totals, task status and throughput, and a core-guardian reading of the current numbers."
 >
   <PageBody>
     <PageToolbar
       title="Dashboard"
-      description="Project and task KPIs, trends and the open work that needs action."
+      description="The current state of every project and task, plus what core-guardian makes of it."
     />
-    <AdminDashboard client:load />
+    <DashboardView client:load />
   </PageBody>
 </BaseLayout>

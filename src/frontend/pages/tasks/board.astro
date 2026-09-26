@@ -1,25 +1,30 @@
 ---
 /**
  * RESPONSIVE STRATEGY
- * desktop: toolbar, then the ReUI Kanban — four Frame columns side by side; drag cards between them (status persists).
- * mobile (390px): columns become a snap-scrolling carousel, one near-full-width column at a time; card tap opens the preview sheet.
- * vehicle: same as mobile; cards are large tap targets, drag is optional (edit status in the preview).
+ * desktop: page toolbar, then all four status columns side by side.
+ * mobile (390px): the board scrolls horizontally in its own scroll area, one
+ *   17.5rem column at a time; cards keep their owner, due date and ring.
+ * vehicle: same as mobile; drag is a deliberate long press, never a glance task.
  *
- * Task board — kanban over `GET /api/tasks/board`; moves PATCH `/api/tasks/{id}`.
+ * @fileoverview /tasks/board — the kanban board.
+ *
+ * `<TaskBoard />` reads `GET /api/tasks/board` and PATCHes
+ * `/api/tasks/{id}` with the new `status` and `position` on every drop.
  */
+
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import { PageBody, PageToolbar } from "@/components/blocks/app-shell-12/components/page-toolbar";
-import { TaskBoard } from "@/components/tasks/TaskBoard";
+import { PageBody, PageToolbar } from "@/components/blocks/app-shell-2/components/page-shell";
+import { TaskBoard } from "@/components/tasks/task-board";
 ---
 
 <BaseLayout
   title="Task board"
-  description="Kanban across Not Started, In Progress, In Review and Done. Drag a card to another column and the status is saved."
+  description="Tasks grouped into the four workflow columns, drag to change status."
 >
   <PageBody>
     <PageToolbar
-      title="Task board"
-      description="Drag a card to another column to change its status. It saves straight away."
+      title="Board"
+      description="Drag a card to move it between columns. The move is saved as soon as you drop it."
     />
     <TaskBoard client:load />
   </PageBody>
