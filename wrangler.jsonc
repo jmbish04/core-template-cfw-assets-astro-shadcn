@@ -82,16 +82,22 @@
         "SkillsAgent",
       ],
     },
-    // v4 drops every Durable Object / Agents SDK agent. Chat now runs through
-    // the CORE_GUARDIAN service binding + D1 (no ChatBroker); notifications
-    // are plain D1 CRUD (no NotificationsAgent). This is the full set of
-    // classes live after v3 — deleting all of them, additively, per
-    // https://developers.cloudflare.com/durable-objects/reference/durable-objects-migrations/
-    // (deleted_classes only marks classes retired; it does not delete the
-    // underlying storage — that requires a separate `delete` migration if
-    // ever needed).
+    // v4 is PRODUCTION HISTORY, not a new step: it was deployed 2026-07-07 from an
+    // unmerged branch (GitHub agent). The live Worker's migration_tag is "v4", and
+    // wrangler only sends tags newer than the live one — so v4 must stay exactly
+    // what was deployed or later steps are silently skipped.
     {
       "tag": "v4",
+      "new_sqlite_classes": ["GitHubAgent"],
+    },
+    // v5 retires every Durable Object / Agents SDK class (all 13 live after v4).
+    // Chat runs through the CORE_GUARDIAN service binding + D1; notifications are
+    // plain D1 CRUD. deleted_classes PERMANENTLY deletes each class's stored data
+    // on deploy (no trash). Only `wrangler deploy` applies it — `versions upload`
+    // (branch preview builds) rejects DO lifecycle changes with code 10064.
+    // https://developers.cloudflare.com/durable-objects/reference/durable-object-class-migrations-legacy/#delete-migration
+    {
+      "tag": "v5",
       "deleted_classes": [
         "CodeModeAgent",
         "BrowserHitlAgent",
@@ -105,6 +111,7 @@
         "McpAgent",
         "ThinkingAgent",
         "SkillsAgent",
+        "GitHubAgent",
       ],
     },
   ],
