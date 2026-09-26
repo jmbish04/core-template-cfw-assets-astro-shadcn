@@ -1,7 +1,11 @@
+/**
+ * @fileoverview The "Suggested Folders" band from ReUI block
+ * `solution-files-1`, listing the current folder's subfolders as shortcuts.
+ */
 import { IconTile } from "@/components/reui/icon-tile"
 
 import { Button } from "@/components/ui/button"
-import { formatBytes, formatCount, type DriveRow } from "./data"
+import { type DriveRow } from "./data"
 import { FolderIcon } from "lucide-react"
 
 export function FolderBand({
@@ -35,14 +39,10 @@ export function FolderBand({
               <span className="text-foreground w-full truncate text-sm font-medium">
                 {folder.node.name}
               </span>
-              <span className="text-muted-foreground flex items-center gap-1.5 text-xs tabular-nums">
-                {formatBytes(folder.sizeBytes)}
-                <span
-                  aria-hidden
-                  className="bg-muted-foreground/40 size-1 shrink-0 rounded-full"
-                />
-                {formatCount(folder.itemCount)} items
-              </span>
+              {/* The block printed a size and an item count here. Neither is
+                  knowable client-side against a per-folder API, and a derived
+                  "0 B · 0 items" would read as an empty folder. */}
+              <span className="text-muted-foreground text-xs">Folder</span>
             </span>
           </Button>
         ))}

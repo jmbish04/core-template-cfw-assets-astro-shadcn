@@ -25,12 +25,11 @@ import {
 import {
   FILE_KIND_ICONS,
   formatBytes,
-  formatCount,
   getInitials,
   type DriveRow,
   type FileKind,
 } from "./data"
-import { RotateCcwIcon, Trash2Icon, Share2Icon, LinkIcon, PencilIcon, StarIcon, FolderIcon, ClockIcon, DownloadIcon, EllipsisVerticalIcon } from "lucide-react"
+import { Trash2Icon, LinkIcon, PencilIcon, StarIcon, FolderIcon, DownloadIcon, EllipsisVerticalIcon } from "lucide-react"
 
 // Type sorts by glyph family first and only then by the exact format, so a sort
 // on Type lands folders above files the way a drive reads.
@@ -44,78 +43,20 @@ const TYPE_RANK: Record<FileKind, number> = {
   file: 6,
 }
 
-// Icon names must stay static literals, so each whole node lives in the table.
-// prettier-ignore
-// Icon names must stay static literals; prettier-ignore keeps the table flat.
-// prettier-ignore
-const BIN_ICONS = {
-  restore: <RotateCcwIcon aria-hidden="true" />,
-  deleteForever: <Trash2Icon aria-hidden="true" />,
-}
-
 const ROW_ACTIONS: {
   id: string
   label: string
   icon: ReactNode
   destructive?: boolean
+  /** Files only — a folder has no bytes to fetch. */
+  filesOnly?: boolean
 }[] = [
-  {
-    id: "share",
-    label: "Share",
-    icon: (
-      <Share2Icon aria-hidden="true" />
-    ),
-  },
-  {
-    id: "link",
-    label: "Copy Link",
-    icon: (
-      <LinkIcon aria-hidden="true" />
-    ),
-  },
-  {
-    id: "rename",
-    label: "Rename",
-    icon: (
-      <PencilIcon aria-hidden="true" />
-    ),
-  },
-  {
-    id: "star",
-    label: "Star",
-    icon: (
-      <StarIcon aria-hidden="true" />
-    ),
-  },
-  {
-    id: "move",
-    label: "Move",
-    icon: (
-      <FolderIcon aria-hidden="true" />
-    ),
-  },
-  {
-    id: "history",
-    label: "Version History",
-    icon: (
-      <ClockIcon aria-hidden="true" />
-    ),
-  },
-  {
-    id: "download",
-    label: "Download",
-    icon: (
-      <DownloadIcon aria-hidden="true" />
-    ),
-  },
-  {
-    id: "remove",
-    label: "Move To Trash",
-    destructive: true,
-    icon: (
-      <Trash2Icon aria-hidden="true" />
-    ),
-  },
+  { id: "rename", label: "Rename", icon: <PencilIcon aria-hidden="true" /> },
+  { id: "star", label: "Star", icon: <StarIcon aria-hidden="true" /> },
+  { id: "move", label: "Move", icon: <FolderIcon aria-hidden="true" /> },
+  { id: "link", label: "Copy Download Link", filesOnly: true, icon: <LinkIcon aria-hidden="true" /> },
+  { id: "download", label: "Download", filesOnly: true, icon: <DownloadIcon aria-hidden="true" /> },
+  { id: "remove", label: "Delete", destructive: true, icon: <Trash2Icon aria-hidden="true" /> },
 ]
 
 function DriveNameCell({
@@ -237,17 +178,20 @@ function DriveOwnerCell({ row }: { row: DriveRow }) {
 function DriveSizeCell({ row }: { row: DriveRow }) {
   const isFolder = row.node.kind === "folder"
 
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-foreground text-sm tabular-nums">
-        {formatBytes(row.sizeBytes)}
+  // A folder's total is NOT known here: the API pages one folder at a time,
+  // so printing formatBytes(0) would read as "empty" when it means "not counted".
+  if (isFolder) {
+    return (
+      <span className="text-muted-foreground text-sm" title="Folder totals are not computed">
+        —
       </span>
-      {isFolder ? (
-        <span className="text-muted-foreground text-xs tabular-nums">
-          {formatCount(row.itemCount)} items
-        </span>
-      ) : null}
-    </div>
+    )
+  }
+
+  return (
+    <span className="text-foreground text-sm tabular-nums">
+      {formatBytes(row.sizeBytes)}
+    </span>
   )
 }
 
@@ -274,7 +218,9 @@ function DriveActionsCell({
         }
       />
       <DropdownMenuContent align="end" className="w-48">
-        {ROW_ACTIONS.map((action) => (
+        {ROW_ACTIONS.filter(
+          (action) => !action.filesOnly || row.node.kind !== "folder"
+        ).map((action) => (
           <Fragment key={action.id}>
             {action.destructive ? <DropdownMenuSeparator /> : null}
             <DropdownMenuItem
@@ -337,9 +283,6 @@ export function createDriveColumns({
   onAction,
   onToggleStar,
   uploads,
-  binMode = false,
-  onRestore,
-  onDeleteForever,
 }: {
   onOpen: (row: DriveRow) => void
   onAction: (action: string, row: DriveRow) => void
@@ -349,10 +292,6 @@ export function createDriveColumns({
     string,
     { progress: number; status: "uploading" | "error" | "done" }
   >
-  /** Bin rows are deleted items: they restore or go for good, nothing else. */
-  binMode?: boolean
-  onRestore?: (id: string) => void
-  onDeleteForever?: (id: string) => void
 }): ColumnDef<DataGridFeatures, DriveRow>[] {
   return [
     {
@@ -430,35 +369,10 @@ export function createDriveColumns({
     {
       id: "actions",
       header: "",
-      // A bin row is a deleted item, not a live file: the usual row menu does
-      // not apply to it, so the same column carries restore and delete-forever
-      // instead of swapping the whole table out.
-      cell: ({ row }) =>
-        binMode ? (
-          <div className="flex items-center justify-end gap-0.5">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label={`Restore ${row.original.node.name}`}
-              onClick={() => onRestore?.(row.original.id)}
-            >
-              {BIN_ICONS.restore}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label={`Delete ${row.original.node.name} forever`}
-              onClick={() => onDeleteForever?.(row.original.id)}
-            >
-              {BIN_ICONS.deleteForever}
-            </Button>
-          </div>
-        ) : (
-          <DriveActionsCell row={row.original} onAction={onAction} />
-        ),
-      size: binMode ? 96 : 56,
+      cell: ({ row }) => (
+        <DriveActionsCell row={row.original} onAction={onAction} />
+      ),
+      size: 56,
       enableSorting: false,
       enableHiding: false,
       enableResizing: false,

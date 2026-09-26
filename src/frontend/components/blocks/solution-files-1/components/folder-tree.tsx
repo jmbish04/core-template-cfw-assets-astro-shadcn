@@ -1,3 +1,12 @@
+/**
+ * @fileoverview The folder rail from ReUI block `solution-files-1`: a
+ * `@headless-tree` folder tree over a storage meter.
+ *
+ * Trimmed to what `/api/files` can answer. The block's Shared / Recent / Bin
+ * scopes had no endpoints behind them and are gone (starred is a filter on the
+ * browse toolbar, which is what the API models); Version History is gone for
+ * the same reason. The meter's numbers come from `GET /api/files/storage`.
+ */
 import { Fragment, useMemo } from "react"
 import {
   Tree,
@@ -24,20 +33,16 @@ import { Progress } from "@/components/ui/progress"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { DRIVE_NAME, DRIVE_ROOT_ID, formatBytes, type DriveRow } from "./data"
-import { FolderPlusIcon, PencilIcon, FolderIcon, ClockIcon, DownloadIcon, Trash2Icon, UsersIcon, StarIcon } from "lucide-react"
+import { FolderPlusIcon, PencilIcon, FolderIcon, Trash2Icon } from "lucide-react"
 
 export const TREE_ROOT_ID = "drive-tree-root"
 export const TREE_INDENT = 20
 
-export type DriveScope = "recent" | "starred" | "shared" | "bin"
-
 /** Folder operations offered from the rail's right-click menu. */
-export type FolderAction =
-  "new" | "rename" | "move" | "history" | "download" | "delete"
+export type FolderAction = "new" | "rename" | "move" | "delete"
 
-/** What the browse panel is currently showing. */
-export type DriveSelection =
-  { type: "folder"; id: string } | { type: "scope"; id: DriveScope }
+/** What the browse panel is currently showing. Only folders remain. */
+export type DriveSelection = { type: "folder"; id: string }
 
 export interface FolderTreeNode {
   name: string
@@ -49,17 +54,7 @@ const FOLDER_ACTIONS: { id: FolderAction; label: string; icon: React.ReactNode; 
   { id: "new", label: "New Folder", icon: <FolderPlusIcon aria-hidden="true" /> },
   { id: "rename", label: "Rename", icon: <PencilIcon aria-hidden="true" /> },
   { id: "move", label: "Move", separated: true, icon: <FolderIcon aria-hidden="true" /> },
-  { id: "history", label: "Version History", icon: <ClockIcon aria-hidden="true" /> },
-  { id: "download", label: "Download", icon: <DownloadIcon aria-hidden="true" /> },
-  { id: "delete", label: "Move To Trash", separated: true, destructive: true, icon: <Trash2Icon aria-hidden="true" /> },
-]
-
-// prettier-ignore
-const SCOPES: { id: DriveScope; label: string; icon: React.ReactNode }[] = [
-  { id: "shared", label: "Shared With Me", icon: <UsersIcon aria-hidden="true" /> },
-  { id: "recent", label: "Recent", icon: <ClockIcon aria-hidden="true" /> },
-  { id: "starred", label: "Starred", icon: <StarIcon aria-hidden="true" /> },
-  { id: "bin", label: "Bin", icon: <Trash2Icon aria-hidden="true" /> },
+  { id: "delete", label: "Delete", separated: true, destructive: true, icon: <Trash2Icon aria-hidden="true" /> },
 ]
 
 /** Flattens the row tree into the loader's id to node map, folders only. */
@@ -89,8 +84,10 @@ export function FolderTree({
   selection,
   usedBytes,
   planBytes,
+  fileCount,
+  folderCount,
   onSelect,
-  onGetStorage,
+  onRefreshStorage,
   onFolderAction,
   expandedItems,
   onExpandedChange,
@@ -99,9 +96,12 @@ export function FolderTree({
   rows: DriveRow[]
   selection: DriveSelection
   usedBytes: number
+  /** Display scale for the bar — a template budget, not a Cloudflare quota. */
   planBytes: number
+  fileCount: number
+  folderCount: number
   onSelect: (next: DriveSelection) => void
-  onGetStorage: () => void
+  onRefreshStorage: () => void
   onFolderAction: (action: FolderAction, folderId: string) => void
   expandedItems: string[]
   onExpandedChange: (next: string[]) => void
@@ -109,7 +109,7 @@ export function FolderTree({
 }) {
   const folderNodes = useMemo(() => buildFolderNodes(rows), [rows])
 
-  const activeFolderId = selection.type === "folder" ? selection.id : ""
+  const activeFolderId = selection.id
 
   const tree = useTree<FolderTreeNode>({
     state: { selectedItems: [activeFolderId], expandedItems },
@@ -187,29 +187,6 @@ export function FolderTree({
 
       <Separator />
 
-      {/* Secondary links */}
-      <div className="flex shrink-0 flex-col gap-0.5 p-2">
-        {SCOPES.map((scope) => {
-          const active = selection.type === "scope" && selection.id === scope.id
-
-          return (
-            <Button
-              key={scope.id}
-              type="button"
-              variant={active ? "secondary" : "ghost"}
-              className="h-8 w-full justify-start gap-2 px-2 font-normal"
-              aria-pressed={active}
-              onClick={() => onSelect({ type: "scope", id: scope.id })}
-            >
-              {scope.icon}
-              {scope.label}
-            </Button>
-          )
-        })}
-      </div>
-
-      <Separator />
-
       {/* Storage */}
       <div className="flex shrink-0 flex-col gap-2 p-3">
         <div className="flex items-center justify-between gap-2">
@@ -225,16 +202,19 @@ export function FolderTree({
         </div>
         <Progress value={usedPercent} className="gap-0" />
         <p className="text-muted-foreground text-xs tabular-nums">
-          {formatBytes(usedBytes)} of {formatBytes(planBytes)} used
+          {formatBytes(usedBytes)} of the {formatBytes(planBytes)} template budget
+        </p>
+        <p className="text-muted-foreground text-xs tabular-nums">
+          {fileCount} files · {folderCount} folders
         </p>
         <Button
           type="button"
           variant="outline"
           size="sm"
           className="mt-1 w-full"
-          onClick={onGetStorage}
+          onClick={onRefreshStorage}
         >
-          Get More Storage
+          Refresh Usage
         </Button>
       </div>
     </div>

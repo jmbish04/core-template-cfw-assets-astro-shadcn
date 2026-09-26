@@ -34,11 +34,11 @@ const notFoundSchema = z.object({ error: z.string() });
 const errorSchema = z.object({ error: z.string() });
 
 const listQuery = z.object({
-  /** Folder to list. Omit for the drive root. Ignored when `q` is set. */
+  /** Folder to list. Omit for the drive root. Ignored for a drive-wide view. */
   parentId: z.string().optional(),
   /** Full-drive name search. Returns matches from every folder. */
   q: z.string().optional(),
-  /** `all` (default) or `starred`. */
+  /** `all` (default, folder-scoped) or `starred` (drive-wide). */
   scope: z.enum(["all", "starred"]).optional(),
 });
 
@@ -138,7 +138,9 @@ filesRouter.openapi(
     request: { query: listQuery },
     responses: {
       200: {
-        description: "Folders first, then files, each alphabetical.",
+        description:
+          "Folders first, then files, each alphabetical. `path` is the breadcrumb for a " +
+          "folder listing and empty for a drive-wide one (a search or scope=starred).",
         content: { "application/json": { schema: listResponse } },
       },
     },
@@ -147,9 +149,14 @@ filesRouter.openapi(
     const { parentId, q, scope } = c.req.valid("query");
     const db = getDb(c.env);
 
+    // "Starred" and a text search are both DRIVE-WIDE views: scoping either to
+    // the current folder would answer a question nobody asked — a starred file
+    // two folders down is exactly the one the view exists to surface.
+    const driveWide = Boolean(q) || scope === "starred";
+
     const filters = [];
     if (q) filters.push(like(files.name, `%${q}%`));
-    else filters.push(parentId ? eq(files.parentId, parentId) : isNull(files.parentId));
+    if (!driveWide) filters.push(parentId ? eq(files.parentId, parentId) : isNull(files.parentId));
     if (scope === "starred") filters.push(eq(files.starred, true));
 
     const rows = await db
@@ -159,7 +166,8 @@ filesRouter.openapi(
       // Folders before files, then alphabetical — the order the explorer expects.
       .orderBy(sql`case when ${files.kind} = 'folder' then 0 else 1 end`, asc(files.name));
 
-    const path = q ? [] : await ancestorPath(c.env, parentId ?? null);
+    // A drive-wide result set has no single folder to breadcrumb.
+    const path = driveWide ? [] : await ancestorPath(c.env, parentId ?? null);
     return c.json({ data: rows, path }, 200);
   },
 );

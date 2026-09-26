@@ -1,3 +1,7 @@
+/**
+ * @fileoverview The rename / new-folder dialog and the delete confirmation from
+ * ReUI block `solution-files-1`.
+ */
 import { useEffect, useState } from "react"
 
 import {
@@ -94,11 +98,14 @@ export function NameDialog({
 
 export function DeleteDialog({
   targetLabel,
+  detail,
   open,
   onConfirm,
   onOpenChange,
 }: {
   targetLabel: string
+  /** What exactly goes, e.g. "3 entries, including everything inside them". */
+  detail?: string
   open: boolean
   onConfirm: () => void
   onOpenChange: (open: boolean) => void
@@ -107,17 +114,18 @@ export function DeleteDialog({
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Move To Trash</AlertDialogTitle>
+          {/* There is no trash: DELETE /api/files/{id} cascades through D1 and
+              removes the R2 objects. Say that, rather than promising 30 days. */}
+          <AlertDialogTitle>Delete Permanently</AlertDialogTitle>
           <AlertDialogDescription>
-            {targetLabel} and everything inside it moves to trash. You can
-            restore it for 30 days.
+            {targetLabel} and everything inside it is deleted immediately, in
+            D1 and in R2. This cannot be undone.
+            {detail ? ` ${detail}` : ""}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction onClick={onConfirm}>
-            Move To Trash
-          </AlertDialogAction>
+          <AlertDialogAction onClick={onConfirm}>Delete</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

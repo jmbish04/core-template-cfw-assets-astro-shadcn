@@ -13,7 +13,6 @@ import { Item, ItemContent, ItemFooter } from "@/components/ui/item"
 import {
   FILE_KIND_ICONS,
   formatBytes,
-  formatCount,
   getInitials,
   type DriveRow,
 } from "./data"
@@ -114,16 +113,8 @@ function FileTile({
             ) : null}
             {visibleProperties.size ? (
               <span className="flex min-w-0 items-center gap-1.5 truncate tabular-nums">
-                {formatBytes(row.sizeBytes)}
-                {isFolder ? (
-                  <>
-                    <span
-                      aria-hidden
-                      className="bg-muted-foreground/40 size-1 shrink-0 rounded-full"
-                    />
-                    {formatCount(row.itemCount)} items
-                  </>
-                ) : null}
+                {/* A folder's total is not computed client-side — see data.tsx. */}
+                {isFolder ? "—" : formatBytes(row.sizeBytes)}
               </span>
             ) : null}
           </div>
