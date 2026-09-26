@@ -16,6 +16,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { apiGet, apiSend } from "@/lib/api";
+import type { Timestamp } from "@/lib/format";
 
 // ---------------------------------------------------------------------------
 // Wire types
@@ -31,7 +32,7 @@ export interface ChatMessage {
   provider: string | null;
   model: string | null;
   costUsd: number | null;
-  createdAt: number;
+  createdAt: Timestamp;
 }
 
 export interface ChatThread {
@@ -39,8 +40,8 @@ export interface ChatThread {
   title: string;
   model: string | null;
   archived: boolean;
-  createdAt: number;
-  updatedAt: number;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 }
 
 export interface RichTextEnvelope {
@@ -54,8 +55,8 @@ export interface ChatDocument {
   threadId: string;
   title: string;
   body: RichTextEnvelope;
-  createdAt: number;
-  updatedAt: number;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 }
 
 /**

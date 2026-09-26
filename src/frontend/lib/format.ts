@@ -3,8 +3,27 @@
  * pages. Timestamps from the API are epoch milliseconds (or ISO strings).
  */
 
-/** Coerce a Date | number | string into epoch ms (or null). */
-function toMs(value: Date | number | string | null | undefined): number | null {
+/**
+ * A timestamp as the API actually serialises it.
+ *
+ * The Worker stores Drizzle `mode: "timestamp"` columns as integers but
+ * serialises them to JSON as ISO STRINGS. Typing a wire field as `number`
+ * therefore lies, and the lie only bites when someone does arithmetic on it
+ * (`a.createdAt - b.createdAt` silently yields NaN and the sort becomes a
+ * no-op). Type wire timestamps as this, and put them through `toMs` before
+ * comparing or subtracting.
+ */
+export type Timestamp = Date | number | string;
+
+/**
+ * Coerce a `Timestamp` into epoch milliseconds.
+ *
+ * @param value An ISO string, epoch ms, or Date — whatever the wire gave you.
+ * @returns Epoch ms, or null when the value is absent or unparseable.
+ * @example
+ * rows.sort((a, b) => (toMs(a.createdAt) ?? 0) - (toMs(b.createdAt) ?? 0));
+ */
+export function toMs(value: Timestamp | null | undefined): number | null {
   if (value === null || value === undefined) return null;
   if (typeof value === "number") return value;
   const t = new Date(value).getTime();
