@@ -73,7 +73,7 @@ This template ships a real, running app so new projects inherit working patterns
 no mock data.
 
 - **AI = core-guardian, nothing else.** There are NO Durable Objects and NO Agents
-  SDK in this template (removed 2026-09-26; wrangler migration `v4` deletes the old
+  SDK in this template (removed 2026-09-26; wrangler migration `v5` deletes the old
   classes). Every model call goes through `src/backend/ai/guardian.ts#guardianChat`
   over the `CORE_GUARDIAN` service binding (`service: core-guardian`,
   `entrypoint: GuardianRpc`, `remote: true`). No `ai` binding, no provider SDKs.
