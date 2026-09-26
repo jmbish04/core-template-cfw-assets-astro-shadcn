@@ -12,7 +12,7 @@
  * Chat (`/api/chat`, `/api/threads`) is served here too — there are no
  * Durable Objects / Agents SDK agents in this Worker. Every inference call
  * routes through the `CORE_GUARDIAN` service binding (see
- * `backend/ai/guardian.ts`); chat state persists to D1.
+ * `backend/ai/guardian/`); chat state persists to D1.
  * Route mount order: auth → health → config → admin → docs → client-error.
  */
 

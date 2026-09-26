@@ -5,7 +5,7 @@
  * `POST /api/chat/stream` (Server-Sent Events) for the reply, `/api/threads`
  * for the thread index, `/api/threads/{id}/document` for the canvas document.
  * Every inference runs through core-guardian — see
- * `backend/ai/guardian.ts`. Nothing here talks to a model provider directly
+ * `backend/ai/guardian/`. Nothing here talks to a model provider directly
  * and nothing here keeps conversation state in the browser: D1 is the store,
  * so a reload resumes the same thread.
  *

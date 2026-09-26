@@ -18,6 +18,7 @@ import { desc, eq } from "drizzle-orm";
 
 import { healthRuns, healthResults } from "@db/schemas";
 import { getDb } from "@/db";
+import { guardianProject } from "@/backend/ai/guardian";
 
 // ---------------------------------------------------------------------------
 // HealthCoordinator
@@ -132,6 +133,24 @@ class HealthCoordinator {
    */
   private async checkCoreGuardian(): Promise<CheckResult> {
     const start = Date.now();
+
+    // Which ledger this Worker bills to. A misconfigured project name is not a
+    // crash — every call still succeeds, against someone else's account — so
+    // it has to be something the health check SAYS, or nothing would ever
+    // notice. An unset var fails the verdict rather than being omitted.
+    let project: string;
+    try {
+      project = guardianProject(this.env);
+    } catch (error) {
+      return {
+        category: "ai",
+        name: "core_guardian_binding",
+        status: "fail",
+        message: error instanceof Error ? error.message : "GUARDIAN_PROJECT is not configured",
+        durationMs: Date.now() - start,
+      };
+    }
+
     try {
       const guardian = (this.env as unknown as { CORE_GUARDIAN?: { useCases(): Promise<unknown> } })
         .CORE_GUARDIAN;
@@ -150,8 +169,8 @@ class HealthCoordinator {
         category: "ai",
         name: "core_guardian_binding",
         status: "ok",
-        message: "core-guardian reachable via CORE_GUARDIAN.useCases()",
-        details: count !== undefined ? { useCaseCount: count } : undefined,
+        message: `core-guardian reachable via CORE_GUARDIAN.useCases(); billing project "${project}"`,
+        details: { project, ...(count !== undefined ? { useCaseCount: count } : {}) },
         durationMs: Date.now() - start,
       };
     } catch (error) {

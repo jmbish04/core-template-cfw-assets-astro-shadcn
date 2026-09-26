@@ -104,10 +104,30 @@ decoration has no real backing, remove the decoration — do not fake it.
 - **AI = core-guardian, nothing else.** There are NO Durable Objects and NO
   Agents SDK in this template (removed 2026-09-26; wrangler migration `v5`
   deletes the old classes). Every model call goes through
-  `src/backend/ai/guardian.ts` over the `CORE_GUARDIAN` service binding
+  **`src/backend/ai/guardian/`** over the `CORE_GUARDIAN` service binding
   (`service: core-guardian`, `entrypoint: GuardianRpc`, `remote: true`). No `ai`
-  binding, no provider SDKs. Router 422 = no model in budget, 429 = breaker;
-  map both to plain-language errors.
+  binding, no provider SDKs. Import from the folder's `index.ts`, never from the
+  files inside it.
+  - **`guardian/config.ts` builds EVERY payload.** `buildRunPayload` is the one
+    construction site; `GUARDIAN_TASKS` holds the task labels so the routing log
+    stays greppable. Change what is sent to the router by editing that file.
+  - **The project name is a var, not a literal.** `vars.GUARDIAN_PROJECT` in
+    `wrangler.jsonc` is what core-guardian bills and logs against, and
+    `scripts/set-guardian-project.mjs` keeps it equal to the Worker's own `name`
+    on every deploy (`pnpm run deploy` runs it; `pnpm run guardian:project:check`
+    fails on drift). A hardcoded name meant a forked Worker reported its spend
+    under the template's name with nothing looking broken — so a missing var now
+    THROWS (`GuardianConfigError`) rather than defaulting, `/api/health` reports
+    the project it is billing to and fails the verdict when it is unset, and
+    `/api/chat` answers 500 with the real reason instead of a 502 that reads as
+    a transient outage.
+  - Router 422 = no model in budget, 429 = breaker; map both to plain-language
+    errors. A `GuardianConfigError` is NOT either of those — it is this Worker
+    being wrong, and retrying will not help.
+  - A module a plain-Node self-check must import needs **no value imports** —
+    Node's strip-only TypeScript erases `import type` but cannot resolve an
+    extensionless value import. That is why the SSE parser lives in
+    `guardian/stream-read.ts`, separate from `guardian/stream.ts`.
 - **Chat is one backend behind twelve faces.** `POST /api/chat/stream` is the
   endpoint; `src/frontend/lib/chat.ts` (`useChatThread`) is the only client.
   SSE events, all measured against the live router: `meta`, `routed`

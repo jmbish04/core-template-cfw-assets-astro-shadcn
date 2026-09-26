@@ -4,7 +4,7 @@
  *
  * The chat endpoints for this template: create a thread on first message if
  * needed, persist the user turn, call core-guardian (see
- * `backend/ai/guardian.ts` — every inference routes through the
+ * `backend/ai/guardian/` — every inference routes through the
  * `CORE_GUARDIAN` service binding), persist the assistant reply, and return
  * it. `/stream` does the same but emits Server-Sent Events so the reply can
  * be rendered token by token; it still persists the finished turn server-side.
@@ -26,14 +26,16 @@ import { asc, eq } from "drizzle-orm";
 import { getDb } from "@/backend/db";
 import { chatThreads, chatMessages, selectChatMessageSchema } from "@/backend/db/schema";
 import {
+  GUARDIAN_TASKS,
+  GuardianConfigError,
+  GuardianError,
   guardianChat,
   guardianStream,
+  guardianStreamMeta,
   guardianTitle,
   readGuardianStream,
-  guardianStreamMeta,
-  type GuardianUsage,
-  GuardianError,
   type GuardianMessage,
+  type GuardianUsage,
 } from "@/backend/ai/guardian";
 
 const CHAT_SYSTEM_PROMPT =
@@ -76,8 +78,16 @@ export const chatRouter = new OpenAPIHono<{ Bindings: Env }>();
 // Shared helpers
 // ---------------------------------------------------------------------------
 
-/** Map a GuardianError onto the plain-language response the UI shows. */
-function guardianErrorMessage(err: unknown): { status: 422 | 429 | 502; error: string } {
+/** Map a failed run onto the plain-language response the UI shows. */
+function guardianErrorMessage(err: unknown): { status: 422 | 429 | 500 | 502; error: string } {
+  // A misconfigured Worker is NOT a transient AI outage, and saying "try again"
+  // about it would send someone away to wait for a fix that is never coming.
+  // Surface the real message: it names the var and the script that sets it,
+  // and carries no secret.
+  if (err instanceof GuardianConfigError) {
+    console.error("chat guardian config error:", err.message);
+    return { status: 500, error: err.message };
+  }
   if (err instanceof GuardianError) {
     if (err.status === 422) {
       return { status: 422, error: "No model is available inside the budget right now. Try again later." };
@@ -180,6 +190,12 @@ chatRouter.openapi(
         description: "No model available inside core-guardian's budget right now.",
         content: { "application/json": { schema: chatErrorSchema } },
       },
+      500: {
+        description:
+          "This Worker is misconfigured — GUARDIAN_PROJECT is unset, so no run can be " +
+          "attributed. Reported separately from 502 because retrying will not help.",
+        content: { "application/json": { schema: chatErrorSchema } },
+      },
       429: {
         description: "core-guardian's circuit breaker is open.",
         content: { "application/json": { schema: chatErrorSchema } },
@@ -204,8 +220,7 @@ chatRouter.openapi(
     let result;
     try {
       result = await guardianChat(c.env, {
-        task: "chat_reply",
-        useCase: "chat",
+        task: GUARDIAN_TASKS.chatReply,
         importance: importance ?? "low",
         complexity,
         messages,
@@ -331,8 +346,7 @@ chatRouter.post("/stream", async (c) => {
 
     try {
       const upstream = await guardianStream(c.env, {
-        task: "chat_reply",
-        useCase: "chat",
+        task: GUARDIAN_TASKS.chatReply,
         importance: importance ?? "low",
         complexity,
         messages,

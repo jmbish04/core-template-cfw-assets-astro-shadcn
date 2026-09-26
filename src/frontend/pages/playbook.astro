@@ -20,7 +20,7 @@ import { CodeBlock } from "@/components/ui/code-block";
  * all on a single Worker.
  */
 
-const guardianClientExample = `/** src/backend/ai/guardian.ts — the ONLY inference path in this Worker. */
+const guardianClientExample = `/** src/backend/ai/guardian/ — the ONLY inference path in this Worker. */
 export async function guardianChat(env: Env, { messages, task, useCase = "chat", importance = "low" }) {
   const guardian = env.CORE_GUARDIAN as unknown as {
     run(payload: unknown): Promise<{ status: number; body: unknown } | { stream: Response }>;
@@ -202,7 +202,7 @@ async fetch(request: Request, env: Env, ctx: ExecutionContext) {
           client:visible
           className="rounded-none bg-transparent ring-0"
           files={[
-            { filename: "src/backend/ai/guardian.ts", language: "ts", code: guardianClientExample },
+            { filename: "src/backend/ai/guardian/", language: "ts", code: guardianClientExample },
             { filename: "src/backend/api/routes/chat.ts", language: "ts", code: chatRouteExample },
             { filename: "ai-chat.tsx", language: "ts", code: chatClientExample },
           ]}

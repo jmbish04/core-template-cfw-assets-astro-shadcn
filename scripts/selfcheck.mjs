@@ -17,7 +17,10 @@
  */
 import assert from "node:assert/strict";
 
-import { readGuardianStream, guardianStreamMeta } from "../src/backend/ai/guardian.ts";
+// Imported from the concrete modules, not the `guardian/index.ts` barrel:
+// Node's strip-only TypeScript support does not resolve extensionless
+// re-exports, which is what a barrel is made of.
+import { readGuardianStream, guardianStreamMeta } from "../src/backend/ai/guardian/stream-read.ts";
 
 /** An SSE Response whose body is delivered in the given chunks, verbatim. */
 function sseResponse(chunks, headers = {}) {
