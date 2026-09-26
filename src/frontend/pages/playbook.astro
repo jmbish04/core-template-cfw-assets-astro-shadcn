@@ -44,23 +44,41 @@ export async function guardianChat(env: Env, { messages, task, useCase = "chat",
   };
 }`;
 
-const chatRouteExample = `// POST /api/chat  { threadId?, message }  →  { threadId, message }
-// 1. create the chat_threads row if threadId is absent
-// 2. insert the user turn into chat_messages
-// 3. guardianChat() with a system prompt + the thread's last 20 turns
-// 4. insert the assistant turn (content, provider, model, costUsd)
-// 5. map GuardianError: 422 → "no model inside the budget", 429 → "rate-limited",
-//    anything else → 502 — never leak router internals to the browser`;
+const chatRouteExample = `// POST /api/chat/stream  { threadId?, message, systemPrompt?, importance?, complexity? }
+// Server-Sent Events, in order:
+//   meta      { threadId }                       — before anything is generated
+//   routed    { provider, model, requestUuid }   — from the router's response HEADERS,
+//                                                  so the UI names the real model early
+//   reasoning { text }                           — the model THINKING, on a reasoning
+//                                                  model. Never part of the answer.
+//   delta     { text }                           — the answer, chunk by chunk
+//   usage     { promptTokens, completionTokens, totalTokens }
+//   title     { threadId, title }                — the model titles a NEW thread on its
+//                                                  first reply; no client-side truncation
+//   done      { threadId, message, latencyMs, usage }
+//   error     { error, status }                  — 422 no model in budget,
+//                                                  429 rate-limited, 502 unavailable
+//
+// The server accumulates the deltas and writes ONE chat_messages row when the
+// stream finishes, with the provider and model that actually served it. Nothing
+// about the conversation lives in the browser.`;
 
-const chatClientExample = `// src/frontend/components/blocks/ai-chat-1/components/ai-chat.tsx
-const res = await fetch("/api/chat", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ threadId, message: text }),
-  signal: controller.signal, // the composer's Stop aborts the wait
+const chatClientExample = `// Every /chat/* surface binds to the same hook — src/frontend/lib/chat.ts
+import { useChatThread } from "@/lib/chat";
+
+const chat = useChatThread({
+  threadId,                       // resume from ?t=<id>, or omit to start one
+  systemPrompt: "Answer only from the knowledge base.",
+  onTitle: (id, title) => renameInRail(id, title),
 });
-const { threadId: id, message } = await res.json();
-// message.provider · message.model shows in the header; costUsd sums in the composer`;
+
+// chat.messages   persisted turns from D1
+// chat.pending    the answer streaming in right now
+// chat.reasoning  the model's thinking — render it folded, never appended
+// chat.routed     { provider, model } that actually served the turn
+// chat.usage      real token counts   chat.latencyMs  measured round trip
+// chat.error      plain language for the three real router failures
+// chat.send(text) / chat.stop()`;
 
 const honoRouteExample = `import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 

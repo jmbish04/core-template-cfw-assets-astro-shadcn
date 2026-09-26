@@ -83,6 +83,14 @@ import {
   CHAT_MESSAGES_TABLE_DESCRIPTION,
   CHAT_MESSAGES_COLUMN_DESCRIPTIONS,
 } from "../../db/schemas/chat/messages";
+import {
+  CHAT_DOCUMENTS_TABLE_DESCRIPTION,
+  CHAT_DOCUMENTS_COLUMN_DESCRIPTIONS,
+} from "../../db/schemas/chat/documents";
+import {
+  FILES_TABLE_DESCRIPTION,
+  FILES_COLUMN_DESCRIPTIONS,
+} from "../../db/schemas/files/files";
 
 // ---------------------------------------------------------------------------
 // Registry — maps D1 table name → descriptions from schema modules
@@ -175,6 +183,15 @@ const TABLE_DOCS: Record<string, TableDocEntry> = {
   chat_messages: {
     tableDescription: CHAT_MESSAGES_TABLE_DESCRIPTION,
     columnDescriptions: CHAT_MESSAGES_COLUMN_DESCRIPTIONS,
+  },
+  chat_documents: {
+    tableDescription: CHAT_DOCUMENTS_TABLE_DESCRIPTION,
+    columnDescriptions: CHAT_DOCUMENTS_COLUMN_DESCRIPTIONS,
+  },
+  // Domain — drive
+  files: {
+    tableDescription: FILES_TABLE_DESCRIPTION,
+    columnDescriptions: FILES_COLUMN_DESCRIPTIONS,
   },
 };
 

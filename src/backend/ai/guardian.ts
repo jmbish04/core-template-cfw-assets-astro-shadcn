@@ -41,8 +41,16 @@ export interface GuardianChatResult {
 
 /** Thrown when core-guardian rejects or fails a run. `status` is the HTTP-shaped status core-guardian returned (422/429/other). */
 export class GuardianError extends Error {
-  constructor(public readonly status: number, public readonly body: unknown) {
+  // Written out rather than declared as constructor parameter properties, so
+  // this module can be imported directly by `scripts/selfcheck.mjs` under
+  // Node's strip-only TypeScript support.
+  readonly status: number;
+  readonly body: unknown;
+
+  constructor(status: number, body: unknown) {
     super(`core-guardian run failed (status ${status})`);
+    this.status = status;
+    this.body = body;
   }
 }
 
