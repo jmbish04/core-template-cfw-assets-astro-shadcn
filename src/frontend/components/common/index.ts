@@ -9,5 +9,10 @@
 export * from "./types";
 export * from "./use-projects";
 export * from "./shared";
-export { StatusBadge } from "./status-badge";
-export { PriorityBadge } from "./priority-badge";
+export {
+  ProjectStatusBadge,
+  TaskStatusBadge,
+  TASK_STATUS_DOT,
+  TASK_STATUS_VARIANT,
+} from "./status-badge";
+export { PriorityBadge, type PriorityBadgeProps } from "./priority-badge";

@@ -17,7 +17,7 @@
  */
 
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
-import { and, desc, eq, like, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, like, or, sql } from "drizzle-orm";
 
 import { getDb } from "../../db";
 import { insertProjectSchema, projects, selectProjectSchema } from "../../db/schema";
@@ -121,9 +121,12 @@ projectsRouter.openapi(
       taskCount: projects.taskCount,
     } as const;
     const sortCol = sortMap[sort as keyof typeof sortMap] ?? projects.updatedAt;
+    // Newest-first is right for dates and counts, and wrong for a name: "sort
+    // by name" descending hands back Z->A, which reads as a bug.
+    const direction = sort === "name" ? asc : desc;
 
     const [rows, countResult] = await Promise.all([
-      db.select().from(projects).where(where).orderBy(desc(sortCol)).limit(limit).offset(offset),
+      db.select().from(projects).where(where).orderBy(direction(sortCol)).limit(limit).offset(offset),
       db.select({ count: sql<number>`count(*)` }).from(projects).where(where),
     ]);
 

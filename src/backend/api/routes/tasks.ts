@@ -116,10 +116,32 @@ const taskListQuerySchema = z.object({
   offset: z.string().optional().openapi({ description: "Skip rows for pagination (default 0)." }),
 });
 
+/**
+ * A timestamp as JSON can carry it: an ISO string or epoch milliseconds.
+ *
+ * drizzle-zod maps a Drizzle `timestamp` column to a bare `z.date()` with NO
+ * coercion, so the generated body schema rejects every value a JSON client can
+ * actually send — the column becomes silently unwritable over HTTP. Coercing
+ * here is what makes `dueDate` settable from the UI at all.
+ */
+const jsonDate = z
+  .union([z.string(), z.number(), z.date()])
+  .transform((value, ctx) => {
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      ctx.addIssue({ code: "custom", message: "Expected an ISO date string or epoch milliseconds." });
+      return z.NEVER;
+    }
+    return date;
+  });
+
 /** Slim insert body — server generates id, createdAt, updatedAt. */
 const createTaskBody = insertTaskSchema
   .omit({ id: true, createdAt: true, updatedAt: true })
-  .extend({ title: z.string().min(1) });
+  .extend({
+    title: z.string().min(1),
+    dueDate: jsonDate.nullable().optional(),
+  });
 
 /** All fields optional for PATCH. */
 const patchTaskBody = createTaskBody.partial();
