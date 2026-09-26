@@ -1,440 +1,232 @@
-"use client"
+/**
+ * @fileoverview `/chat/docked` — ReUI Pro block `ai-chat-2`, wired to
+ * core-guardian.
+ *
+ * The block's shape kept: a document with the assistant docked beside it, and
+ * an "Insert into draft" action on every reply. The difference is that the
+ * document is REAL — it is the thread's `chat_documents` row, edited in the
+ * PlateJS editor, saved through `PUT /api/threads/{id}/document` and appended
+ * to through `POST …/document/append`.
+ *
+ * MOUNTING: `client:only="react"`. PlateJS touches browser-only DOM APIs and
+ * must never run during Astro SSR.
+ *
+ * Removed from the block (no real backing on this Worker): the skeleton
+ * "release doc" and its fixed section list, the seeded transcript and reveal
+ * timers, the model list (replaced by the routing-profile picker), the
+ * accept/undo draft dance over a single hardcoded section, and the retry on a
+ * canned failure.
+ */
+import { useState } from "react";
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react"
-import { cn } from "@/lib/utils"
+import { appendToDocument, useChatThread, type ChatMessage } from "@/lib/chat";
 
 import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@/components/ui/avatar"
-import { Button } from "@/components/ui/button"
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet"
-import { TooltipProvider } from "@/components/ui/tooltip"
-import { AssistantPanel } from "./assistant-panel"
-import {
-  ASSISTANT_NAME,
-  COLLABORATORS,
-  DOC_FILENAME,
-  DOC_SHARE_URL,
-  draftReply,
-  MODELS,
-  THREADS,
-  type ChatMessageRecord,
-  type DraftPayload,
-  type TranscriptRecord,
-} from "./data"
-import { ReleaseDoc } from "./release-doc"
-import { LinkIcon, CheckIcon, FileTextIcon, SparklesIcon } from "lucide-react"
+  CanvasDocument,
+  ChatComposer,
+  ChatErrorBanner,
+  ThreadList,
+  Transcript,
+  useBelow,
+  useChatDocument,
+  useThreadSession,
+  useThreads,
+} from "@/components/chat";
+import { Frame, FramePanel } from "@/components/reui/frame";
+import { IconTile } from "@/components/reui/icon-tile";
+import { Button } from "@/components/ui/button";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { BotIcon, MessageSquareIcon, PlusIcon, SparklesIcon, TextCursorInputIcon } from "lucide-react";
 
-/** Static icon nodes: the shadcn CLI cannot resolve icon names from props. */
-const ICON_LINK = (
-  <LinkIcon data-icon="inline-start" aria-hidden="true" />
-)
-
-const ICON_CHECK = (
-  <CheckIcon data-icon="inline-start" aria-hidden="true" />
-)
-
-// Below lg the assistant rides an overlay Sheet; at lg+ it is an in-flow panel.
-// A 384px panel beside the document needs about 1024px before both read well.
-const LG_QUERY = "(max-width: 1023px)"
-
-function subscribeBelowLg(onChange: () => void) {
-  const query = window.matchMedia(LG_QUERY)
-  query.addEventListener("change", onChange)
-  return () => query.removeEventListener("change", onChange)
+export interface DockedChatProps {
+  /** `?t=` as the Astro page read it, so a reload resumes the thread. */
+  initialThreadId?: string;
 }
 
-/** Read straight from matchMedia, so a phone's first paint already gets the
-    sheet instead of flashing the desktop dock for a frame. */
-function useIsBelowLg() {
-  return useSyncExternalStore(
-    subscribeBelowLg,
-    () => window.matchMedia(LG_QUERY).matches,
-    () => false
-  )
-}
+/**
+ * The `/chat/docked` surface: a live document with the assistant beside it.
+ *
+ * @param props The thread to resume, from the query string.
+ * @returns The two-pane draft surface.
+ */
+export function DockedChat({ initialThreadId }: DockedChatProps) {
+  const session = useThreadSession(initialThreadId);
+  const rail = useThreads();
+  const [inserted, setInserted] = useState<string | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  // Mounted in exactly one place: a second copy behind `lg:hidden` would give
+  // the surface two transcripts and two composers over one stream.
+  const narrow = useBelow(1024);
 
-export function AiChat() {
-  const belowLg = useIsBelowLg()
-  const [dockOpen, setDockOpen] = useState(true)
-  const [sheetOpen, setSheetOpen] = useState(false)
-  const [modelId, setModelId] = useState(MODELS[0].id)
-  /** Which saved conversation the panel is showing. */
-  const [threadId, setThreadId] = useState(THREADS[0].id)
-  const [streaming, setStreaming] = useState(true)
-  /** Only a real Stop press earns the "Stopped by you" note; a send that
-      interrupts the stream settles the reply complete and unmarked. */
-  const [stopped, setStopped] = useState(false)
-  /** Replies that were stopped, so the note survives them settling. */
-  const [stoppedIds, setStoppedIds] = useState<string[]>([])
-  /** Seeded replies Retry replaced; they cannot be popped from THREADS. */
-  const [suppressedIds, setSuppressedIds] = useState<string[]>([])
-  /** New chat parks the panel on its zero state until the next send. */
-  const [newChat, setNewChat] = useState(false)
-  /** The draft written into the document, or null while the section is empty. */
-  const [draft, setDraft] = useState<DraftPayload | null>(null)
-  const [flash, setFlash] = useState(false)
-  /** Set for one beat after Share copies the document link. */
-  const [shared, setShared] = useState(false)
-  /** Turns the visitor adds, on top of the seeded thread. */
-  const [sent, setSent] = useState<ChatMessageRecord[]>([])
-  /** Set once the seeded reply has been settled into the message stream. */
-  const [committed, setCommitted] = useState(false)
-  /** The reply currently typing itself out, so the thread can animate it. */
-  const [arrivingId, setArrivingId] = useState<string | null>(null)
+  const chat = useChatThread({
+    threadId: session.threadId,
+    systemPrompt:
+      "You are helping the reader write a document that sits beside this conversation. Answer in prose they could paste straight into it.",
+    onThreadCreated: (id) => {
+      session.adoptThread(id);
+      void rail.refresh();
+    },
+    onTitle: (id, title) => rail.applyTitle(id, title),
+  });
 
-  const draftSection = useRef<HTMLElement | null>(null)
-  /** Collapse hands focus here before inert makes the panel unfocusable. */
-  const assistantToggle = useRef<HTMLButtonElement | null>(null)
-  /** Serves reply ids without reading state back out of a dispatch. */
-  const replySeq = useRef(0)
-  /** Armed by Insert so the scroll waits for the section to actually grow. */
-  const scrollQueued = useRef(false)
-  const replyTimer = useRef<number | null>(null)
-  const flashTimer = useRef<number | null>(null)
-  const sharedTimer = useRef<number | null>(null)
+  // The document belongs to the thread, so it follows whatever id the chat
+  // hook is holding — including the one the server just created mid-stream.
+  const doc = useChatDocument(chat.threadId);
 
-  const thread = THREADS.find((item) => item.id === threadId) ?? THREADS[0]
-  // A new conversation has no thread yet, so it must not wear the old name.
-  const threadTitle = newChat ? ASSISTANT_NAME : thread.title
-  const pending = newChat || committed ? undefined : thread.pending
-  const transcript: TranscriptRecord = newChat
-    ? { messages: sent }
-    : {
-        ...thread,
-        messages: [
-          ...thread.messages.filter(
-            (message) => !suppressedIds.includes(message.id)
-          ),
-          ...sent,
-        ],
-        pending,
-      }
-
-  const assistantOpen = belowLg ? sheetOpen : dockOpen
-  const showEmpty = newChat && sent.length === 0
-
-  useEffect(() => {
-    return () => {
-      if (replyTimer.current) window.clearTimeout(replyTimer.current)
-      if (flashTimer.current) window.clearTimeout(flashTimer.current)
-      if (sharedTimer.current) window.clearTimeout(sharedTimer.current)
-    }
-  }, [])
-
-  // Fired after the section content commits, so Insert never scrolls to where
-  // the draft is about to be.
-  useEffect(() => {
-    if (!draft || !scrollQueued.current) return
-    scrollQueued.current = false
-    draftSection.current?.scrollIntoView({
-      block: "center",
-      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-        ? "auto"
-        : "smooth",
-    })
-  }, [draft])
-
-  /** The reveal reports when its last chunk lands, so a long answer runs as
-      long as it needs to instead of being cut off by a timer that guessed. */
-  function handleArrived() {
-    setArrivingId(null)
-    setStreaming(false)
+  async function insert(message: ChatMessage) {
+    if (!chat.threadId) return;
+    await appendToDocument(chat.threadId, message.content);
+    await doc.reload();
+    setInserted(message.id);
+    window.setTimeout(() => setInserted((id) => (id === message.id ? null : id)), 1800);
   }
 
-  /** A short wait under the marker, then the reply types itself out. */
-  function beginReply(prompt: string) {
-    if (replyTimer.current) window.clearTimeout(replyTimer.current)
-    setStopped(false)
-    setArrivingId(null)
-    setStreaming(true)
-    replyTimer.current = window.setTimeout(() => {
-      replyTimer.current = null
-      replySeq.current += 1
-      const replyId = `reply_${replySeq.current}`
-      const reply = draftReply(prompt, replySeq.current - 1)
-      setSent((current) => [
-        ...current,
-        {
-          id: replyId,
-          role: "assistant",
-          at: "Now",
-          parts: reply.parts,
-          draft: reply.draft,
-          followUps: reply.followUps,
-        },
-      ])
-      setArrivingId(replyId)
-    }, 700)
-  }
-
-  function handleSend(text: string) {
-    const base = sent.length
-    const appended: ChatMessageRecord[] = []
-    let settledId: string | null = null
-    if (pending) {
-      // Sending settles the in-flight reply in place, complete unless a real
-      // Stop already froze it, so the new turn is genuinely last.
-      const finished = !stopped && Boolean(pending.rest)
-      settledId = `sent_${base + 1}`
-      appended.push({
-        id: settledId,
-        role: "assistant",
-        at: pending.at,
-        draft: pending.draft,
-        followUps: pending.followUps,
-        parts: finished
-          ? pending.parts.map((part, index) =>
-              index === pending.parts.length - 1 && part.kind === "text"
-                ? { ...part, text: part.text + pending.rest }
-                : part
-            )
-          : pending.parts,
-      })
-    }
-    appended.push({
-      id: `sent_${base + appended.length + 1}`,
-      role: "user",
-      at: "Now",
-      parts: [{ kind: "text", text }],
-    })
-    setSent((current) => [...current, ...appended])
-    if (pending) {
-      setCommitted(true)
-      if (stopped && settledId)
-        setStoppedIds((current) => [...current, settledId])
-    }
-    beginReply(text)
-  }
-
-  function resetThread(toNewChat: boolean) {
-    if (replyTimer.current) window.clearTimeout(replyTimer.current)
-    replyTimer.current = null
-    setSent([])
-    setCommitted(false)
-    setArrivingId(null)
-    setStopped(false)
-    setStreaming(false)
-    setStoppedIds([])
-    setSuppressedIds([])
-    setDraft(null)
-    setNewChat(toNewChat)
-  }
-
-  function openThread(id: string) {
-    setThreadId(id)
-    resetThread(false)
-  }
-
-  /** Replaces the newest reply with a fresh answer to the same question. */
-  function handleRetry() {
-    const messages = transcript.messages
-    const asked = [...messages]
-      .reverse()
-      .find((message) => message.role === "user")
-    const prompt = asked?.parts
-      .map((part) => (part.kind === "text" ? part.text : ""))
-      .join(" ")
-      .trim()
-    if (!prompt) return
-
-    if (pending) {
-      // Settling the seeded reply retires it, leaving the question standing.
-      setCommitted(true)
-    } else {
-      // The trailing assistant run splits: sent turns pop, seeded turns can
-      // only be filtered out, or Retry would duplicate them.
-      const trailing: ChatMessageRecord[] = []
-      for (
-        let index = messages.length - 1;
-        index >= 0 && messages[index].role === "assistant";
-        index--
-      )
-        trailing.push(messages[index])
-      const sentIds = new Set(sent.map((message) => message.id))
-      const dropped = trailing
-        .filter((message) => sentIds.has(message.id))
-        .map((message) => message.id)
-      const seeded = trailing
-        .filter((message) => !sentIds.has(message.id))
-        .map((message) => message.id)
-      if (dropped.length)
-        setSent((current) =>
-          current.filter((message) => !dropped.includes(message.id))
-        )
-      if (seeded.length) setSuppressedIds((current) => [...current, ...seeded])
-    }
-    beginReply(prompt)
-  }
-
-  /** Hands over the document link, the one share action a draft page needs. */
-  function handleShare() {
-    navigator.clipboard
-      ?.writeText(DOC_SHARE_URL)
-      .then(() => {
-        setShared(true)
-        if (sharedTimer.current) window.clearTimeout(sharedTimer.current)
-        sharedTimer.current = window.setTimeout(() => setShared(false), 1600)
-      })
-      .catch(() => setShared(false))
-  }
-
-  /** Writes the offered draft into the document, or takes it back out. */
-  function handleToggleDraft(offered: DraftPayload) {
-    if (draft) {
-      setDraft(null)
-      return
-    }
-    setDraft(offered)
-    scrollQueued.current = true
-    // The sheet covers the document, so it steps aside to show the change land.
-    if (belowLg) setSheetOpen(false)
-    setFlash(true)
-    if (flashTimer.current) window.clearTimeout(flashTimer.current)
-    flashTimer.current = window.setTimeout(() => setFlash(false), 1600)
-  }
-
-  const panel = (
-    <AssistantPanel
-      showEmpty={showEmpty}
-      transcript={transcript}
-      streaming={streaming}
-      stopped={stopped}
-      stoppedIds={stoppedIds}
-      arrivingId={arrivingId}
-      drafted={draft !== null}
-      modelId={modelId}
-      onModelChange={setModelId}
-      onToggleDraft={handleToggleDraft}
-      onSend={handleSend}
-      onStop={() => {
-        if (replyTimer.current) window.clearTimeout(replyTimer.current)
-        replyTimer.current = null
-        setStopped(true)
-        // A stopped sent reply keeps its note after it settles into the thread.
-        if (arrivingId) setStoppedIds((current) => [...current, arrivingId])
-        setArrivingId(null)
-        setStreaming(false)
-      }}
-      onNewChat={() => resetThread(true)}
-      onOpenThread={openThread}
-      onRetry={handleRetry}
-      onArrived={handleArrived}
-      threadTitle={threadTitle}
-      overlay={belowLg}
-      onClose={() => {
-        if (belowLg) {
-          setSheetOpen(false)
-          return
-        }
-        // Focus must leave the panel before inert makes its controls dead.
-        assistantToggle.current?.focus()
-        setDockOpen(false)
-      }}
-    />
-  )
-
-  return (
-    // Every tooltip in the block needs this ancestor to open.
-    <TooltipProvider>
-      <div className="bg-background text-foreground flex h-svh w-full flex-col">
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b px-3 sm:px-4">
-          <FileTextIcon className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
-          <span className="text-muted-foreground min-w-0 truncate font-mono text-xs">
-            {DOC_FILENAME}
-          </span>
-
-          <div className="ms-auto flex items-center gap-2">
-            <ul
-              aria-label="In this draft"
-              className="hidden items-center -space-x-2 sm:flex"
+  const assistant = (
+    <div className="flex h-full min-h-0 w-full flex-col">
+      <header className="border-border flex h-12 shrink-0 items-center gap-2 border-b px-3">
+        <IconTile variant="elevated" size="sm" aria-hidden="true">
+          <SparklesIcon aria-hidden="true" />
+        </IconTile>
+        <h2 className="min-w-0 truncate text-sm font-medium">Assistant</h2>
+        <div className="ms-auto flex items-center gap-0.5">
+          <Sheet>
+            <SheetTrigger
+              render={<Button variant="ghost" size="icon-sm" aria-label="Conversations" />}
             >
-              {COLLABORATORS.map((person) => (
-                <li key={person.name}>
-                  <span className="sr-only">{person.name}</span>
-                  <Avatar
-                    aria-hidden="true"
-                    className="ring-background size-6 ring-2"
-                  >
-                    <AvatarImage src={person.avatar} alt="" />
-                    <AvatarFallback className="text-[10px]">
-                      {person.initials}
-                    </AvatarFallback>
-                  </Avatar>
-                </li>
-              ))}
-            </ul>
-
-            <Button variant="outline" onClick={handleShare}>
-              {shared ? ICON_CHECK : ICON_LINK}
-              {shared ? "Copied" : "Share"}
-            </Button>
-
-            <Button
-              ref={assistantToggle}
-              variant="outline"
-              aria-pressed={assistantOpen}
-              onClick={() =>
-                belowLg
-                  ? setSheetOpen((open) => !open)
-                  : setDockOpen((open) => !open)
+              <MessageSquareIcon aria-hidden="true" />
+            </SheetTrigger>
+            <SheetContent side="right" className="flex w-80 flex-col gap-3 p-3">
+              <SheetHeader className="p-0">
+                <SheetTitle>Conversations</SheetTitle>
+              </SheetHeader>
+              <ThreadList
+                threads={rail.threads}
+                activeId={chat.threadId}
+                loading={rail.loading}
+                heading={null}
+                onSelect={session.openThread}
+                onRename={rail.rename}
+                onDelete={(id) => {
+                  void rail.remove(id);
+                  if (id === chat.threadId) session.newThread();
+                }}
+              />
+            </SheetContent>
+          </Sheet>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button variant="ghost" size="icon-sm" aria-label="New chat" onClick={session.newThread} />
               }
             >
-              <SparklesIcon data-icon="inline-start" aria-hidden="true" />
-              <span className="max-sm:sr-only">Assistant</span>
-            </Button>
-          </div>
-        </header>
-
-        <div className="flex min-h-0 flex-1">
-          <main className="min-w-0 flex-1 overflow-y-auto">
-            <ReleaseDoc draft={draft} flash={flash} draftRef={draftSection} />
-          </main>
-
-          {/* Only the shell's width animates: the panel inside keeps its 384px
-              so nothing inside it reflows while the document makes room. */}
-          {belowLg ? null : (
-            <div
-              role="complementary"
-              aria-label="Assistant"
-              aria-hidden={!dockOpen}
-              inert={!dockOpen}
-              className={cn(
-                "shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out motion-reduce:transition-none",
-                dockOpen ? "w-96 border-s" : "w-0"
-              )}
-            >
-              <div className="h-full w-96">{panel}</div>
-            </div>
-          )}
+              <PlusIcon aria-hidden="true" />
+            </TooltipTrigger>
+            <TooltipContent>New chat</TooltipContent>
+          </Tooltip>
         </div>
-      </div>
+      </header>
 
-      {/* Mounted closed so the first open still plays the sheet transition. */}
-      <Sheet open={belowLg && sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent
-          side="right"
-          initialFocus={false}
-          showCloseButton={false}
-          // Full width on a phone: a 384px cap there leaves a few dead
-          // pixels of page showing beside the drawer.
-          className="w-full p-0 sm:max-w-96"
-        >
-          <SheetHeader className="sr-only">
-            <SheetTitle>Assistant</SheetTitle>
-            <SheetDescription>Ask about this draft.</SheetDescription>
-          </SheetHeader>
-          {panel}
-        </SheetContent>
-      </Sheet>
+      <Transcript
+        messages={chat.messages}
+        pending={chat.pending}
+        reasoning={chat.reasoning}
+        routed={chat.routed}
+        latencyMs={chat.latencyMs}
+        usage={chat.usage}
+        streaming={chat.streaming}
+        loading={chat.loading}
+        onStop={chat.stop}
+        contentClassName="max-w-none px-3 py-4 sm:px-3"
+        replyActions={(message) => (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label="Insert this reply into the draft"
+                  disabled={!chat.threadId}
+                  onClick={() => void insert(message)}
+                />
+              }
+            >
+              <TextCursorInputIcon aria-hidden="true" />
+            </TooltipTrigger>
+            <TooltipContent>
+              {inserted === message.id ? "Added to the draft" : "Insert into draft"}
+            </TooltipContent>
+          </Tooltip>
+        )}
+        empty={
+          <Empty className="m-auto px-4">
+            <EmptyHeader>
+              <EmptyTitle>Write with the assistant</EmptyTitle>
+              <EmptyDescription>
+                Ask for a section, then insert the reply straight into the draft.
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        }
+      />
+
+      <div className="border-border shrink-0 border-t p-2">
+        <ChatErrorBanner error={chat.error} onDismiss={chat.clearError} className="mb-2" />
+        <ChatComposer
+          onSend={chat.send}
+          onStop={chat.stop}
+          streaming={chat.streaming}
+          profile={chat.profile}
+          onProfileChange={chat.setProfile}
+          routed={chat.routed}
+          placeholder="Ask for a section…"
+        />
+      </div>
+    </div>
+  );
+
+  return (
+    <TooltipProvider>
+      <div className="flex min-h-0 flex-1 gap-4 lg:h-[calc(100svh-11rem)]">
+        <Frame className="flex min-w-0 flex-1">
+          <FramePanel className="flex min-h-0 flex-col">
+            <CanvasDocument
+              state={doc}
+              emptyHint="Send the assistant a message. The draft is created with the conversation."
+            />
+          </FramePanel>
+        </Frame>
+
+        {/* Docked beside the document above lg; a sheet below it, as the block
+            does — there is no room for two panes on a phone. */}
+        {!narrow && (
+          <Frame className="flex w-96 shrink-0">
+            <FramePanel className="flex min-h-0 flex-col p-0">{assistant}</FramePanel>
+          </Frame>
+        )}
+
+        {narrow && (
+          <>
+            <Button
+              size="lg"
+              onClick={() => setSheetOpen(true)}
+              className="fixed end-4 bottom-4 z-20 gap-1.5 rounded-full shadow-lg"
+            >
+              <BotIcon aria-hidden="true" />
+              Assistant
+            </Button>
+            <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+              <SheetContent side="right" className="w-full p-0 sm:max-w-md">
+                <SheetHeader className="sr-only">
+                  <SheetTitle>Assistant</SheetTitle>
+                </SheetHeader>
+                {assistant}
+              </SheetContent>
+            </Sheet>
+          </>
+        )}
+      </div>
     </TooltipProvider>
-  )
+  );
 }

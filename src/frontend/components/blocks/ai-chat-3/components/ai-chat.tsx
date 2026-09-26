@@ -1,430 +1,267 @@
-import { useEffect, useRef, useState } from "react"
-import { Badge } from "@/components/reui/badge"
-import { IconTile } from "@/components/reui/icon-tile"
-import { cn } from "@/lib/utils"
+/**
+ * @fileoverview `/chat/welcome` — ReUI Pro block `ai-chat-3`, wired to
+ * core-guardian.
+ *
+ * The block's shape kept: an `Empty` greeting over live workspace figures, a
+ * rail of Start / Resume rows, an `InputGroup` composer with attachment chips,
+ * and a streaming reply with Stop. Everything under it is real — the figures
+ * come from `GET /api/dashboard/stats`, the Resume rows are `/api/threads`,
+ * and an attachment is a genuine file from the `/files` drive whose name, type
+ * and size go into the prompt (see `describeAttachments`).
+ *
+ * Removed from the block (no real backing on this Worker): the seeded greeting
+ * figures, the invented "connected app" context sources behind the chips, the
+ * questionnaire branch (the router returns prose, not a form schema), the
+ * seeded transcript and its reveal timers, and the model list (replaced by the
+ * routing-profile picker).
+ */
+import { useEffect, useState, type ReactNode } from "react";
 
-import { Button } from "@/components/ui/button"
+import { apiGet } from "@/lib/api";
+import { useChatThread } from "@/lib/chat";
+import { compactNumber, relativeTime } from "@/lib/format";
+
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { TooltipProvider } from "@/components/ui/tooltip"
-import type { ScopeAnswer } from "./chat-questionnaire"
-import { ChatThread } from "./chat-thread"
-import { Composer } from "./composer"
-import {
-  ASSISTANT_NAME,
-  draftReply,
-  EFFORTS,
-  MODELS,
-  planFromScope,
-  THREADS,
-  type ChatMessageRecord,
-  type ThreadRecord,
-} from "./data"
-import { Welcome } from "./welcome"
-import { SparklesIcon, PlusIcon, ChevronDownIcon } from "lucide-react"
+  AttachmentChips,
+  AttachmentPicker,
+  ChatComposer,
+  ChatErrorBanner,
+  Transcript,
+  describeAttachments,
+  useThreadSession,
+  useThreads,
+  type DriveFile,
+  type ThreadSession,
+  type UseThreads,
+} from "@/components/chat";
+import { Frame, FramePanel } from "@/components/reui/frame";
+import { Button } from "@/components/ui/button";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
+import { Skeleton } from "@/components/ui/skeleton";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { ChartColumnIcon, FolderKanbanIcon, ListChecksIcon, MessageSquareIcon } from "lucide-react";
 
-/** The plan step a thinking toggle buys before the answer starts arriving. */
-const PLANNING_LABEL = "Planning the answer"
+interface DashboardStats {
+  totalProjects: number;
+  activeProjects: number;
+  totalTasks: number;
+  completedTasks: number;
+  completionRatePct: number;
+  overdueTasks: number;
+  unreadNotifications: number;
+}
 
-export function AiChat() {
-  const [modelId, setModelId] = useState(MODELS[0].id)
-  /** The composer's text, held here so a starter card can fill it. */
-  const [draft, setDraft] = useState("")
-  const [contextIds, setContextIds] = useState<string[]>([])
-  const [effortId, setEffortId] = useState(EFFORTS[0].id)
-  /** The resumed conversation, or null while this is still a new chat. */
-  const [thread, setThread] = useState<ThreadRecord | null>(null)
-  const [messages, setMessages] = useState<ChatMessageRecord[]>([])
-  const [streaming, setStreaming] = useState(false)
-  const [activity, setActivity] = useState(PLANNING_LABEL)
-  /** The reply currently typing itself out, so only that turn animates. */
-  const [arrivingId, setArrivingId] = useState<string | null>(null)
-  /** Replies a Stop cut short. They stay cut short from then on. */
-  const [stoppedIds, setStoppedIds] = useState<string[]>([])
-  /** Scope answers, keyed by the reply that asked for them. */
-  const [scopeAnswers, setScopeAnswers] = useState<
-    Record<string, ScopeAnswer[]>
-  >({})
+/** Prompt starters. Copy, not data — they fill the composer and nothing else. */
+const STARTERS = [
+  { icon: ListChecksIcon, prompt: "Which tasks are overdue, and what is blocking them?" },
+  { icon: FolderKanbanIcon, prompt: "Summarise where each active project stands." },
+  { icon: ChartColumnIcon, prompt: "What changed in this workspace over the last week?" },
+];
 
-  const field = useRef<HTMLTextAreaElement>(null)
-  const replyTimer = useRef<number | null>(null)
-  /** Ids for turns added during the session, never colliding with seeded ones. */
-  const turnCount = useRef(0)
-  const replyCount = useRef(0)
-
-  const activeModel = MODELS.find((model) => model.id === modelId) ?? MODELS[0]
-  // The greeting owns the screen until there is a conversation to read.
-  const inThread = messages.length > 0
-  // An unsaved chat has no name yet, so it wears the question that started it.
-  const opener = messages.find((message) => message.role === "user")?.parts[0]
-  const title =
-    thread?.title ?? (opener?.kind === "text" ? opener.text : "New chat")
-
-  useEffect(() => {
-    return () => {
-      if (replyTimer.current) window.clearTimeout(replyTimer.current)
-    }
-  }, [])
-
-  function clearTimer() {
-    if (replyTimer.current) window.clearTimeout(replyTimer.current)
-    replyTimer.current = null
+/** The live workspace figures under the greeting. */
+function WorkspaceStats({ stats, loading }: { stats: DashboardStats | null; loading: boolean }) {
+  if (loading) return <Skeleton className="h-4 w-72" aria-hidden="true" />;
+  if (!stats) {
+    // The figures failed to load. Saying so beats a zero that reads as a fact.
+    return <span className="text-muted-foreground text-sm">Workspace figures are unavailable right now.</span>;
   }
+  return (
+    <span className="text-muted-foreground text-sm">
+      {compactNumber(stats.activeProjects)} active projects
+      <span aria-hidden="true" className="bg-muted-foreground/40 mx-1.5 inline-block size-1 rounded-full align-middle" />
+      {compactNumber(stats.totalTasks - stats.completedTasks)} open tasks
+      <span aria-hidden="true" className="bg-muted-foreground/40 mx-1.5 inline-block size-1 rounded-full align-middle" />
+      {compactNumber(stats.overdueTasks)} overdue
+    </span>
+  );
+}
 
-  function nextId() {
-    turnCount.current += 1
-    return `live_${turnCount.current}`
-  }
+/**
+ * One conversation. Remounted by `sessionKey` on a deliberate switch, because
+ * `useChatThread` seeds its thread id once and owns it afterwards.
+ */
+function WelcomeSession({
+  session,
+  rail,
+  zeroState,
+  seed,
+  onSeedUsed,
+}: {
+  session: ThreadSession;
+  rail: UseThreads;
+  zeroState: ReactNode;
+  seed: { text: string } | null;
+  onSeedUsed: () => void;
+}) {
+  const [attached, setAttached] = useState<DriveFile[]>([]);
 
-  /**
-   * The reveal reports when its last chunk lands, so a long answer runs as
-   * long as it needs to instead of being cut off by a timer that guessed.
-   */
-  function handleArrived() {
-    setArrivingId(null)
-    setStreaming(false)
-  }
+  const chat = useChatThread({
+    threadId: session.threadId,
+    onThreadCreated: (id) => {
+      session.adoptThread(id);
+      void rail.refresh();
+    },
+    onTitle: (id, title) => rail.applyTitle(id, title),
+  });
 
-  /** A short plan step, then the reply types itself out and settles. */
-  function beginReply(prompt: string) {
-    clearTimer()
-    // Sending mid reply settles the one in flight, so the thinking Marker owns
-    // the gap and the previous turn drops its caret at once.
-    setArrivingId(null)
-    const reply = draftReply(prompt, replyCount.current)
-    replyCount.current += 1
-    setStreaming(true)
-    const planMs = (EFFORTS.find((item) => item.id === effortId) ?? EFFORTS[0])
-      .planMs
-    setActivity(planMs ? PLANNING_LABEL : reply.activity)
-
-    const deliver = () => {
-      setActivity(reply.activity)
-      replyTimer.current = window.setTimeout(() => {
-        replyTimer.current = null
-        const id = nextId()
-        setMessages((current) => [
-          ...current,
-          {
-            id,
-            role: "assistant",
-            at: "Now",
-            parts: reply.parts,
-            // Only a mode that bought a plan step has a plan to show.
-            reasoning: planMs ? reply.reasoning : undefined,
-          },
-        ])
-        setArrivingId(id)
-      }, 700)
-    }
-
-    if (planMs) replyTimer.current = window.setTimeout(deliver, planMs)
-    else deliver()
-  }
-
-  /** Answering the scope form is a turn: it writes the plan it asked for. */
-  function handleScopeAnswer(messageId: string, answers: ScopeAnswer[]) {
-    if (scopeAnswers[messageId]) return
-    setScopeAnswers((current) => ({ ...current, [messageId]: answers }))
-
-    clearTimer()
-    setArrivingId(null)
-    setStreaming(true)
-    setActivity("Writing the plan")
-
-    replyTimer.current = window.setTimeout(() => {
-      replyTimer.current = null
-      const id = nextId()
-      setMessages((current) => [
-        ...current,
-        {
-          id,
-          role: "assistant",
-          at: "Now",
-          parts: [{ kind: "text", text: planFromScope(answers) }],
-        },
-      ])
-      setArrivingId(id)
-    }, 700)
-  }
-
-  /** Drops the newest reply and asks the same question again. */
-  function handleRetry() {
-    const asked = [...messages].reverse().find((item) => item.role === "user")
-    const prompt = asked?.parts
-      .map((part) => (part.kind === "text" ? part.text : ""))
-      .join(" ")
-      .trim()
-    if (!prompt) return
-
-    setMessages((current) => {
-      const next = [...current]
-      while (next.length && next[next.length - 1].role === "assistant")
-        next.pop()
-      return next
-    })
-    beginReply(prompt)
-  }
-
-  /** Drops one reply, and any scope answers that belonged to it. */
-  function handleDismiss(messageId: string) {
-    setMessages((current) => current.filter((item) => item.id !== messageId))
-    setScopeAnswers((current) => {
-      if (!current[messageId]) return current
-      const next = { ...current }
-      delete next[messageId]
-      return next
-    })
-  }
-
-  function handleSend(text: string) {
-    setMessages((current) => [
-      ...current,
-      {
-        id: nextId(),
-        role: "user",
-        at: "Now",
-        parts: [{ kind: "text", text }],
-        contextIds: contextIds.length ? contextIds : undefined,
-      },
-    ])
-    setDraft("")
-    setContextIds([])
-    beginReply(text)
-  }
-
-  /** Starters fill the composer and attach the context the row promised to
-      read: the click is a contract, never an auto send. */
-  function handleUseStarter(prompt: string, contextId: string) {
-    // A dirty composer is appended to, never replaced: a starter click must
-    // not destroy a half written thought.
-    const typed = draft.trim()
-    const next = typed ? `${typed} ${prompt}` : prompt
-    setDraft(next)
-    setContextIds((current) =>
-      current.includes(contextId) ? current : [...current, contextId]
-    )
-    const box = field.current
-    if (!box) return
-    box.focus()
-    // Caret to the end, so typing continues the prompt rather than splitting
-    // it. The value lands on the next render, so this waits a beat.
-    window.setTimeout(() => box.setSelectionRange(next.length, next.length))
-  }
-
-  function handleOpenThread(id: string) {
-    const opened = THREADS.find((item) => item.id === id)
-    if (!opened) return
-    clearTimer()
-    setThread(opened)
-    setMessages(opened.messages)
-    setStreaming(false)
-    setArrivingId(null)
-    setStoppedIds([])
-    // Scope answers belong to the conversation that asked, so a switch must
-    // not leave a fresh questionnaire pre-answered under a reused id.
-    setScopeAnswers({})
-    setContextIds([])
-    setDraft("")
-  }
-
-  function handleNewChat() {
-    clearTimer()
-    setThread(null)
-    setMessages([])
-    setStreaming(false)
-    setArrivingId(null)
-    setStoppedIds([])
-    setScopeAnswers({})
-    setContextIds([])
-    setDraft("")
-    field.current?.focus()
+  /** Attachments ride into the prompt as a context line, then clear. */
+  function send(text: string) {
+    const context = describeAttachments(attached);
+    setAttached([]);
+    onSeedUsed();
+    void chat.send(context ? `${context}\n\n${text}` : text);
   }
 
   return (
-    // Every tooltip in the block needs this ancestor to open.
     <TooltipProvider>
-      <div className="bg-background text-foreground flex h-svh w-full flex-col">
-        {/* Translucent and blurred, with a short gradient under it, so the
-            thread reads as passing beneath the header rather than stopping. */}
-        <header className="bg-background/70 supports-backdrop-filter:bg-background/60 after:from-background sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 px-4 backdrop-blur-md after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-6 after:bg-gradient-to-b after:to-transparent sm:px-6">
-          <IconTile variant="elevated" size="sm" aria-hidden="true">
-            <SparklesIcon
+      <div className="flex min-h-0 flex-1 flex-col gap-3 md:h-[calc(100svh-11rem)]">
+        <ChatErrorBanner error={chat.error} onDismiss={chat.clearError} />
+
+        <Frame className="flex min-h-0 flex-1">
+          <FramePanel className="flex min-h-0 flex-col p-0">
+            <Transcript
+              messages={chat.messages}
+              pending={chat.pending}
+              reasoning={chat.reasoning}
+              routed={chat.routed}
+              latencyMs={chat.latencyMs}
+              usage={chat.usage}
+              streaming={chat.streaming}
+              loading={chat.loading}
+              onStop={chat.stop}
+              empty={zeroState}
             />
-          </IconTile>
-          {/* On a phone the thread name is worth more than the product name,
-              and the avatar already carries the identity. */}
-          <span
-            className={cn(
-              "shrink-0 text-sm font-medium",
-              inThread && "max-sm:sr-only"
-            )}
-          >
-            {ASSISTANT_NAME}
-          </span>
+          </FramePanel>
+        </Frame>
 
-          {inThread ? (
-            <>
-              <span
-                aria-hidden="true"
-                className="bg-muted-foreground/40 size-1 shrink-0 rounded-full max-sm:hidden"
-              />
-              {/* The greeting h1 unmounts with the welcome screen, so in a
-                  thread the page heading is the thread's name. */}
-              <h1 className="text-muted-foreground min-w-0 truncate text-sm font-normal">
-                {title}
-              </h1>
-            </>
-          ) : null}
-
-          {streaming ? (
-            <Badge variant="primary-light" className="shrink-0">
-              Working
-            </Badge>
-          ) : null}
-
-          <div className="ms-auto flex shrink-0 items-center gap-2">
-            {inThread ? (
-              <Button variant="ghost" size="sm" onClick={handleNewChat}>
-                <PlusIcon data-icon="inline-start" aria-hidden="true" />
-                <span className="max-sm:sr-only">New chat</span>
-              </Button>
-            ) : null}
-
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-1.5"
-                    aria-label={`Model, ${activeModel.name}`}
-                  />
-                }
-              >
-                <span className="max-w-28 truncate sm:max-w-none">
-                  {activeModel.name}
-                </span>
-                <ChevronDownIcon data-icon="inline-end" aria-hidden="true" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-72 p-0">
-                <DropdownMenuGroup>
-                  <DropdownMenuLabel className="text-muted-foreground px-2.5 pt-2.5 pb-1 text-xs font-normal">
-                    Model
-                  </DropdownMenuLabel>
-                </DropdownMenuGroup>
-                <DropdownMenuRadioGroup
-                  value={modelId}
-                  onValueChange={(value) => value && setModelId(value)}
-                  className="px-1.5 pb-1.5"
-                >
-                  {MODELS.map((model) => (
-                    <DropdownMenuRadioItem
-                      key={model.id}
-                      value={model.id}
-                      className="items-start gap-2 py-1.5"
-                    >
-                      <span className="flex min-w-0 flex-1 flex-col">
-                        <span className="flex min-w-0 items-center gap-1.5">
-                          <span className="truncate text-sm/5 font-medium">
-                            {model.name}
-                          </span>
-                          {model.recommended ? (
-                            <Badge variant="primary-light" size="sm">
-                              Default
-                            </Badge>
-                          ) : null}
-                        </span>
-                        <span className="text-muted-foreground truncate text-[11px]/4">
-                          {model.provider}
-                          <span
-                            aria-hidden="true"
-                            className="bg-muted-foreground/40 mx-1.5 inline-block size-1 rounded-full align-middle"
-                          />
-                          <span className="tabular-nums">{model.context}</span>{" "}
-                          context
-                        </span>
-                      </span>
-                    </DropdownMenuRadioItem>
-                  ))}
-                </DropdownMenuRadioGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </header>
-
-        {inThread ? (
-          <ChatThread
-            messages={messages}
-            scopeAnswers={scopeAnswers}
-            onScopeAnswer={handleScopeAnswer}
-            modelName={activeModel.name}
-            onRetry={handleRetry}
-            onDismiss={handleDismiss}
-            separator={thread?.separator ?? "Today"}
-            streaming={streaming}
-            activity={activity}
-            arrivingId={arrivingId}
-            stoppedIds={stoppedIds}
-            onArrived={handleArrived}
-          />
-        ) : (
-          <Welcome
-            threads={THREADS}
-            onUseStarter={handleUseStarter}
-            onOpenThread={handleOpenThread}
-          />
-        )}
-
-        {/* Docked to the foot of the viewport in both states, and mounted once
-            so a starter fill survives the switch into the thread. */}
-        <div className="shrink-0 px-4 pb-4 sm:px-6">
-          <Composer
-            value={draft}
-            onValueChange={setDraft}
-            fieldRef={field}
-            contextIds={contextIds}
-            onAddContext={(id) =>
-              setContextIds((current) =>
-                current.includes(id) ? current : [...current, id]
-              )
-            }
-            onRemoveContext={(id) =>
-              setContextIds((current) => current.filter((item) => item !== id))
-            }
-            effortId={effortId}
-            onEffortChange={setEffortId}
-            streaming={streaming}
-            onSend={handleSend}
-            onStop={() => {
-              clearTimer()
-              // Frozen where it got to, so Stop keeps the half written answer
-              // instead of handing back the rest of it.
-              if (arrivingId) {
-                setStoppedIds((current) => [...current, arrivingId])
-              } else {
-                // Stopped before anything arrived: an empty stub keeps the
-                // thread legible with a "Stopped by you" note.
-                const id = nextId()
-                setMessages((current) => [
-                  ...current,
-                  { id, role: "assistant", at: "Now", parts: [] },
-                ])
-                setStoppedIds((current) => [...current, id])
-              }
-              setArrivingId(null)
-              setStreaming(false)
-            }}
-          />
-        </div>
+        <ChatComposer
+          onSend={send}
+          onStop={chat.stop}
+          streaming={chat.streaming}
+          profile={chat.profile}
+          onProfileChange={chat.setProfile}
+          routed={chat.routed}
+          seed={seed ?? undefined}
+          leading={<AttachmentChips files={attached} onDetach={(id) => setAttached((prev) => prev.filter((f) => f.id !== id))} />}
+          addons={
+            <AttachmentPicker
+              attached={attached}
+              onAttach={(file) => setAttached((prev) => [...prev, file])}
+              onDetach={(id) => setAttached((prev) => prev.filter((f) => f.id !== id))}
+            />
+          }
+        />
       </div>
     </TooltipProvider>
-  )
+  );
+}
+
+export interface WelcomeChatProps {
+  /** `?t=` as the Astro page read it, so a reload resumes the thread. */
+  initialThreadId?: string;
+}
+
+/**
+ * The `/chat/welcome` surface.
+ *
+ * Owns the zero state (live workspace figures, prompt starters, real recent
+ * threads) and hands it to the keyed session that owns the conversation.
+ *
+ * @param props The thread to resume, from the query string.
+ * @returns The zero state, or the transcript once a turn exists.
+ */
+export function WelcomeChat({ initialThreadId }: WelcomeChatProps) {
+  const session = useThreadSession(initialThreadId);
+  const rail = useThreads();
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [seed, setSeed] = useState<{ text: string } | null>(null);
+
+  useEffect(() => {
+    void apiGet<DashboardStats>("dashboard/stats")
+      .then(setStats)
+      .catch(() => setStats(null))
+      .finally(() => setStatsLoading(false));
+  }, []);
+
+  const zeroState = (
+    <div className="scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-6 sm:px-6">
+      <div className="m-auto flex w-full max-w-3xl flex-col gap-8">
+        <Empty className="flex-none gap-0 p-0">
+          <EmptyHeader className="max-w-none items-center gap-2">
+            <EmptyTitle className="text-2xl font-semibold tracking-tight sm:text-3xl">
+              <h1>What are we working on?</h1>
+            </EmptyTitle>
+            <EmptyDescription className="text-sm">
+              <WorkspaceStats stats={stats} loading={statsLoading} />
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+
+        <div className="mx-auto flex w-full max-w-lg flex-col gap-5">
+          <section className="flex flex-col gap-1">
+            <h2 className="text-muted-foreground text-xs font-medium">Start</h2>
+            <ul className="flex flex-col gap-2">
+              {STARTERS.map(({ icon: Icon, prompt }) => (
+                <li key={prompt}>
+                  <Button
+                    variant="outline"
+                    onClick={() => setSeed({ text: prompt })}
+                    className="h-auto w-full justify-start gap-3 px-3 py-2.5 text-start font-normal whitespace-normal"
+                  >
+                    <Icon className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
+                    <span className="min-w-0 text-sm">{prompt}</span>
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <section className="flex flex-col gap-1">
+            <h2 className="text-muted-foreground text-xs font-medium">Resume</h2>
+            {rail.loading ? (
+              <Skeleton className="h-16 w-full" aria-hidden="true" />
+            ) : rail.threads.length === 0 ? (
+              <p className="text-muted-foreground text-sm">No earlier conversations yet.</p>
+            ) : (
+              <ul className="flex flex-col">
+                {rail.threads.slice(0, 5).map((thread) => (
+                  <li key={thread.id} className="min-w-0">
+                    <button
+                      type="button"
+                      onClick={() => session.openThread(thread.id)}
+                      className="group/resume flex w-full min-w-0 cursor-pointer items-center gap-2 py-1 text-start"
+                    >
+                      <MessageSquareIcon
+                        aria-hidden="true"
+                        className="text-muted-foreground group-hover/resume:text-foreground size-3.5 shrink-0 transition-colors"
+                      />
+                      <span className="text-muted-foreground group-hover/resume:text-foreground min-w-0 truncate text-sm underline-offset-4 transition-colors group-hover/resume:underline">
+                        {thread.title}
+                      </span>
+                      <span className="text-muted-foreground/70 shrink-0 text-xs tabular-nums">
+                        {relativeTime(thread.updatedAt)}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+
+
+  return (
+    <WelcomeSession
+      key={session.sessionKey}
+      session={session}
+      rail={rail}
+      zeroState={zeroState}
+      seed={seed}
+      onSeedUsed={() => setSeed(null)}
+    />
+  );
 }
