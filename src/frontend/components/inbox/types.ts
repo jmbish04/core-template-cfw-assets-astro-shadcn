@@ -42,13 +42,22 @@ export interface SeedResponse {
   count?: number;
 }
 
-/** The left-pane view selector. "starred" is a cross-folder view. */
-export type InboxView = "inbox" | "starred" | "archive";
+/**
+ * The list filter tabs (lifted from ReUI app-shell-4's filter tabs). Each tab is
+ * a server-side query: "unread" is the inbox folder with `read=false`, and
+ * "starred" is a cross-folder view.
+ */
+export type InboxView = "inbox" | "unread" | "starred" | "archive";
 
 /** Map a view to the API query params it implies. */
-export function viewToQuery(view: InboxView): { folder?: EmailFolder; starred?: "true" } {
+export function viewToQuery(view: InboxView): {
+  folder?: EmailFolder;
+  starred?: "true";
+  read?: "false";
+} {
   if (view === "starred") return { starred: "true" };
   if (view === "archive") return { folder: "archive" };
+  if (view === "unread") return { folder: "inbox", read: "false" };
   return { folder: "inbox" };
 }
 

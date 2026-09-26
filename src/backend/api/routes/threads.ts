@@ -1,12 +1,16 @@
 /**
  * @fileoverview Chat threads REST API router.
  *
- * The persistent thread index for the assistant-ui chat surfaces. Backs the
- * frontend's `RemoteThreadListAdapter` (list / create / rename / archive /
- * delete) and the dynamic follow-up suggestions endpoint.
+ * The persistent thread index for the chat surface. Backs the frontend's
+ * thread list (list / create / rename / archive / delete) and the dynamic
+ * follow-up suggestions endpoint. Messages live in `chat_messages` (see
+ * `messages.ts` schema); the actual chat send/receive endpoint is
+ * `POST /api/chat`, mounted separately in `api/index.ts`.
  *
- * A thread row's `id` doubles as the `ChatBroker` Durable Object `name`, so the
- * metadata here (D1) and the messages (DO embedded SQLite) stay linked by one id.
+ * Every LLM call in this router routes through `guardianChat` — no Workers
+ * AI binding, no Durable Object. `chat_threads.model` is legacy free text
+ * (core-guardian picks the provider/model dynamically); it is no longer
+ * validated against a fixed model list.
  *
  * Mount this router at `/api/threads` in `api/index.ts`.
  *
@@ -17,20 +21,21 @@
  *   PATCH  /{id}            – partial update (title / model / archived)
  *   DELETE /{id}            – hard delete
  *   POST   /followups       – generate 3 follow-up prompts from recent messages
+ *   POST   /{id}/title      – generate + persist a short title
  */
 
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
-import { desc, eq } from "drizzle-orm";
-import { generateText } from "ai";
+import { asc, desc, eq } from "drizzle-orm";
 
 import { getDb } from "../../db";
 import {
   chatThreads,
+  chatMessages,
   insertChatThreadSchema,
   selectChatThreadSchema,
+  selectChatMessageSchema,
 } from "../../db/schema";
-import { getChatModel } from "../../ai/providers/ai-sdk";
-import { asChatModelId } from "../../ai/models/chat-models";
+import { guardianChat } from "../../ai/guardian";
 
 // ---------------------------------------------------------------------------
 // Shared schemas
@@ -150,7 +155,7 @@ threadsRouter.openapi(
       .insert(chatThreads)
       .values({
         title: body.title ?? "New chat",
-        model: asChatModelId(body.model) ?? null,
+        model: body.model ?? null,
         archived: body.archived ?? false,
         createdAt: now,
         updatedAt: now,
@@ -184,19 +189,7 @@ threadsRouter.openapi(
     },
   }),
   async (c) => {
-    const { threadId, messages } = c.req.valid("json");
-    const db = getDb(c.env);
-
-    // Resolve the thread's selected model so followups match the chat model.
-    let modelId: string | null = null;
-    if (threadId) {
-      const [row] = await db
-        .select({ model: chatThreads.model })
-        .from(chatThreads)
-        .where(eq(chatThreads.id, threadId))
-        .limit(1);
-      modelId = row?.model ?? null;
-    }
+    const { messages } = c.req.valid("json");
 
     // Keep the prompt tight: last ~6 turns is plenty of context.
     const transcript = messages
@@ -205,13 +198,20 @@ threadsRouter.openapi(
       .join("\n");
 
     try {
-      const { text } = await generateText({
-        model: getChatModel(c.env, modelId),
-        system:
-          "You generate short follow-up prompts the USER might tap next in a chat. " +
-          "Return EXACTLY 3 suggestions, each on its own line, no numbering, no quotes, " +
-          "no preamble. Each must be under 8 words and phrased as the user speaking.",
-        prompt: `Conversation so far:\n${transcript}\n\nThree follow-up prompts:`,
+      const { text } = await guardianChat(c.env, {
+        task: "threads_followups",
+        useCase: "chat",
+        importance: "low",
+        messages: [
+          {
+            role: "system",
+            content:
+              "You generate short follow-up prompts the USER might tap next in a chat. " +
+              "Return EXACTLY 3 suggestions, each on its own line, no numbering, no quotes, " +
+              "no preamble. Each must be under 8 words and phrased as the user speaking.",
+          },
+          { role: "user", content: `Conversation so far:\n${transcript}\n\nThree follow-up prompts:` },
+        ],
       });
 
       const suggestions = text
@@ -264,7 +264,7 @@ threadsRouter.openapi(
     const db = getDb(c.env);
 
     const [row] = await db
-      .select({ model: chatThreads.model })
+      .select({ id: chatThreads.id })
       .from(chatThreads)
       .where(eq(chatThreads.id, id))
       .limit(1);
@@ -274,12 +274,19 @@ threadsRouter.openapi(
 
     let title = "New chat";
     try {
-      const { text } = await generateText({
-        model: getChatModel(c.env, row.model),
-        system:
-          "You write a short chat title (3-7 words) summarising the user's message. " +
-          "Return ONLY the title — no quotes, no trailing punctuation, no preamble.",
-        prompt: firstUser.slice(0, 800),
+      const { text } = await guardianChat(c.env, {
+        task: "threads_title",
+        useCase: "chat",
+        importance: "low",
+        messages: [
+          {
+            role: "system",
+            content:
+              "You write a short chat title (3-7 words) summarising the user's message. " +
+              "Return ONLY the title — no quotes, no trailing punctuation, no preamble.",
+          },
+          { role: "user", content: firstUser.slice(0, 800) },
+        ],
       });
       title = text.replace(/^["'\s]+|["'\s]+$/g, "").slice(0, 80) || "New chat";
     } catch (error) {
@@ -328,6 +335,45 @@ threadsRouter.openapi(
 );
 
 // ---------------------------------------------------------------------------
+// GET /{id}/messages — oldest first
+// ---------------------------------------------------------------------------
+
+const messagesResponse = z.object({ data: z.array(selectChatMessageSchema) });
+
+threadsRouter.openapi(
+  createRoute({
+    method: "get",
+    path: "/{id}/messages",
+    tags: ["Chat Threads"],
+    summary: "List a thread's messages, oldest first",
+    operationId: "threadsMessagesList",
+    request: { params: threadIdParam },
+    responses: {
+      200: {
+        description: "Messages oldest first.",
+        content: { "application/json": { schema: messagesResponse } },
+      },
+      404: {
+        description: "Thread not found.",
+        content: { "application/json": { schema: notFoundSchema } },
+      },
+    },
+  }),
+  async (c) => {
+    const { id } = c.req.valid("param");
+    const db = getDb(c.env);
+    const [thread] = await db.select({ id: chatThreads.id }).from(chatThreads).where(eq(chatThreads.id, id)).limit(1);
+    if (!thread) return c.json({ error: "Thread not found." }, 404);
+    const rows = await db
+      .select()
+      .from(chatMessages)
+      .where(eq(chatMessages.threadId, id))
+      .orderBy(asc(chatMessages.createdAt));
+    return c.json({ data: rows }, 200);
+  },
+);
+
+// ---------------------------------------------------------------------------
 // PATCH /{id} — partial update
 // ---------------------------------------------------------------------------
 
@@ -362,7 +408,7 @@ threadsRouter.openapi(
     if (body.title !== undefined) patch.title = body.title;
     if (body.archived !== undefined) patch.archived = body.archived;
     // Model is validated against the offered set; an unknown id clears it.
-    if (body.model !== undefined) patch.model = asChatModelId(body.model) ?? null;
+    if (body.model !== undefined) patch.model = body.model;
 
     const [row] = await db
       .update(chatThreads)

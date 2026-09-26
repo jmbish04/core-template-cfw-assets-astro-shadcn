@@ -1,25 +1,28 @@
 /**
- * @fileoverview AdvancedPanel — system info + danger zone.
+ * @fileoverview AdvancedPanel — system status, maintenance and danger zone,
+ * built on ReUI settings-10 (stacked Frame cards of Item rows with badges).
  *
- * Surfaces a read-only system status block (from `GET /api/ping`) alongside two
- * tasteful, real actions backed by existing endpoints:
- *   - "Reset appearance" → PUT /api/settings/preferences with the theme/density
- *     defaults (a soft reset, not destructive).
- *   - "Clear notifications" → DELETE /api/notifications, gated behind an
- *     AlertDialog (this also clears the realtime feed via the NotificationsAgent
- *     DO, so the notifications page updates live).
- *
- * No window.confirm — the destructive action is confirmed via AlertDialog.
- * Monolith dark profile throughout; the danger zone is set off with a
- * `ring-1 ring-destructive/30` instead of a hard border.
+ *   - System: read-only `GET /api/ping` status.
+ *   - Maintenance: "Reset appearance" → PUT /api/settings/preferences with the
+ *     theme/density defaults (a soft reset).
+ *   - Danger zone: "Clear all notifications" → DELETE /api/notifications,
+ *     gated behind an AlertDialog.
  */
 
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
 
-import { RotateCcwIcon, ServerIcon, Trash2Icon } from "lucide-react";
+import { RefreshCwIcon, RotateCcwIcon, Trash2Icon } from "lucide-react";
 
+import { Badge } from "@/components/reui/badge";
+import {
+  Frame,
+  FrameDescription,
+  FrameHeader,
+  FramePanel,
+  FrameTitle,
+} from "@/components/reui/frame";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,21 +33,20 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { apiGet, ApiError, apiSend } from "@/lib/api";
-import { shortDate } from "@/lib/format";
+import { relativeTime, shortDate } from "@/lib/format";
 
-import { InlineError, SavedFlash, SettingsRow, SettingsRowGroup, useSavedFlash } from "./shared";
+import {
+  InlineError,
+  NOTIFICATIONS_CHANGED,
+  SavedFlash,
+  SettingRow,
+  SettingsRows,
+  useSavedFlash,
+} from "./shared";
 
 interface PingResponse {
   status: string;
@@ -59,6 +61,10 @@ const APPEARANCE_DEFAULTS = {
   density: "comfortable",
 };
 
+function errMessage(e: unknown, fallback: string): string {
+  return e instanceof ApiError ? e.message : fallback;
+}
+
 export function AdvancedPanel() {
   const [ping, setPing] = useState<PingResponse | null>(null);
   const [pingLoading, setPingLoading] = useState(true);
@@ -69,16 +75,16 @@ export function AdvancedPanel() {
 
   const [clearOpen, setClearOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [cleared, flashCleared] = useSavedFlash();
   const [actionError, setActionError] = useState<string | null>(null);
 
   const loadPing = useCallback(async () => {
     setPingLoading(true);
     setPingError(null);
     try {
-      const res = await apiGet<PingResponse>("ping");
-      setPing(res);
+      setPing(await apiGet<PingResponse>("ping"));
     } catch (e) {
-      setPingError(e instanceof ApiError ? e.message : "Failed to reach the API.");
+      setPingError(errMessage(e, "Couldn't reach the API. Check your connection and refresh."));
     } finally {
       setPingLoading(false);
     }
@@ -95,7 +101,7 @@ export function AdvancedPanel() {
       await apiSend("PUT", "settings/preferences", APPEARANCE_DEFAULTS);
       flashReset();
     } catch (e) {
-      setActionError(e instanceof ApiError ? e.message : "Failed to reset appearance.");
+      setActionError(errMessage(e, "Couldn't reset appearance. Try again."));
     } finally {
       setResetting(false);
     }
@@ -106,135 +112,127 @@ export function AdvancedPanel() {
     setActionError(null);
     try {
       await apiSend<{ ok: boolean }>("DELETE", "notifications");
+      window.dispatchEvent(new Event(NOTIFICATIONS_CHANGED));
       setClearOpen(false);
+      flashCleared();
     } catch (e) {
-      setActionError(e instanceof ApiError ? e.message : "Failed to clear notifications.");
+      setActionError(errMessage(e, "Couldn't clear notifications. Try again."));
     } finally {
       setClearing(false);
     }
-  }, []);
+  }, [flashCleared]);
 
   return (
-    <div className="flex flex-col gap-6">
-      {/* System info -------------------------------------------------------- */}
-      <Card className="bg-card ring-1 ring-border/40">
-        <CardHeader className="flex flex-row items-start justify-between gap-4">
-          <div className="space-y-1">
-            <CardTitle className="flex items-center gap-2">
-              <ServerIcon className="size-4 text-muted-foreground" />
-              System
-            </CardTitle>
-            <CardDescription>
-              Read-only status reported by the Worker edge runtime.
-            </CardDescription>
+    <div className="flex w-full max-w-2xl flex-col gap-5">
+      <InlineError message={actionError} />
+
+      {/* System ------------------------------------------------------------- */}
+      <Frame>
+        <FrameHeader className="flex-row items-start justify-between gap-4">
+          <div className="space-y-px">
+            <FrameTitle>System</FrameTitle>
+            <FrameDescription>Status reported by the Worker edge runtime.</FrameDescription>
           </div>
           <Button size="sm" variant="outline" onClick={loadPing} disabled={pingLoading}>
-            {pingLoading ? "Pinging…" : "Refresh"}
+            <RefreshCwIcon aria-hidden="true" />
+            {pingLoading ? "Checking…" : "Refresh"}
           </Button>
-        </CardHeader>
-        <CardContent>
-          <InlineError message={pingError} />
-          {pingLoading ? (
-            <Skeleton className="h-16 w-full" />
-          ) : ping ? (
-            <dl className="grid gap-4 rounded-md bg-muted/30 p-4 ring-1 ring-foreground/5 sm:grid-cols-3">
-              <div className="space-y-1">
-                <dt className="text-xs text-muted-foreground">API status</dt>
-                <dd>
-                  <Badge variant={ping.status === "ok" ? "default" : "destructive"}>
-                    {ping.status}
+        </FrameHeader>
+        <FramePanel className="p-0!">
+          {pingError ? (
+            <div className="p-4">
+              <InlineError message={pingError} />
+            </div>
+          ) : pingLoading || !ping ? (
+            <div className="p-4">
+              <Skeleton className="h-16 w-full" />
+            </div>
+          ) : (
+            <SettingsRows>
+              <SettingRow
+                title="API status"
+                description="Result of GET /api/ping."
+                control={
+                  <Badge variant={ping.status === "ok" ? "success-light" : "destructive-light"}>
+                    {ping.status === "ok" ? "Operational" : ping.status}
                   </Badge>
-                </dd>
-              </div>
-              <div className="space-y-1">
-                <dt className="text-xs text-muted-foreground">Server time</dt>
-                <dd className="text-sm">{new Date(ping.timestamp).toLocaleTimeString()}</dd>
-              </div>
-              <div className="space-y-1">
-                <dt className="text-xs text-muted-foreground">Date</dt>
-                <dd className="text-sm">{shortDate(ping.timestamp)}</dd>
-              </div>
-            </dl>
-          ) : null}
-        </CardContent>
-      </Card>
+                }
+              />
+              <SettingRow
+                title="Server clock"
+                description="Timestamp returned with the last ping."
+                control={
+                  <span className="text-sm tabular-nums">
+                    {shortDate(ping.timestamp)} · {relativeTime(ping.timestamp)}
+                  </span>
+                }
+              />
+            </SettingsRows>
+          )}
+        </FramePanel>
+      </Frame>
 
       {/* Maintenance -------------------------------------------------------- */}
-      <Card className="bg-card ring-1 ring-border/40">
-        <CardHeader className="flex flex-row items-start justify-between gap-4">
-          <div className="space-y-1">
-            <CardTitle>Maintenance</CardTitle>
-            <CardDescription>Soft resets that restore default state.</CardDescription>
-          </div>
-          <SavedFlash show={reset} label="Reset" />
-        </CardHeader>
-        <CardContent>
-          <SettingsRowGroup>
-            <SettingsRow
-              label="Reset appearance"
-              description="Restore theme, accent, font size, and density to their defaults."
-              control={
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={resetAppearance}
-                  disabled={resetting}
-                >
-                  <RotateCcwIcon className="size-3.5" />
-                  {resetting ? "Resetting…" : "Reset"}
-                </Button>
-              }
-            />
-          </SettingsRowGroup>
-        </CardContent>
-      </Card>
+      <Frame>
+        <FrameHeader>
+          <FrameTitle>Maintenance</FrameTitle>
+          <FrameDescription>Soft resets that restore default state.</FrameDescription>
+        </FrameHeader>
+        <FramePanel className="p-0!">
+          <SettingRow
+            title={
+              <>
+                Reset appearance
+                <SavedFlash show={reset} label="Reset" />
+              </>
+            }
+            description="Restore theme, accent, font size, and density to their defaults."
+            control={
+              <Button size="sm" variant="outline" onClick={resetAppearance} disabled={resetting}>
+                <RotateCcwIcon aria-hidden="true" />
+                {resetting ? "Resetting…" : "Reset"}
+              </Button>
+            }
+          />
+        </FramePanel>
+      </Frame>
 
       {/* Danger zone -------------------------------------------------------- */}
-      <Card className="bg-card ring-1 ring-destructive/30">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-destructive">Danger zone</CardTitle>
-          <CardDescription>
-            These actions take effect immediately and cannot be undone.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <InlineError message={actionError} />
-          <SettingsRowGroup>
-            <SettingsRow
-              label="Clear all notifications"
-              description="Permanently removes every notification from the realtime feed. Connected clients update live."
-              control={
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={() => setClearOpen(true)}
-                >
-                  <Trash2Icon className="size-3.5" />
-                  Clear notifications
-                </Button>
-              }
-            />
-          </SettingsRowGroup>
-        </CardContent>
-      </Card>
+      <Frame className="[--frame-border-color:color-mix(in_oklch,var(--color-destructive)_35%,transparent)]">
+        <FrameHeader>
+          <FrameTitle className="text-destructive">Danger zone</FrameTitle>
+          <FrameDescription>These actions take effect immediately and can't be undone.</FrameDescription>
+        </FrameHeader>
+        <FramePanel className="p-0!">
+          <SettingRow
+            title={
+              <>
+                Clear all notifications
+                <SavedFlash show={cleared} label="Cleared" />
+              </>
+            }
+            description="Permanently removes every notification from the feed."
+            control={
+              <Button size="sm" variant="destructive" onClick={() => setClearOpen(true)}>
+                <Trash2Icon aria-hidden="true" />
+                Clear notifications
+              </Button>
+            }
+          />
+        </FramePanel>
+      </Frame>
 
-      {/* Clear confirmation ------------------------------------------------- */}
       <AlertDialog open={clearOpen} onOpenChange={setClearOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Clear all notifications?</AlertDialogTitle>
             <AlertDialogDescription>
-              This permanently deletes every notification from the feed. The change
-              propagates in realtime to all connected clients. This cannot be undone.
+              This permanently deletes every notification from the feed. It can't be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={clearing}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
-              onClick={clearNotifications}
-              disabled={clearing}
-            >
+            <AlertDialogAction variant="destructive" onClick={clearNotifications} disabled={clearing}>
               {clearing ? "Clearing…" : "Clear notifications"}
             </AlertDialogAction>
           </AlertDialogFooter>

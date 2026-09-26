@@ -6,11 +6,7 @@
  * user but is debounced before it reaches the network, so charts and stats are
  * not re-fetched on every keystroke.
  *
- * Layout (all responsive, single-column on mobile):
- *   ┌ FilterBar ────────────────────────────────────────────┐
- *   ┌ StatCards (1 → 2 → 3 → 6 columns) ────────────────────┐
- *   ┌ InsightsPanel (Workers AI) ────────────┐┌ RecentActivity ┐
- *   ┌ ChartsGrid (5 recharts variations) ───────────────────┐
+ * Layout (metric → chart → action) lives in {@link AdminDashboardChrome}.
  *
  * Every panel handles its own LOADING / ERROR / EMPTY state; nothing here uses
  * mock data or `window.alert`. All errors are rendered inline from the
@@ -28,6 +24,7 @@ import {
   useCharts,
   useDebounced,
   useInsights,
+  useOpenTasks,
   useStats,
 } from "./useDashboardData";
 
@@ -49,6 +46,7 @@ export function AdminDashboard() {
   const charts = useCharts(filters);
   const insights = useInsights(filters);
   const activity = useActivity(filters, 8);
+  const openTasks = useOpenTasks(filters);
 
   // Reload every panel — used after seeding demo data.
   function reloadAll() {
@@ -56,6 +54,7 @@ export function AdminDashboard() {
     charts.reload();
     insights.reload();
     activity.reload();
+    openTasks.reload();
   }
 
   return (
@@ -70,6 +69,7 @@ export function AdminDashboard() {
       charts={charts}
       insights={insights}
       activity={activity}
+      openTasks={openTasks}
       onSeeded={reloadAll}
     />
   );

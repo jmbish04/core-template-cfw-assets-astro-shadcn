@@ -20,6 +20,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ApiError, apiGet } from "@/lib/api";
 
+import type { ListEnvelope, Project, Task } from "@/components/tasks/types";
+
 import type {
   ActivityResponse,
   DashboardCharts,
@@ -132,6 +134,35 @@ export function useActivity(
       }),
     [filters.q, limit],
   );
+}
+
+/** Open (not done) tasks + the project list used to label them. */
+export interface OpenTasks {
+  tasks: Task[];
+  projects: Project[];
+}
+
+const OPEN_STATUSES = "todo,in_progress,in_review";
+
+/**
+ * Action-layer feed: open tasks sorted by due date (`GET /api/tasks`), honouring
+ * the search box and the status filter (a "done" filter yields no open work),
+ * plus `GET /api/projects` so rows show project names rather than ids.
+ */
+export function useOpenTasks(filters: DashboardFilters): Resource<OpenTasks> {
+  return useResource(async () => {
+    if (filters.status === "done") return { tasks: [], projects: [] };
+    const [tasks, projects] = await Promise.all([
+      apiGet<ListEnvelope<Task>>("tasks", {
+        status: filters.status === "all" ? OPEN_STATUSES : filters.status,
+        sort: "dueDate",
+        limit: 100,
+        ...(filters.q.trim() ? { q: filters.q.trim() } : {}),
+      }),
+      apiGet<ListEnvelope<Project>>("projects", { limit: 200 }),
+    ]);
+    return { tasks: tasks.data, projects: projects.data };
+  }, [filters.q, filters.status]);
 }
 
 /**

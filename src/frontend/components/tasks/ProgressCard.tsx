@@ -27,7 +27,7 @@ import { useState } from "react";
 import { CheckIcon, PencilIcon, XIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Frame, FramePanel } from "@/components/reui/frame";
 import { Input } from "@/components/ui/input";
 
 import { RadialGauge } from "@/components/dashboard/RadialGauge";
@@ -73,8 +73,8 @@ export function ProgressCard({ progress, saving = false, onSetProgress }: Progre
   }
 
   return (
-    <Card>
-      <CardContent className="flex flex-col gap-4">
+    <Frame spacing="sm">
+      <FramePanel className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
           <h2 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
             Progress
@@ -172,7 +172,7 @@ export function ProgressCard({ progress, saving = false, onSetProgress }: Progre
             ) : null}
           </div>
         ) : null}
-      </CardContent>
-    </Card>
+      </FramePanel>
+    </Frame>
   );
 }

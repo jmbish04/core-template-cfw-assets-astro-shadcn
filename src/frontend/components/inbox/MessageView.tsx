@@ -1,24 +1,45 @@
 /**
- * @fileoverview MessageView — the inbox right (reading) pane.
+ * @fileoverview MessageView — the inbox reading pane. The action header is
+ * lifted from ReUI `app-shell-4` (`AppHeader`): prev/next, truncated subject,
+ * then a toolbar of star / archive-or-restore / overflow menu. Below it: sender
+ * block, labels, and the body (HTML when present, else plain text).
  *
- * Shows the full selected email: sender, recipient, subject, absolute date,
- * label chips, and the body (HTML when present, else plain text). Exposes
- * star / archive / move-to-inbox / back actions. Marking-as-read on open is
- * handled by the parent island (so the unread count stays in sync).
+ * Seams vs. the block: reply / bookmark / delete / snooze are dropped (the API
+ * has no send or delete), the overflow menu keeps "Mark as unread" (real PATCH),
+ * and prev/next walk the loaded list. On mobile the pane renders inside a Sheet
+ * owned by the parent, which supplies `onClose` for the back button.
  */
 
 import {
   ArchiveIcon,
   ArrowLeftIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
   InboxIcon,
+  MailIcon,
   MailOpenIcon,
+  MoreHorizontalIcon,
   StarIcon,
 } from "lucide-react";
 
+import { Badge } from "@/components/reui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
 import type { EmailMessage } from "./types";
@@ -26,17 +47,20 @@ import { senderInitials, senderLabel } from "./types";
 
 export interface MessageViewProps {
   message: EmailMessage | null;
-  /** Mobile back-to-list handler (hidden on desktop). */
-  onBack?: () => void;
+  /** Back handler — shown when the pane lives in the mobile Sheet. */
+  onClose?: () => void;
+  onPrev?: () => void;
+  onNext?: () => void;
   onToggleStar: (msg: EmailMessage) => void;
   onArchive: (msg: EmailMessage) => void;
   onMoveToInbox: (msg: EmailMessage) => void;
+  onMarkUnread: (msg: EmailMessage) => void;
 }
 
-/** Absolute date like "Jun 30, 2026, 9:14 AM". */
+/** Absolute date like "Jun 30, 2026, 9:14 AM" — the reader shows exact time. */
 function fullDate(value: number | string): string {
-  const d = new Date(typeof value === "number" ? value : new Date(value).getTime());
-  if (Number.isNaN(d.getTime())) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
   return d.toLocaleString("en-US", {
     month: "short",
     day: "numeric",
@@ -46,125 +70,167 @@ function fullDate(value: number | string): string {
   });
 }
 
-/** Empty placeholder shown on desktop when no message is selected. */
+/** Desktop placeholder when nothing is selected. */
 function NoSelection() {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-      <MailOpenIcon className="size-10 text-muted-foreground/60" />
-      <div className="space-y-1">
-        <p className="text-sm font-medium">No message selected</p>
-        <p className="mx-auto max-w-xs text-sm text-muted-foreground">
-          Pick an email from the list to read it here.
-        </p>
-      </div>
-    </div>
+    <Empty className="h-full border-0">
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <MailOpenIcon />
+        </EmptyMedia>
+        <EmptyTitle>No message selected</EmptyTitle>
+        <EmptyDescription>Pick an email from the list to read it here.</EmptyDescription>
+      </EmptyHeader>
+    </Empty>
   );
 }
 
-/** The reading pane for a single email. */
+/** The reading pane for one email. */
 export function MessageView({
   message,
-  onBack,
+  onClose,
+  onPrev,
+  onNext,
   onToggleStar,
   onArchive,
   onMoveToInbox,
+  onMarkUnread,
 }: MessageViewProps) {
   if (!message) return <NoSelection />;
 
   const label = senderLabel(message);
   return (
-    <div className="flex h-full flex-col">
-      {/* Action bar */}
-      <div className="flex items-center gap-1 px-4 py-2.5">
-        {onBack ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="md:hidden"
-            onClick={onBack}
-            aria-label="Back to list"
-          >
-            <ArrowLeftIcon className="size-4" />
-            Back
-          </Button>
-        ) : null}
-        <div className="flex-1" />
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label={message.starred ? "Unstar" : "Star"}
-          aria-pressed={message.starred}
-          onClick={() => onToggleStar(message)}
-        >
-          <StarIcon className={cn("size-4", message.starred && "fill-amber-400 text-amber-400")} />
-        </Button>
-        {message.folder === "archive" ? (
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Move to inbox"
-            onClick={() => onMoveToInbox(message)}
-          >
-            <InboxIcon className="size-4" />
-          </Button>
-        ) : (
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Archive"
-            onClick={() => onArchive(message)}
-          >
-            <ArchiveIcon className="size-4" />
+    <div className="flex h-full min-h-0 flex-col">
+      {/* Action header (app-shell-4 AppHeader) */}
+      <header className="border-border flex h-12 min-w-0 shrink-0 items-center gap-1 border-b px-2 sm:gap-1.5 sm:px-4">
+        {onClose && (
+          <Button variant="ghost" size="icon-sm" aria-label="Back to list" onClick={onClose}>
+            <ArrowLeftIcon aria-hidden="true" />
           </Button>
         )}
-      </div>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Previous message"
+          disabled={!onPrev}
+          onClick={onPrev}
+          className="text-muted-foreground hidden shrink-0 sm:flex"
+        >
+          <ChevronLeftIcon aria-hidden="true" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Next message"
+          disabled={!onNext}
+          onClick={onNext}
+          className="text-muted-foreground hidden shrink-0 sm:flex"
+        >
+          <ChevronRightIcon aria-hidden="true" />
+        </Button>
+        <div className="hidden items-center sm:flex">
+          <Separator orientation="vertical" className="h-5" />
+        </div>
+
+        <h2 className="text-foreground w-0 flex-1 truncate text-sm leading-snug font-semibold">
+          {message.subject}
+        </h2>
+
+        <div role="toolbar" aria-label="Message actions" className="ml-auto flex shrink-0 items-center gap-0.5">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={message.starred ? "Unstar message" : "Star message"}
+            aria-pressed={message.starred}
+            onClick={() => onToggleStar(message)}
+          >
+            <StarIcon
+              aria-hidden="true"
+              className={cn(message.starred ? "fill-warning text-warning" : "text-muted-foreground")}
+            />
+          </Button>
+          {message.folder === "archive" ? (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Move to inbox"
+              onClick={() => onMoveToInbox(message)}
+              className="text-muted-foreground"
+            >
+              <InboxIcon aria-hidden="true" />
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Archive message"
+              onClick={() => onArchive(message)}
+              className="text-muted-foreground"
+            >
+              <ArchiveIcon aria-hidden="true" />
+            </Button>
+          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="More options"
+                  className="text-muted-foreground shrink-0"
+                />
+              }
+            >
+              <MoreHorizontalIcon aria-hidden="true" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem onClick={() => onMarkUnread(message)}>
+                <MailIcon aria-hidden="true" />
+                Mark as unread
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </header>
 
       <ScrollArea className="min-h-0 flex-1">
-        <div className="space-y-5 px-5 pb-10 pt-2">
-          <h1 className="text-xl font-semibold tracking-tight">{message.subject}</h1>
-
+        <div className="space-y-5 px-4 pt-4 pb-10 sm:px-5">
           <div className="flex items-start gap-3">
-            <Avatar size="lg">
-              <AvatarFallback>
-                {senderInitials(message.fromName, message.fromAddress)}
-              </AvatarFallback>
+            <Avatar className="size-9">
+              <AvatarFallback>{senderInitials(message.fromName, message.fromAddress)}</AvatarFallback>
             </Avatar>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-baseline gap-x-2">
                 <span className="text-sm font-medium">{label}</span>
-                <span className="truncate text-xs text-muted-foreground">
-                  &lt;{message.fromAddress}&gt;
-                </span>
+                <span className="text-muted-foreground truncate text-xs">&lt;{message.fromAddress}&gt;</span>
               </div>
-              <div className="text-xs text-muted-foreground">
+              <div className="text-muted-foreground text-xs">
                 to {message.toAddress} · {fullDate(message.receivedAt)}
               </div>
-              {message.labels.length > 0 ? (
+              {message.labels.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1">
                   {message.labels.map((l) => (
-                    <Badge key={l} variant="secondary" className="font-normal">
+                    <Badge key={l} variant="secondary" size="sm">
                       {l}
                     </Badge>
                   ))}
                 </div>
-              ) : null}
+              )}
             </div>
           </div>
 
-          <div className="rounded-xl bg-muted/20 p-5 ring-1 ring-border/40">
-            {message.htmlBody ? (
-              <div
-                className="prose prose-sm prose-invert max-w-none break-words [&_a]:text-primary"
-                // Showcase content is from our own seed + parsed inbound mail.
-                // For untrusted production mail, sanitize before rendering.
-                dangerouslySetInnerHTML={{ __html: message.htmlBody }}
-              />
-            ) : (
-              <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-foreground/90">
-                {message.textBody}
-              </pre>
-            )}
-          </div>
+          {message.htmlBody ? (
+            <div
+              className="prose prose-sm dark:prose-invert max-w-none break-words [&_a]:text-primary"
+              // Showcase content is from our own seed + parsed inbound mail.
+              // For untrusted production mail, sanitize before rendering.
+              dangerouslySetInnerHTML={{ __html: message.htmlBody }}
+            />
+          ) : (
+            <pre className="text-foreground/90 font-sans text-sm leading-relaxed break-words whitespace-pre-wrap">
+              {message.textBody}
+            </pre>
+          )}
         </div>
       </ScrollArea>
     </div>

@@ -1,14 +1,16 @@
 /**
- * @fileoverview Health check API routes for the Career Orchestrator Worker.
+ * @fileoverview Health check API routes.
  *
  * Provides three endpoints:
  *  - `GET  /api/health`        — Quick liveness check (returns latest run from D1)
  *  - `GET  /api/health/latest` — Fetch the most recent run with all results
  *  - `POST /api/health/run`    — Run a full diagnostic, persist to D1, return results
  *
- * Uses the relational D1 schema (`health_runs` + `health_results`). The
- * `runAllChecks` path iterates every registered Durable Object agent binding,
- * opens a stub, calls a no-op `ping` RPC, and records latency per agent.
+ * Uses the relational D1 schema (`health_runs` + `health_results`). There are
+ * no Durable Object agents to ping in this template — the one live
+ * dependency check is `CORE_GUARDIAN` (the service binding every inference
+ * call routes through), verified with a real, no-spend RPC call
+ * (`GuardianRpc.useCases()`), not a presence check.
  */
 
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
@@ -20,31 +22,6 @@ import { getDb } from "@/db";
 // ---------------------------------------------------------------------------
 // HealthCoordinator
 // ---------------------------------------------------------------------------
-
-type DOBindingDescriptor = {
-  /** Hono binding key on `Env`. */
-  binding: keyof Env;
-  /** Friendly check name persisted to `health_results.name`. */
-  name: string;
-};
-
-/**
- * Canonical list of Durable Object agent bindings the coordinator pings.
- *
- * Each entry is opened via `env[binding].idFromName("health-probe")`, a stub
- * is fetched, and a no-op HTTP request to `/__ping` is sent. Failures and
- * timeouts are caught and recorded — they do not abort the run.
- */
-const AGENT_BINDINGS: DOBindingDescriptor[] = [
-  { binding: "CODE_MODE_AGENT" as keyof Env, name: "code_mode_agent_ping" },
-  { binding: "BROWSER_HITL_AGENT" as keyof Env, name: "browser_hitl_agent_ping" },
-  { binding: "WORKFLOWS_AGENT" as keyof Env, name: "workflows_agent_ping" },
-  { binding: "ARTIFACT_AGENT" as keyof Env, name: "artifact_agent_ping" },
-  { binding: "CHAT_BROKER" as keyof Env, name: "chat_broker_ping" },
-  { binding: "NOTIFICATIONS_AGENT" as keyof Env, name: "notifications_agent_ping" },
-];
-
-const PING_TIMEOUT_MS = 2000;
 
 type CheckResult = {
   category: "database" | "ai" | "agents" | "binding";
@@ -87,11 +64,7 @@ class HealthCoordinator {
   async runAllChecks(trigger: "manual" | "scheduled" | "agent") {
     const start = Date.now();
 
-    const checks = await Promise.all([
-      this.checkD1(),
-      this.checkWorkersAI(),
-      ...AGENT_BINDINGS.map((descriptor) => this.pingAgent(descriptor)),
-    ]);
+    const checks = await Promise.all([this.checkD1(), this.checkCoreGuardian()]);
 
     const durationMs = Date.now() - start;
     const status = aggregateStatus(checks);
@@ -151,86 +124,43 @@ class HealthCoordinator {
     }
   }
 
-  private async checkWorkersAI(): Promise<CheckResult> {
+  /**
+   * Real, no-spend dependency check: calls `GuardianRpc.useCases()` over the
+   * `CORE_GUARDIAN` service binding. This is the ONLY inference dependency in
+   * the Worker now, so a throw here must degrade the verdict — not just get
+   * logged (an instrument that always reports "ok" isn't reporting).
+   */
+  private async checkCoreGuardian(): Promise<CheckResult> {
     const start = Date.now();
     try {
-      const binding = (this.env as unknown as { AI?: unknown }).AI;
-      if (!binding) {
+      const guardian = (this.env as unknown as { CORE_GUARDIAN?: { useCases(): Promise<unknown> } })
+        .CORE_GUARDIAN;
+      if (!guardian || typeof guardian.useCases !== "function") {
         return {
           category: "ai",
-          name: "workers_ai_binding",
-          status: "skipped",
-          message: "env.AI binding not present",
+          name: "core_guardian_binding",
+          status: "fail",
+          message: "CORE_GUARDIAN service binding not present",
           durationMs: Date.now() - start,
         };
       }
+      const useCases = await guardian.useCases();
+      const count = Array.isArray((useCases as any)?.useCases) ? (useCases as any).useCases.length : undefined;
       return {
         category: "ai",
-        name: "workers_ai_binding",
+        name: "core_guardian_binding",
         status: "ok",
-        message: "env.AI binding available",
+        message: "core-guardian reachable via CORE_GUARDIAN.useCases()",
+        details: count !== undefined ? { useCaseCount: count } : undefined,
         durationMs: Date.now() - start,
       };
     } catch (error) {
       return {
         category: "ai",
-        name: "workers_ai_binding",
+        name: "core_guardian_binding",
         status: "fail",
-        message: error instanceof Error ? error.message : "Unknown AI binding failure",
+        message: error instanceof Error ? error.message : "Unknown core-guardian failure",
         durationMs: Date.now() - start,
-      };
-    }
-  }
-
-  private async pingAgent(descriptor: DOBindingDescriptor): Promise<CheckResult> {
-    const start = Date.now();
-    const ns = (this.env as unknown as Record<string, unknown>)[descriptor.binding as string] as
-      | DurableObjectNamespace
-      | undefined;
-
-    if (!ns || typeof ns.idFromName !== "function") {
-      return {
-        category: "binding",
-        name: descriptor.name,
-        status: "skipped",
-        message: `Binding ${String(descriptor.binding)} is not present on env`,
-        durationMs: Date.now() - start,
-      };
-    }
-
-    try {
-      const id = ns.idFromName("health-probe");
-      const stub = ns.get(id);
-
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), PING_TIMEOUT_MS);
-
-      const response = await stub.fetch("https://do.local/__ping", {
-        method: "GET",
-        signal: controller.signal,
-      });
-      clearTimeout(timer);
-
-      const durationMs = Date.now() - start;
-      // 404 is fine — it confirms the DO is reachable even if no /__ping route exists.
-      const reachable = response.status < 500;
-      return {
-        category: "agents",
-        name: descriptor.name,
-        status: reachable ? "ok" : "fail",
-        message: `${descriptor.binding as string} responded ${response.status}`,
-        details: { status: response.status },
-        durationMs,
-      };
-    } catch (error) {
-      const durationMs = Date.now() - start;
-      const aborted = error instanceof Error && error.name === "AbortError";
-      return {
-        category: "agents",
-        name: descriptor.name,
-        status: aborted ? "timeout" : "fail",
-        message: error instanceof Error ? error.message : "Unknown DO failure",
-        durationMs,
       };
     }
   }

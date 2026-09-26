@@ -9,7 +9,6 @@
 import {
   BellIcon,
   BookOpenIcon,
-  BotIcon,
   BracesIcon,
   ChartColumnIcon,
   FlaskConicalIcon,
@@ -21,7 +20,6 @@ import {
   MessagesSquareIcon,
   NotebookPenIcon,
   SettingsIcon,
-  SparklesIcon,
   WrenchIcon,
   type LucideIcon,
 } from "lucide-react";
@@ -42,7 +40,7 @@ export const siteConfig = {
   name: "Cloudflare Edge Showcase",
   shortName: "Edge Showcase",
   description:
-    "Multi-page edge frontend showcase using Astro, React, ReUI and assistant-ui with the Cloudflare Agents SDK",
+    "Cloudflare Worker template: Astro + React on ReUI, D1 via Hono, AI chat through the core-guardian service binding",
   url: "https://example.com",
   links: { github: "https://github.com/jmbish04/core-template-cfw-assets-astro-shadcn" },
 };
@@ -69,26 +67,8 @@ export const navGroups: NavGroup[] = [
     ],
   },
   {
-    label: "Agents",
-    items: [
-      { href: "/chat", label: "Chat", icon: MessagesSquareIcon },
-      { href: "/assistant", label: "Assistant", icon: BotIcon },
-      {
-        href: "/showcase/code-mode",
-        label: "Showcase",
-        icon: SparklesIcon,
-        children: [
-          { href: "/showcase/code-mode", label: "Code mode" },
-          { href: "/showcase/browser-hitl", label: "Browser HITL" },
-          { href: "/showcase/multi-agent", label: "Multi-agent" },
-          { href: "/showcase/workflows", label: "Workflows" },
-          { href: "/showcase/artifacts", label: "Artifacts" },
-          { href: "/showcase/mcp", label: "MCP tools" },
-          { href: "/showcase/thinking", label: "Thinking" },
-          { href: "/showcase/skills", label: "Skills" },
-        ],
-      },
-    ],
+    label: "AI",
+    items: [{ href: "/chat", label: "Chat", icon: MessagesSquareIcon }],
   },
   {
     label: "System",
@@ -106,15 +86,7 @@ export const navGroups: NavGroup[] = [
           { href: "/settings/advanced", label: "Advanced" },
         ],
       },
-      {
-        href: "/showcase/features",
-        label: "Platform",
-        icon: FlaskConicalIcon,
-        children: [
-          { href: "/showcase/features", label: "Features" },
-          { href: "/showcase/utilities", label: "Data utilities" },
-        ],
-      },
+      { href: "/showcase/utilities", label: "Data utilities", icon: FlaskConicalIcon },
       { href: "/playbook", label: "Playbook", icon: WrenchIcon },
     ],
   },

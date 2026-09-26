@@ -1,39 +1,31 @@
 /**
  * @fileoverview Notifications REST API router.
  *
- * Proxies all mutations through the `NotificationsAgent` Durable Object so
- * that REST mutations are reflected in real-time to every connected WebSocket
- * client. The agent is reached with `getAgentByName(env.NOTIFICATIONS_AGENT,
- * "global")` — never with `stub.fetch(new Request(...))`.
+ * Plain D1 CRUD against the `notifications` table — no Durable Object, no
+ * WebSocket fanout. This template dropped the `NotificationsAgent` realtime
+ * broker; the frontend now polls/refetches instead of subscribing.
  *
  * Mount this router at `/api/notifications` in `api/index.ts`.
  *
  * Route inventory:
- *   GET    /           – list notifications (via stub.list())
- *   POST   /           – create notification (via stub.add(body))
- *   POST   /{id}/read  – mark one notification read (via stub.markRead(id))
- *   POST   /read-all   – mark all notifications read (via stub.markAllRead())
- *   DELETE /           – clear all notifications (via stub.clearAll())
+ *   GET    /           – list notifications, newest first
+ *   POST   /           – create notification
+ *   POST   /{id}/read  – mark one notification read
+ *   POST   /read-all   – mark all notifications read
+ *   DELETE /           – clear all notifications
  */
 
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
-import { getAgentByName } from "agents";
+import { desc, eq } from "drizzle-orm";
 
-import {
-  NotificationsAgent,
-  type AddNotificationInput,
-  type NotificationItem,
-} from "../../ai/agents/NotificationsAgent";
+import { getDb } from "../../db";
+import { notifications, type Notification } from "../../db/schemas/notifications/notifications";
 
 // ---------------------------------------------------------------------------
 // Shared schemas
 // ---------------------------------------------------------------------------
 
-/**
- * Wire-format notification item (createdAt is epoch millis, not a Date).
- * Mirrors `NotificationItem` from the NotificationsAgent but expressed as a
- * Zod schema for OpenAPI registration.
- */
+/** Wire-format notification item (createdAt is epoch millis, not a Date). */
 const notificationItemSchema = z.object({
   id: z.string(),
   type: z.enum(["info", "success", "warning", "error", "mention", "system"]),
@@ -66,22 +58,24 @@ const notifIdParam = z.object({ id: z.string().min(1) });
 
 const okResponseSchema = z.object({ ok: z.boolean() });
 
-// ---------------------------------------------------------------------------
-// Helper — resolve the singleton NotificationsAgent stub
-// ---------------------------------------------------------------------------
+/** Feed cap — mirrors the old hot-cache limit so behaviour doesn't change. */
+const FEED_LIMIT = 50;
 
-/**
- * Obtain the "global" NotificationsAgent stub via native DO RPC.
- *
- * `getAgentByName` resolves the single shared notification feed for this
- * single-user template. Callers then invoke `await stub.add(...)` etc. — never
- * `stub.fetch(new Request(...))`.
- */
-async function getNotificationsStub(env: Env) {
-  // `wrangler types` emits the DO namespace as `DurableObjectNamespace<undefined>`
-  // (it can't infer the class), so cast to the real class to recover typed RPC.
-  const ns = env.NOTIFICATIONS_AGENT as unknown as DurableObjectNamespace<NotificationsAgent>;
-  return getAgentByName(ns, "global");
+/** Normalize a D1 row into the wire-friendly shape (createdAt as epoch ms). */
+function toItem(row: Notification) {
+  return {
+    id: row.id,
+    type: row.type,
+    title: row.title,
+    body: row.body ?? null,
+    severity: row.severity,
+    read: row.read,
+    actor: row.actor ?? null,
+    entityType: row.entityType ?? null,
+    entityId: row.entityId ?? null,
+    href: row.href ?? null,
+    createdAt: row.createdAt.getTime(),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -99,19 +93,23 @@ notificationsRouter.openapi(
     method: "get",
     path: "/",
     tags: ["Notifications"],
-    summary: "List notifications (reads from the agent hot-cache)",
+    summary: "List notifications, newest first",
     operationId: "notificationsList",
     responses: {
       200: {
-        description: "Current notification feed (newest first).",
+        description: "Notification feed (newest first).",
         content: { "application/json": { schema: z.array(notificationItemSchema) } },
       },
     },
   }),
   async (c) => {
-    const stub = await getNotificationsStub(c.env);
-    const items = await stub.list() as NotificationItem[];
-    return c.json(items, 200);
+    const db = getDb(c.env);
+    const rows = await db
+      .select()
+      .from(notifications)
+      .orderBy(desc(notifications.createdAt))
+      .limit(FEED_LIMIT);
+    return c.json(rows.map(toItem), 200);
   },
 );
 
@@ -124,7 +122,7 @@ notificationsRouter.openapi(
     method: "post",
     path: "/",
     tags: ["Notifications"],
-    summary: "Create notification (also pushes to WebSocket clients)",
+    summary: "Create a notification",
     operationId: "notificationsCreate",
     request: {
       body: { content: { "application/json": { schema: addNotificationBody } } },
@@ -137,10 +135,22 @@ notificationsRouter.openapi(
     },
   }),
   async (c) => {
-    const body = c.req.valid("json") as AddNotificationInput;
-    const stub = await getNotificationsStub(c.env);
-    const item = await stub.add(body) as NotificationItem;
-    return c.json(item, 201);
+    const body = c.req.valid("json");
+    const db = getDb(c.env);
+    const [row] = await db
+      .insert(notifications)
+      .values({
+        type: body.type ?? "info",
+        title: body.title,
+        body: body.body ?? null,
+        severity: body.severity ?? body.type ?? "info",
+        actor: body.actor ?? null,
+        entityType: body.entityType ?? null,
+        entityId: body.entityId ?? null,
+        href: body.href ?? null,
+      })
+      .returning();
+    return c.json(toItem(row!), 201);
   },
 );
 
@@ -165,8 +175,8 @@ notificationsRouter.openapi(
   }),
   async (c) => {
     const { id } = c.req.valid("param");
-    const stub = await getNotificationsStub(c.env);
-    await stub.markRead(id);
+    const db = getDb(c.env);
+    await db.update(notifications).set({ read: true }).where(eq(notifications.id, id));
     return c.json({ ok: true }, 200);
   },
 );
@@ -190,8 +200,8 @@ notificationsRouter.openapi(
     },
   }),
   async (c) => {
-    const stub = await getNotificationsStub(c.env);
-    await stub.markAllRead();
+    const db = getDb(c.env);
+    await db.update(notifications).set({ read: true });
     return c.json({ ok: true }, 200);
   },
 );
@@ -215,8 +225,8 @@ notificationsRouter.openapi(
     },
   }),
   async (c) => {
-    const stub = await getNotificationsStub(c.env);
-    await stub.clearAll();
+    const db = getDb(c.env);
+    await db.delete(notifications);
     return c.json({ ok: true }, 200);
   },
 );

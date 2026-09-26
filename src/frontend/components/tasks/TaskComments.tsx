@@ -21,7 +21,7 @@ import { MessageSquareIcon } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Frame, FrameHeader, FramePanel, FrameTitle } from "@/components/reui/frame";
 import { Kbd } from "@/components/ui/kbd";
 import { apiGet, apiSend, ApiError } from "@/lib/api";
 import { relativeTime } from "@/lib/format";
@@ -106,16 +106,16 @@ export function TaskComments({ taskId }: TaskCommentsProps) {
   }, [draft, draftEmpty, sending, taskId]);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-sm">
+    <Frame spacing="sm">
+      <FrameHeader>
+        <FrameTitle className="text-sm">
           Comments
           {comments.length > 0 ? (
             <span className="ml-2 text-xs font-normal text-muted-foreground">{comments.length}</span>
           ) : null}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+        </FrameTitle>
+      </FrameHeader>
+      <FramePanel className="flex flex-col gap-4">
         {error ? <ErrorState message={error} onRetry={load} /> : null}
 
         {loading ? (
@@ -190,7 +190,7 @@ export function TaskComments({ taskId }: TaskCommentsProps) {
         ) : (
           <div className="min-h-28 rounded-lg bg-input/30 ring-1 ring-border/40" />
         )}
-      </CardContent>
-    </Card>
+      </FramePanel>
+    </Frame>
   );
 }

@@ -31,6 +31,8 @@ export interface PlateEditorProps {
   /** Optional id for label association. */
   id?: string;
   className?: string;
+  /** Extra classes for the editable content area (e.g. lift the max height). */
+  contentClassName?: string;
 }
 
 /**
@@ -44,6 +46,7 @@ export function PlateEditor({
   placeholder = "Write the note…",
   id,
   className,
+  contentClassName,
 }: PlateEditorProps) {
   const initialValue = useMemo<PlateValue>(() => bodyToPlateValue(value), [value]);
 
@@ -73,6 +76,7 @@ export function PlateEditor({
             "max-h-[22rem] min-h-40 overflow-y-auto px-3 py-2.5 text-sm leading-7 text-foreground outline-none",
             // Muted placeholder (Plate renders it on the first empty block).
             "[&_[data-slate-placeholder]]:text-muted-foreground [&_[data-slate-placeholder]]:opacity-100",
+            contentClassName,
           )}
         />
       </Plate>

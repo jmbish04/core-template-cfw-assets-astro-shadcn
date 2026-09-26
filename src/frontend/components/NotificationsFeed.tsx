@@ -1,29 +1,24 @@
 /**
- * @fileoverview NotificationsFeed — realtime notification inbox wired to the
- * `NotificationsAgent` Durable Object over a WebSocket state channel.
+ * @fileoverview NotificationsFeed — notification inbox backed by the D1 REST
+ * API, laid out as a ReUI Timeline (timeline-4 / solution-users-6 grammar:
+ * icon indicators, title + badge header, body) inside a ReUI Frame.
  *
- * This island opens a long-lived socket via `useAgent` from `agents/react` and
- * subscribes to the agent's server-authoritative state `{ notifications, unread }`.
- * There is **no chat / inference** here — `NotificationsAgent` is a plain
- * Agents SDK `Agent` that pushes state to every connected client whenever it
- * calls `setState` on the server. New notifications, read-state changes, and
- * clears all arrive in realtime with no polling.
+ * Data:
+ *   - GET  /api/notifications            – full list, newest first
+ *   - POST /api/notifications/{id}/read  – mark one read (optimistic)
+ *   - POST /api/notifications/read-all   – mark all read (optimistic)
  *
- * Routing: the agent name is the **kebab-case of the DO class name**, so the SDK
- * routes this socket to `/agents/notifications-agent/global`. `"global"` is the
- * single canonical instance for this single-user template.
- *
- * Styling follows the Monolith dark profile used by `AgentChat.tsx`: shadcn
- * Card/Badge/Button primitives, no hard 1px borders (we use `ring-1
- * ring-border/40` + `bg-card`).
+ * Freshness: polls every 15s while the tab is visible, refetches when the tab
+ * becomes visible again, and on the `notifications:changed` window event that
+ * SendTestNotification / AdvancedPanel fire after they mutate the feed.
+ * ponytail: polling, not push — switch to SSE/WebSocket if 15s lag matters.
  */
 
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import {
-  AlertTriangleIcon,
   BellIcon,
   CheckCheckIcon,
   CircleAlertIcon,
@@ -32,34 +27,45 @@ import {
   type LucideIcon,
   MessageSquareIcon,
   SettingsIcon,
+  TriangleAlertIcon,
 } from "lucide-react";
 
-import { useAgent } from "agents/react";
-
-import { Badge } from "@/components/ui/badge";
+import { Badge, type BadgeProps } from "@/components/reui/badge";
+import {
+  Frame,
+  FrameDescription,
+  FrameHeader,
+  FramePanel,
+  FrameTitle,
+} from "@/components/reui/frame";
+import {
+  Timeline,
+  TimelineContent,
+  TimelineHeader,
+  TimelineIndicator,
+  TimelineItem,
+  TimelineSeparator,
+  TimelineTitle,
+} from "@/components/reui/timeline";
+import { NOTIFICATIONS_CHANGED } from "@/components/settings/shared";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import { Skeleton } from "@/components/ui/skeleton";
+import { apiGet, ApiError, apiSend } from "@/lib/api";
+import { relativeTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
-// Wire types — kept structurally in sync with the agent's NotificationItem.
-// (Duplicated here rather than imported so this client island has no backend
-// import edge; the server is the source of truth for the shape.)
+// Wire types
 // ---------------------------------------------------------------------------
 
-type NotificationType =
-  | "info"
-  | "success"
-  | "warning"
-  | "error"
-  | "mention"
-  | "system";
+type NotificationType = "info" | "success" | "warning" | "error" | "mention" | "system";
 
 interface NotificationItem {
   id: string;
@@ -76,202 +82,199 @@ interface NotificationItem {
   createdAt: number;
 }
 
-interface NotificationsState {
-  notifications: NotificationItem[];
-  unread: number;
-}
+const POLL_MS = 15_000;
 
 // ---------------------------------------------------------------------------
-// Presentation helpers
+// Presentation
 // ---------------------------------------------------------------------------
 
-const TYPE_ICON: Record<NotificationType, LucideIcon> = {
-  info: InfoIcon,
-  success: CircleCheckIcon,
-  warning: AlertTriangleIcon,
-  error: CircleAlertIcon,
-  mention: MessageSquareIcon,
-  system: SettingsIcon,
+const TYPE_META: Record<
+  NotificationType,
+  { icon: LucideIcon; label: string; tone: string; badge: BadgeProps["variant"] }
+> = {
+  info: { icon: InfoIcon, label: "Info", tone: "text-info", badge: "info-outline" },
+  success: { icon: CircleCheckIcon, label: "Success", tone: "text-success", badge: "success-outline" },
+  warning: { icon: TriangleAlertIcon, label: "Warning", tone: "text-warning", badge: "warning-outline" },
+  error: { icon: CircleAlertIcon, label: "Error", tone: "text-destructive", badge: "destructive-outline" },
+  mention: { icon: MessageSquareIcon, label: "Mention", tone: "text-primary", badge: "primary-outline" },
+  system: { icon: SettingsIcon, label: "System", tone: "text-muted-foreground", badge: "outline" },
 };
-
-/** Tailwind color class for the type/severity icon. */
-const TYPE_TONE: Record<NotificationType, string> = {
-  info: "text-sky-400",
-  success: "text-emerald-400",
-  warning: "text-amber-400",
-  error: "text-rose-400",
-  mention: "text-violet-400",
-  system: "text-muted-foreground",
-};
-
-/** Format a millisecond timestamp as a compact relative string. */
-function relativeTime(ms: number): string {
-  const diff = Date.now() - ms;
-  const sec = Math.round(diff / 1000);
-  if (sec < 45) return "just now";
-  const min = Math.round(sec / 60);
-  if (min < 60) return `${min}m ago`;
-  const hr = Math.round(min / 60);
-  if (hr < 24) return `${hr}h ago`;
-  const day = Math.round(hr / 24);
-  if (day < 7) return `${day}d ago`;
-  return new Date(ms).toLocaleDateString();
-}
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
 export function NotificationsFeed() {
-  // Local mirror of the agent's synced state. `useAgent` also exposes
-  // `agent.state`, but we keep an explicit copy seeded via `onStateUpdate` so
-  // the initial undefined → first-sync transition renders cleanly.
-  const [feed, setFeed] = useState<NotificationsState>({
-    notifications: [],
-    unread: 0,
-  });
+  const [items, setItems] = useState<NotificationItem[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [fetchedAt, setFetchedAt] = useState<number | null>(null);
 
-  // Open the WebSocket to the NotificationsAgent DO. `notifications-agent` is
-  // the kebab-case of the class name and must match the SDK route
-  // `/agents/notifications-agent/global`. `"global"` is the single shared feed.
-  const agent = useAgent<NotificationsState>({
-    agent: "notifications-agent",
-    name: "global",
-    onStateUpdate: (state) => setFeed(state),
-  });
+  const load = useCallback(async () => {
+    try {
+      setItems(await apiGet<NotificationItem[]>("notifications"));
+      setFetchedAt(Date.now());
+      setError(null);
+    } catch (e) {
+      setError(
+        e instanceof ApiError
+          ? e.message
+          : "Couldn't load notifications. Check your connection; the feed retries every 15 seconds.",
+      );
+    }
+  }, []);
 
-  // PartySocket readyState: 0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED.
-  const status =
-    agent.readyState === 1
-      ? "live"
-      : agent.readyState === 0
-        ? "connecting"
-        : "offline";
+  useEffect(() => {
+    void load();
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") void load();
+    }, POLL_MS);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void load();
+    };
+    const onChanged = () => void load();
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener(NOTIFICATIONS_CHANGED, onChanged);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener(NOTIFICATIONS_CHANGED, onChanged);
+    };
+  }, [load]);
 
-  const markAllRead = () => {
-    void agent.call("markAllRead", []);
+  const unread = items?.filter((n) => !n.read).length ?? 0;
+
+  const markRead = async (id: string) => {
+    setItems((prev) => prev?.map((n) => (n.id === id ? { ...n, read: true } : n)) ?? prev);
+    try {
+      await apiSend("POST", `notifications/${id}/read`);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Couldn't mark that notification read. Try again.");
+      void load();
+    }
   };
 
-  const markRead = (id: string) => {
-    void agent.call("markRead", [id]);
+  const markAllRead = async () => {
+    setItems((prev) => prev?.map((n) => ({ ...n, read: true })) ?? prev);
+    try {
+      await apiSend("POST", "notifications/read-all");
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Couldn't mark notifications read. Try again.");
+      void load();
+    }
   };
-
-  const hasItems = feed.notifications.length > 0;
 
   return (
-    <Card className="flex h-[calc(100vh-12rem)] flex-col bg-card ring-1 ring-border/40">
-      <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3">
-        <div className="flex items-start gap-3">
-          <span className="relative mt-0.5">
-            <BellIcon className="size-5 text-muted-foreground" />
-            {feed.unread > 0 ? (
-              <span className="absolute -right-1.5 -top-1.5 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
-                {feed.unread > 9 ? "9+" : feed.unread}
-              </span>
-            ) : null}
-          </span>
-          <div>
-            <CardTitle>Notifications</CardTitle>
-            <CardDescription>
-              Realtime feed synced from the NotificationsAgent Durable Object over
-              a WebSocket state channel.
-            </CardDescription>
+    <Frame className="min-w-0">
+      <FrameHeader className="flex-row flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0 space-y-px">
+          <FrameTitle className="flex items-center gap-2">
+            Inbox
+            {unread > 0 ? <Badge variant="primary-light">{unread} unread</Badge> : null}
+          </FrameTitle>
+          <FrameDescription>
+            {fetchedAt ? `Updated ${relativeTime(fetchedAt)} · refreshes every 15s` : "Loading…"}
+          </FrameDescription>
+        </div>
+        <Button size="sm" variant="outline" onClick={() => void markAllRead()} disabled={unread === 0}>
+          <CheckCheckIcon aria-hidden="true" />
+          Mark all read
+        </Button>
+      </FrameHeader>
+
+      <FramePanel className="min-h-64">
+        {error ? (
+          <p role="alert" className="text-destructive mb-4 text-sm">
+            {error}
+          </p>
+        ) : null}
+
+        {items === null ? (
+          <div className="space-y-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex items-start gap-3">
+                <Skeleton className="size-6 rounded-full" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-4 w-1/2" />
+                  <Skeleton className="h-3 w-3/4" />
+                </div>
+              </div>
+            ))}
           </div>
-        </div>
-
-        <div className="flex flex-col items-end gap-2">
-          <Badge
-            variant={
-              status === "live"
-                ? "default"
-                : status === "connecting"
-                  ? "secondary"
-                  : "outline"
-            }
-          >
-            {status}
-          </Badge>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={markAllRead}
-            disabled={feed.unread === 0}
-          >
-            <CheckCheckIcon className="size-3.5" />
-            Mark all read
-          </Button>
-        </div>
-      </CardHeader>
-
-      <CardContent className="min-h-0 flex-1 overflow-y-auto p-0">
-        {hasItems ? (
-          <ul className="divide-y divide-border/30">
-            {feed.notifications.map((item) => {
-              const Icon = TYPE_ICON[item.type] ?? InfoIcon;
-              const tone = TYPE_TONE[item.type] ?? "text-muted-foreground";
+        ) : items.length === 0 ? (
+          <Empty className="border-0">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <BellIcon aria-hidden="true" />
+              </EmptyMedia>
+              <EmptyTitle>You're all caught up</EmptyTitle>
+              <EmptyDescription>
+                New notifications appear here. Send a test to see one arrive.
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        ) : (
+          <Timeline>
+            {items.map((item, index) => {
+              const meta = TYPE_META[item.type] ?? TYPE_META.info;
+              const Icon = meta.icon;
+              const isLast = index === items.length - 1;
               return (
-                <li
+                <TimelineItem
                   key={item.id}
-                  className={cn(
-                    "flex items-start gap-3 px-6 py-3 transition-colors hover:bg-muted/30",
-                    item.read ? "opacity-70" : "bg-muted/10",
-                  )}
+                  step={index + 1}
+                  className={cn("ms-10", isLast ? "pb-0" : "pb-5", item.read && "opacity-70")}
                 >
-                  <Icon className={cn("mt-0.5 size-4 shrink-0", tone)} />
-
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <p className="truncate text-sm font-medium text-foreground">
-                        {item.title}
-                      </p>
+                  <TimelineHeader className="flex min-w-0 items-start justify-between gap-2.5">
+                    <TimelineSeparator className="bg-border! group-data-[orientation=vertical]/timeline:-left-7 group-data-[orientation=vertical]/timeline:h-[calc(100%-1.5rem-0.5rem)] group-data-[orientation=vertical]/timeline:translate-y-7" />
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <TimelineTitle className="min-w-0 truncate text-sm font-semibold">
+                        {item.href ? (
+                          <a href={item.href} className="hover:underline">
+                            {item.title}
+                          </a>
+                        ) : (
+                          item.title
+                        )}
+                      </TimelineTitle>
+                      <Badge variant={meta.badge}>{meta.label}</Badge>
                       {!item.read ? (
-                        <span
-                          className="size-2 shrink-0 rounded-full bg-primary"
-                          aria-label="unread"
-                        />
+                        <span className="bg-primary size-2 shrink-0 rounded-full" aria-label="Unread" />
                       ) : null}
                     </div>
-                    {item.body ? (
-                      <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
-                        {item.body}
-                      </p>
+                    {!item.read ? (
+                      <Button
+                        size="xs"
+                        variant="ghost"
+                        className="shrink-0"
+                        onClick={() => void markRead(item.id)}
+                      >
+                        Mark read
+                      </Button>
                     ) : null}
-                    <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
-                      <span>{relativeTime(item.createdAt)}</span>
-                      {item.actor ? (
-                        <>
-                          <span aria-hidden>·</span>
-                          <span className="truncate">{item.actor}</span>
-                        </>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  {!item.read ? (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="shrink-0"
-                      onClick={() => markRead(item.id)}
+                    <TimelineIndicator
+                      className={cn(
+                        "border-border bg-background flex size-6 items-center justify-center border shadow-xs group-data-[orientation=vertical]/timeline:-left-7 [&_svg]:size-3.5",
+                        meta.tone,
+                      )}
                     >
-                      Read
-                    </Button>
-                  ) : null}
-                </li>
+                      <Icon aria-hidden="true" />
+                    </TimelineIndicator>
+                  </TimelineHeader>
+                  <TimelineContent className="mt-1 space-y-1">
+                    {item.body ? (
+                      <p className="text-muted-foreground line-clamp-2 text-sm">{item.body}</p>
+                    ) : null}
+                    <p className="text-muted-foreground text-xs">
+                      {relativeTime(item.createdAt)}
+                      {item.actor ? ` · ${item.actor}` : ""}
+                    </p>
+                  </TimelineContent>
+                </TimelineItem>
               );
             })}
-          </ul>
-        ) : (
-          <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center text-muted-foreground">
-            <BellIcon className="size-8 opacity-40" />
-            <p className="text-sm">No notifications yet.</p>
-            <p className="text-xs">
-              New events stream in live over
-              wss://&hellip;/agents/notifications-agent/global
-            </p>
-          </div>
+          </Timeline>
         )}
-      </CardContent>
-    </Card>
+      </FramePanel>
+    </Frame>
   );
 }

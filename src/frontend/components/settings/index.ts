@@ -2,8 +2,8 @@
  * @fileoverview Barrel for the settings feature islands + shared primitives.
  *
  * Astro pages import the hydrated islands from here so the page front-matter
- * stays thin. The shared row/section primitives are re-exported for any future
- * settings surface that wants the same Monolith "settings row" pattern.
+ * stays thin. The shared ReUI Frame row + save-bar primitives are re-exported
+ * for any future settings surface.
  */
 
 export { SettingsNav, SETTINGS_SECTIONS } from "./SettingsNav";
@@ -15,11 +15,12 @@ export { AdvancedPanel } from "./AdvancedPanel";
 export { SendTestNotification } from "./SendTestNotification";
 
 export {
-  SettingsRow,
-  SettingsRowGroup,
-  SectionHeader,
+  SettingRow,
+  SettingsRows,
+  SaveBar,
   SavedFlash,
   InlineError,
   RowSkeleton,
   useSavedFlash,
+  NOTIFICATIONS_CHANGED,
 } from "./shared";

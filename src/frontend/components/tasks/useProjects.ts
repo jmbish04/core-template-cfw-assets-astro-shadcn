@@ -1,6 +1,6 @@
 /**
  * @fileoverview useProjects — shared hook that loads the full project list once
- * and exposes it as filter options + an id→name lookup. Used by TaskFilters,
+ * and exposes it as filter options + an id→name lookup. Used by the tasks Filters builder,
  * TaskBoard, TaskDetail, the analytics page, and the notes page so a project's
  * display name can be shown wherever only a `projectId` is stored on a record.
  *

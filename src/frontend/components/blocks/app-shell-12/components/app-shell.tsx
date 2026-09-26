@@ -8,6 +8,7 @@
  * menu (no users here — the theme toggle moved to the header).
  */
 import { type CSSProperties, type ReactNode } from "react";
+import { Toaster } from "sonner";
 
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -44,6 +45,8 @@ export function AppShell({
           <div className="flex min-w-0 flex-1 flex-col">{children}</div>
         </SidebarInset>
       </SidebarProvider>
+      {/* sonner host for block toasts; theme follows the html.dark class via tokens */}
+      <Toaster position="bottom-right" toastOptions={{ className: "!bg-popover !text-popover-foreground !border-border" }} />
     </TooltipProvider>
   );
 }

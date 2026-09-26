@@ -28,19 +28,17 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiGet, ApiError } from "@/lib/api";
 
-import { ErrorState } from "./Shared";
+import { Frame, FramePanel } from "@/components/reui/frame";
+import { Progress, ProgressLabel } from "@/components/ui/progress";
+import { compactNumber } from "@/lib/format";
+import { cn } from "@/lib/utils";
+
+import { ErrorState, MOBILE_SHEET_DIALOG } from "./Shared";
 import { PriorityBadge } from "./PriorityBadge";
 import { ProjectDialog } from "./ProjectDialog";
-import { ProjectStatusBadge } from "./StatusBadge";
-import type { ListEnvelope, Project, Task, TaskStatus } from "./types";
+import { ProjectStatusBadge, TASK_STATUS_DOT as STATUS_DOT } from "./StatusBadge";
+import type { ListEnvelope, Project, Task } from "./types";
 
-/** Status → dot color, mirroring the task facet vocabulary. */
-const STATUS_DOT: Record<TaskStatus, string> = {
-  todo: "bg-muted-foreground/60",
-  in_progress: "bg-sky-400",
-  in_review: "bg-violet-400",
-  done: "bg-emerald-400",
-};
 
 export interface ProjectPreviewDialogProps {
   project: Project | null;
@@ -84,9 +82,12 @@ export function ProjectPreviewDialog({
     if (open && projectId) void load();
   }, [open, projectId, load]);
 
+  const doneCount = tasks.filter((t) => t.status === "done").length;
+  const donePct = tasks.length ? Math.round((doneCount / tasks.length) * 100) : 0;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className={cn("max-w-lg", MOBILE_SHEET_DIALOG)}>
         {project ? (
           <>
             <DialogHeader>
@@ -105,12 +106,32 @@ export function ProjectPreviewDialog({
             </DialogHeader>
 
             <div className="flex flex-col gap-3">
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>Owner: {project.owner}</span>
-                <span>
-                  {project.taskCount} {project.taskCount === 1 ? "task" : "tasks"}
-                </span>
-              </div>
+              {/* Progress stats: dense label|value rows + a done-share bar. */}
+              <Frame spacing="sm">
+                <FramePanel className="flex flex-col gap-3">
+                  <dl className="grid grid-cols-3 gap-3 text-sm max-sm:grid-cols-1 max-sm:gap-1.5">
+                    {[
+                      { label: "Owner", value: project.owner },
+                      { label: "Tasks", value: compactNumber(project.taskCount) },
+                      { label: "Done", value: loading ? "—" : `${doneCount} of ${tasks.length}` },
+                    ].map((stat) => (
+                      <div
+                        key={stat.label}
+                        className="flex min-w-0 flex-col gap-0.5 max-sm:flex-row max-sm:justify-between"
+                      >
+                        <dt className="text-xs text-muted-foreground">{stat.label}</dt>
+                        <dd className="truncate font-medium tabular-nums">{stat.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                  <Progress
+                    value={donePct}
+                    className="gap-0 **:data-[slot=progress-track]:h-1.5 **:data-[slot=progress-track]:rounded-full **:data-[slot=progress-indicator]:rounded-full **:data-[slot=progress-indicator]:bg-success"
+                  >
+                    <ProgressLabel className="sr-only">Share of project tasks done</ProgressLabel>
+                  </Progress>
+                </FramePanel>
+              </Frame>
 
               <Separator className="bg-border/40" />
 

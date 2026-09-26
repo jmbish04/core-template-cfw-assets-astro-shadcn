@@ -10,6 +10,7 @@
  * session seeds from the correct note. Surfaced via a `trigger` element.
  */
 
+import { cn } from "@/lib/utils";
 import { useEffect, useState, type ReactElement } from "react";
 
 import {
@@ -35,7 +36,7 @@ import {
 import { apiSend, ApiError } from "@/lib/api";
 import { PlateEditor, bodyToSnippet } from "@/components/notes";
 
-import { ErrorState } from "./Shared";
+import { ErrorState, MOBILE_SHEET_DIALOG } from "./Shared";
 import { useProjects } from "./useProjects";
 import type { TeamNote } from "./types";
 
@@ -104,7 +105,7 @@ export function NoteDialog({ trigger, note, onSaved }: NoteDialogProps) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={trigger} />
-      <DialogContent className="max-w-xl">
+      <DialogContent className={cn("max-w-xl", MOBILE_SHEET_DIALOG)}>
         <DialogHeader>
           <DialogTitle>{editing ? "Edit note" : "New note"}</DialogTitle>
           <DialogDescription>

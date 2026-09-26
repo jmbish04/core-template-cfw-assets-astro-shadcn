@@ -1,29 +1,19 @@
 /**
- * @fileoverview Dashboard filter bar — search + range + status.
+ * @fileoverview Dashboard filter toolbar — search + range + status.
  *
- * A controlled toolbar that lifts all filter state to the parent
- * {@link AdminDashboard}. The text input is debounced at the parent level
- * (see `useDebounced`) so the raw keystroke value lives here for instant
- * feedback while the network only sees the settled value.
- *
- * Monolith styling: the bar is a `bg-card` surface with `ring-1 ring-border/40`
- * (no traditional borders). Controls sit on a single responsive row that wraps
- * gracefully on mobile.
+ * Styled after the ReUI Pro `dashboard-4` block's `OverviewToolbar`: a bare
+ * row of Selects (range carries a calendar icon) that wraps on mobile, with
+ * the search box as an InputGroup. Controlled — all state lives in
+ * {@link AdminDashboard}, which debounces the search before it hits the API.
+ * Selects pass `items` so Base UI renders labels, never raw values.
  */
 
 "use client";
 
-import { Search } from "lucide-react";
+import { CalendarIcon, SearchIcon, XIcon } from "lucide-react";
 
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 import type { RangeValue, StatusValue } from "./types";
 
@@ -35,9 +25,9 @@ const RANGE_OPTIONS: { value: RangeValue; label: string }[] = [
 
 const STATUS_OPTIONS: { value: StatusValue; label: string }[] = [
   { value: "all", label: "All statuses" },
-  { value: "todo", label: "To Do" },
-  { value: "in_progress", label: "In Progress" },
-  { value: "in_review", label: "In Review" },
+  { value: "todo", label: "Not started" },
+  { value: "in_progress", label: "In progress" },
+  { value: "in_review", label: "In review" },
   { value: "done", label: "Done" },
 ];
 
@@ -51,68 +41,58 @@ export interface FilterBarProps {
 }
 
 /** Search + time-range + status toolbar driving every dashboard query. */
-export function FilterBar({
-  q,
-  range,
-  status,
-  onQChange,
-  onRangeChange,
-  onStatusChange,
-}: FilterBarProps) {
+export function FilterBar({ q, range, status, onQChange, onRangeChange, onStatusChange }: FilterBarProps) {
   return (
-    <div className="flex flex-col gap-4 rounded-lg bg-card p-4 ring-1 ring-border/40 sm:flex-row sm:items-end">
-      <div className="flex-1">
-        <Label htmlFor="dashboard-search" className="sr-only">
-          Search activity and tasks
-        </Label>
-        <div className="relative">
-          <Search
-            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden
-          />
-          <Input
-            id="dashboard-search"
-            value={q}
-            onChange={(e) => onQChange(e.target.value)}
-            placeholder="Search activity, tasks, actors…"
-            className="pl-9"
-            autoComplete="off"
-          />
-        </div>
-      </div>
+    <div className="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-center">
+      <InputGroup className="w-full sm:w-64">
+        <InputGroupAddon align="inline-start">
+          <SearchIcon className="text-muted-foreground size-4" aria-hidden="true" />
+        </InputGroupAddon>
+        <InputGroupInput
+          value={q}
+          onChange={(e) => onQChange(e.target.value)}
+          placeholder="Search activity and tasks…"
+          aria-label="Search activity and tasks"
+          autoComplete="off"
+        />
+        {q ? (
+          <InputGroupAddon align="inline-end">
+            <InputGroupButton size="icon-xs" aria-label="Clear search" onClick={() => onQChange("")}>
+              <XIcon className="size-4" aria-hidden="true" />
+            </InputGroupButton>
+          </InputGroupAddon>
+        ) : null}
+      </InputGroup>
 
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="dashboard-range" className="text-xs text-muted-foreground">
-          Range
-        </Label>
-        <Select value={range} onValueChange={(v) => onRangeChange(v as RangeValue)}>
-          <SelectTrigger id="dashboard-range" className="w-full sm:w-[160px]">
-            <SelectValue />
+      <div className="flex flex-wrap items-center gap-2.5">
+        <Select value={range} onValueChange={(v) => v && onRangeChange(v as RangeValue)} items={RANGE_OPTIONS}>
+          <SelectTrigger className="w-40" aria-label="Date range">
+            <CalendarIcon className="size-4" aria-hidden="true" />
+            <SelectValue placeholder="Date range" />
           </SelectTrigger>
-          <SelectContent>
-            {RANGE_OPTIONS.map((o) => (
-              <SelectItem key={o.value} value={o.value}>
-                {o.label}
-              </SelectItem>
-            ))}
+          <SelectContent align="start" alignItemWithTrigger={false}>
+            <SelectGroup>
+              {RANGE_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectGroup>
           </SelectContent>
         </Select>
-      </div>
 
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="dashboard-status" className="text-xs text-muted-foreground">
-          Status
-        </Label>
-        <Select value={status} onValueChange={(v) => onStatusChange(v as StatusValue)}>
-          <SelectTrigger id="dashboard-status" className="w-full sm:w-[160px]">
-            <SelectValue />
+        <Select value={status} onValueChange={(v) => v && onStatusChange(v as StatusValue)} items={STATUS_OPTIONS}>
+          <SelectTrigger className="w-40" aria-label="Task status">
+            <SelectValue placeholder="Task status" />
           </SelectTrigger>
-          <SelectContent>
-            {STATUS_OPTIONS.map((o) => (
-              <SelectItem key={o.value} value={o.value}>
-                {o.label}
-              </SelectItem>
-            ))}
+          <SelectContent align="start" alignItemWithTrigger={false}>
+            <SelectGroup>
+              {STATUS_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectGroup>
           </SelectContent>
         </Select>
       </div>

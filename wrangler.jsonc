@@ -27,71 +27,20 @@
     "run_worker_first": true,
     "not_found_handling": "404-page",
   },
-  "ai": {
-    "binding": "AI",
-    // Workers AI has no local emulation. `remote: true` lets `wrangler dev`
-    // (which runs Durable Objects locally — `--remote` is unsupported for DOs)
-    // proxy AI inference to the real Workers AI service, so the chat agents
-    // stream genuine model output during local development.
-    "remote": true,
-  },
-  "durable_objects": {
-    "bindings": [
-      {
-        "name": "CODE_MODE_AGENT",
-        "class_name": "CodeModeAgent",
-      },
-      {
-        "name": "BROWSER_HITL_AGENT",
-        "class_name": "BrowserHitlAgent",
-      },
-      {
-        "name": "WORKFLOWS_AGENT",
-        "class_name": "WorkflowsAgent",
-      },
-      {
-        "name": "ARTIFACT_AGENT",
-        "class_name": "ArtifactAgent",
-      },
-      {
-        "name": "CHAT_BROKER",
-        "class_name": "ChatBroker",
-      },
-      {
-        "name": "NOTIFICATIONS_AGENT",
-        "class_name": "NotificationsAgent",
-      },
-      {
-        "name": "ORCHESTRATOR_AGENT",
-        "class_name": "OrchestratorAgent",
-      },
-      {
-        "name": "RESEARCHER_AGENT",
-        "class_name": "ResearcherAgent",
-      },
-      {
-        "name": "CODER_AGENT",
-        "class_name": "CoderAgent",
-      },
-      {
-        "name": "MCP_AGENT",
-        "class_name": "McpAgent",
-      },
-      {
-        "name": "THINKING_AGENT",
-        "class_name": "ThinkingAgent",
-      },
-      {
-        "name": "SKILLS_AGENT",
-        "class_name": "SkillsAgent",
-      },
-    ],
-  },
-  "browser": {
-    "binding": "MYBROWSER",
-  },
-  "worker_loaders": [
-    { "binding": "WORKER_LOADERS" }
+  // All inference goes through core-guardian — see ~/AGENTS-ai.md. There is
+  // no local Workers AI binding, no browser binding, and no worker_loaders
+  // binding left in this Worker (they existed only for the removed agents).
+  "services": [
+    {
+      "binding": "CORE_GUARDIAN",
+      "service": "core-guardian",
+      "entrypoint": "GuardianRpc",
+      // Service bindings default to local mode in `wrangler dev`, which needs
+      // a second `wrangler dev` process running core-guardian locally.
+      // `remote: true` proxies to the real deployed core-guardian instead, so
+      // local dev exercises the real AI router.
+      "remote": true,
+    },
   ],
   "migrations": [
     // v1 captures the original deployed-class set so wrangler can apply
@@ -125,6 +74,31 @@
     {
       "tag": "v3",
       "new_sqlite_classes": [
+        "OrchestratorAgent",
+        "ResearcherAgent",
+        "CoderAgent",
+        "McpAgent",
+        "ThinkingAgent",
+        "SkillsAgent",
+      ],
+    },
+    // v4 drops every Durable Object / Agents SDK agent. Chat now runs through
+    // the CORE_GUARDIAN service binding + D1 (no ChatBroker); notifications
+    // are plain D1 CRUD (no NotificationsAgent). This is the full set of
+    // classes live after v3 — deleting all of them, additively, per
+    // https://developers.cloudflare.com/durable-objects/reference/durable-objects-migrations/
+    // (deleted_classes only marks classes retired; it does not delete the
+    // underlying storage — that requires a separate `delete` migration if
+    // ever needed).
+    {
+      "tag": "v4",
+      "deleted_classes": [
+        "CodeModeAgent",
+        "BrowserHitlAgent",
+        "WorkflowsAgent",
+        "ArtifactAgent",
+        "ChatBroker",
+        "NotificationsAgent",
         "OrchestratorAgent",
         "ResearcherAgent",
         "CoderAgent",

@@ -9,8 +9,10 @@
  *   - `/scalar`       — interactive Scalar API reference UI
  *   - `/swagger`      — Swagger UI
  *
- * The chat / agent surfaces are NOT served here — they run on Durable Objects
- * via the Agents SDK (`routeAgentRequest`) and are wired in `src/_worker.ts`.
+ * Chat (`/api/chat`, `/api/threads`) is served here too — there are no
+ * Durable Objects / Agents SDK agents in this Worker. Every inference call
+ * routes through the `CORE_GUARDIAN` service binding (see
+ * `backend/ai/guardian.ts`); chat state persists to D1.
  * Route mount order: auth → health → config → admin → docs → client-error.
  */
 
@@ -23,6 +25,7 @@ import { logger } from "hono/logger";
 import { authMiddleware } from "./middleware/auth";
 import { errorHandler } from "./middleware/error";
 import { authRouter } from "./routes/auth";
+import { chatRouter } from "./routes/chat";
 import { clientErrorRouter } from "./routes/client-error";
 import { adminRouter, configRouter } from "./routes/config";
 import { docsRouter } from "./routes/docs";
@@ -128,6 +131,7 @@ app.route("/api/tasks", taskDetailRouter);
 app.route("/api/tasks", taskHierarchyRouter);
 app.route("/api/team-notes", teamNotesRouter);
 app.route("/api/threads", threadsRouter);
+app.route("/api/chat", chatRouter);
 app.route("/api/settings", settingsRouter);
 app.route("/api/webhooks", webhooksRouter);
 app.route("/api/activity", activityRouter);

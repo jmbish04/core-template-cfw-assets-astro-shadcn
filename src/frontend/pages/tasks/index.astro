@@ -1,36 +1,30 @@
 ---
 /**
- * Tasks list — a sortable/filterable table of all tasks from `GET /api/tasks`,
- * with inline status/priority editing and a filter bar (search, status,
- * priority, project, assignee, label, sort). An optional `?projectId=` query
- * param seeds the project filter (used by project deep-links).
+ * RESPONSIVE STRATEGY
+ * desktop: toolbar, then one Frame — status tabs, search + ReUI Filters builder + View popover, the Data Grid (sort, group, paginate).
+ * mobile (390px): the grid is swapped for a dense title|status list that opens the preview (a bottom sheet); no horizontal scroll.
+ * vehicle: same as mobile; each row is a full-width tap target.
  *
- * Mounts the TaskList island (client:load). Runs in SSR (output: "server"),
- * so we can read the query string off `Astro.url`.
+ * Tasks list — ReUI Data Grid over `GET /api/tasks`. `?projectId=` seeds a
+ * Project filter rule (project deep-links) and `?q=` seeds the search box.
  */
 import BaseLayout from "@/layouts/BaseLayout.astro";
+import { PageBody, PageToolbar } from "@/components/blocks/app-shell-12/components/page-toolbar";
 import { TaskList } from "@/components/tasks/TaskList";
 
 const initialProjectId = Astro.url.searchParams.get("projectId") ?? undefined;
+const initialQ = Astro.url.searchParams.get("q") ?? undefined;
 ---
 
 <BaseLayout
   title="Tasks"
-  description="A filterable, sortable table of every task with inline status and priority editing. Search, filter by project / assignee / label, and drill into any task."
+  description="Every task in one grid. Search, build filters by field, group by status, priority or project, and open any task."
 >
-  <div class="container mx-auto flex max-w-7xl flex-col gap-8 px-4 py-12">
-    <header class="flex flex-col gap-2">
-      <div class="flex items-center gap-3">
-        <span class="text-4xl">✅</span>
-        <h1 class="text-3xl font-semibold tracking-tight">Tasks</h1>
-      </div>
-      <p class="max-w-3xl text-base text-muted-foreground">
-        Every task in one table. Filter by status, priority, project, assignee,
-        or label; sort by due date, priority, or recency; edit status and
-        priority inline without opening the task.
-      </p>
-    </header>
-
-    <TaskList client:load initialProjectId={initialProjectId} />
-  </div>
+  <PageBody>
+    <PageToolbar
+      title="Tasks"
+      description="Search, filter by any field, group, and sort. Click a row to preview it."
+    />
+    <TaskList client:load initialProjectId={initialProjectId} initialQ={initialQ} />
+  </PageBody>
 </BaseLayout>
