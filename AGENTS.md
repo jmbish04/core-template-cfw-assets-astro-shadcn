@@ -135,8 +135,24 @@ decoration has no real backing, remove the decoration — do not fake it.
     inbound mail in `email_messages`.
   - `/notes` — **PlateJS** rich-text editor; bodies persist as a versioned
     `{v,format:"plate",value}` envelope.
-  - `/chat` — a gallery of twelve ReUI Pro `ai-chat-1..12` surfaces, each a real
-    conversation against core-guardian. See `chatSurfaces` in `lib/config.ts`.
+  - `/chat` — a gallery of twelve ReUI Pro `ai-chat-*` surfaces, each a real
+    conversation against core-guardian, all on one backend and one client
+    (`lib/chat.ts` + `components/chat/**`). `chatSurfaces` in `lib/config.ts`
+    is the route table; the gallery and the sidebar both render from it.
+    `/chat/copilot` (1) · `/chat/docked` (2, PlateJS canvas beside the thread)
+    · `/chat/welcome` (3) · `/chat/sidebar` (4, quote a sentence to reply to it)
+    · `/chat/sources` (5, six real collections set the answer scope)
+    · `/chat/agentic` (6, a real multi-turn plan that files a real task)
+    · `/chat/compare` (7, one prompt through two routing profiles, scored on
+    measured latency/tokens/cost) · `/chat/voice` (8, MediaRecorder +
+    SpeechRecognition, both feature-detected) · `/chat/branching` (9, a fork is
+    a real sibling thread via `parent_thread_id`) · `/chat/scoped` (10) ·
+    `/chat/stage` (11, framed receipts) · `/chat/support` (12, answers only
+    from `/api/docs` and the drive's text files, and files a task when they do
+    not cover the question).
+    **The rule every one of them follows: if a block decoration has no real
+    backing, it is removed, not faked.** No tool-calling layer exists, so no
+    tool trace is drawn; no votes table exists, so no thumbs are shown.
   - `/activity` (ReUI `timeline-5`), `/notifications`,
     `/settings/{preferences,notifications,webhooks,advanced}` (ReUI `settings-3`).
   - `/docs` + `/playbook` — documentation using the Shiki-backed ReUI CodeBlock.
