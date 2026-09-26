@@ -1,7 +1,11 @@
 /**
  * Runnable self-check for the two hand-written stream parsers.
  *
+ *   pnpm run selfcheck        # runs every scripts/selfcheck*.mjs
  *   node scripts/selfcheck.mjs
+ *
+ * One file per subject, all matching `scripts/selfcheck*.mjs`, so two people
+ * can add checks without editing the same file.
  *
  * Both parsers split an SSE byte stream on frame boundaries and must survive a
  * chunk boundary landing mid-frame — the failure mode that only shows up under
