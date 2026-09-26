@@ -8,6 +8,7 @@
 
 import { guardianChat } from "./chat";
 import { GUARDIAN_TASKS } from "./config";
+import { GuardianConfigError } from "./errors";
 import type { GuardianMessage } from "./types";
 
 /** The instruction that shapes the suggestions. Edit here, not at the call site. */
@@ -64,6 +65,10 @@ export async function guardianFollowups(
       .filter((line) => line.length > 0 && line.length <= FOLLOWUPS_MAX_CHARS)
       .slice(0, FOLLOWUPS_COUNT);
   } catch (error) {
+    // "Best effort" means tolerant of the ROUTER, not of our own config. A
+    // GuardianConfigError is permanent, and swallowing it here would render a
+    // misconfigured Worker as "no suggestions today" forever.
+    if (error instanceof GuardianConfigError) throw error;
     console.error("guardianFollowups error:", error);
     return [];
   }

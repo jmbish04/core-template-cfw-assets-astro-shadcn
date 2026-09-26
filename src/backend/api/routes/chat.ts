@@ -29,6 +29,8 @@ import {
   GUARDIAN_TASKS,
   GuardianConfigError,
   GuardianError,
+  ROUTING_PROFILE_NAMES,
+  resolveProfile,
   guardianChat,
   guardianStream,
   guardianStreamMeta,
@@ -57,9 +59,15 @@ const chatBody = z
      * shared system prompt.
      */
     systemPrompt: z.string().max(4000).optional(),
-    /** Routing hints passed straight through to core-guardian. */
-    importance: z.enum(["low", "medium", "high"]).optional(),
-    complexity: z.enum(["low", "medium", "high"]).optional(),
+    /**
+     * Which routing profile to run this turn under.
+     *
+     * A closed set of names, NOT raw routing dials: the server owns the
+     * mapping (see `resolveProfile`), so an unauthenticated caller cannot
+     * invent hint combinations the router was never designed for, and the
+     * profile definition lives in one place rather than in every client.
+     */
+    profile: z.enum(ROUTING_PROFILE_NAMES).optional(),
   })
   .openapi("ChatBody");
 
@@ -207,8 +215,8 @@ chatRouter.openapi(
     },
   }),
   async (c) => {
-    const { threadId: bodyThreadId, message, systemPrompt, importance, complexity } =
-      c.req.valid("json");
+    const { threadId: bodyThreadId, message, systemPrompt, profile } = c.req.valid("json");
+    const routing = resolveProfile(profile);
 
     const { db, threadId, needsTitle, messages } = await openTurn(
       c.env,
@@ -221,8 +229,7 @@ chatRouter.openapi(
     try {
       result = await guardianChat(c.env, {
         task: GUARDIAN_TASKS.chatReply,
-        importance: importance ?? "low",
-        complexity,
+        ...routing,
         messages,
       });
     } catch (err) {
@@ -278,7 +285,8 @@ chatRouter.openAPIRegistry.registerPath({
 chatRouter.post("/stream", async (c) => {
   const parsed = chatBody.safeParse(await c.req.json().catch(() => ({})));
   if (!parsed.success) return c.json({ error: "Invalid chat request body." }, 400);
-  const { threadId: bodyThreadId, message, systemPrompt, importance, complexity } = parsed.data;
+  const { threadId: bodyThreadId, message, systemPrompt, profile } = parsed.data;
+  const routing = resolveProfile(profile);
 
   const { db, threadId, needsTitle, messages } = await openTurn(
     c.env,
@@ -347,8 +355,7 @@ chatRouter.post("/stream", async (c) => {
     try {
       const upstream = await guardianStream(c.env, {
         task: GUARDIAN_TASKS.chatReply,
-        importance: importance ?? "low",
-        complexity,
+        ...routing,
         messages,
       });
 

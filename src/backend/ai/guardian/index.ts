@@ -33,10 +33,14 @@
 export {
   GUARDIAN_DEFAULTS,
   GUARDIAN_TASKS,
+  ROUTING_PROFILES,
+  ROUTING_PROFILE_NAMES,
   buildRunPayload,
   guardianProject,
+  resolveProfile,
   type GuardianRunPayload,
   type GuardianTask,
+  type RoutingProfile,
 } from "./config";
 export { GuardianConfigError, GuardianError } from "./errors";
 export { guardianRpc, runGuardian } from "./rpc";

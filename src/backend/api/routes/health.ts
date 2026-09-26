@@ -65,7 +65,11 @@ class HealthCoordinator {
   async runAllChecks(trigger: "manual" | "scheduled" | "agent") {
     const start = Date.now();
 
-    const checks = await Promise.all([this.checkD1(), this.checkCoreGuardian()]);
+    const checks = await Promise.all([
+      this.checkD1(),
+      this.checkGuardianProject(),
+      this.checkCoreGuardian(),
+    ]);
 
     const durationMs = Date.now() - start;
     const status = aggregateStatus(checks);
@@ -131,24 +135,48 @@ class HealthCoordinator {
    * the Worker now, so a throw here must degrade the verdict — not just get
    * logged (an instrument that always reports "ok" isn't reporting).
    */
-  private async checkCoreGuardian(): Promise<CheckResult> {
+  /**
+   * Which ledger this Worker bills to.
+   *
+   * A misconfigured project name is not a crash — every call still succeeds,
+   * against someone else's account — so it has to be something a check SAYS,
+   * or nothing would ever notice. Its own check rather than a clause inside
+   * the binding probe, so a Worker with both problems reports both.
+   */
+  private async checkGuardianProject(): Promise<CheckResult> {
     const start = Date.now();
-
-    // Which ledger this Worker bills to. A misconfigured project name is not a
-    // crash — every call still succeeds, against someone else's account — so
-    // it has to be something the health check SAYS, or nothing would ever
-    // notice. An unset var fails the verdict rather than being omitted.
-    let project: string;
     try {
-      project = guardianProject(this.env);
+      const project = guardianProject(this.env);
+      return {
+        category: "ai",
+        name: "guardian_project",
+        status: "ok",
+        message: `Billing and routing decisions are attributed to "${project}"`,
+        details: { project },
+        durationMs: Date.now() - start,
+      };
     } catch (error) {
       return {
         category: "ai",
-        name: "core_guardian_binding",
+        name: "guardian_project",
         status: "fail",
         message: error instanceof Error ? error.message : "GUARDIAN_PROJECT is not configured",
         durationMs: Date.now() - start,
       };
+    }
+  }
+
+  private async checkCoreGuardian(): Promise<CheckResult> {
+    const start = Date.now();
+
+    // Reported, not gated: the binding probe below runs whether or not the
+    // project is configured, because they are independent failures and
+    // collapsing them would hide one behind the other.
+    let project: string | null;
+    try {
+      project = guardianProject(this.env);
+    } catch {
+      project = null;
     }
 
     try {
@@ -169,7 +197,9 @@ class HealthCoordinator {
         category: "ai",
         name: "core_guardian_binding",
         status: "ok",
-        message: `core-guardian reachable via CORE_GUARDIAN.useCases(); billing project "${project}"`,
+        message: project
+          ? `core-guardian reachable via CORE_GUARDIAN.useCases(); billing project "${project}"`
+          : "core-guardian reachable via CORE_GUARDIAN.useCases(); billing project NOT CONFIGURED",
         details: { project, ...(count !== undefined ? { useCaseCount: count } : {}) },
         durationMs: Date.now() - start,
       };

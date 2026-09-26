@@ -18,7 +18,7 @@
  */
 
 import { GuardianConfigError } from "./errors";
-import type { GuardianRunOptions } from "./types";
+import type { GuardianEffort, GuardianRunOptions } from "./types";
 
 /**
  * Defaults applied to every run a caller does not override.
@@ -51,6 +51,45 @@ export const GUARDIAN_TASKS = {
 } as const;
 
 export type GuardianTask = (typeof GUARDIAN_TASKS)[keyof typeof GUARDIAN_TASKS];
+
+/**
+ * The routing profiles a REQUEST may ask for.
+ *
+ * The chat surfaces show this as a picker. The server owns the mapping
+ * deliberately: a closed set of three names is a far smaller thing to accept
+ * from an unauthenticated caller than two free routing dials, and it keeps the
+ * profile definition in one place instead of duplicated in the client.
+ *
+ * core-guardian still chooses the provider and model itself — these are hints,
+ * not a model name, which is why there is no model list anywhere in this repo.
+ */
+export const ROUTING_PROFILES = {
+  fast: { importance: "low", complexity: "low" },
+  balanced: { importance: "medium", complexity: "medium" },
+  deep: { importance: "high", complexity: "high" },
+} as const satisfies Record<string, { importance: GuardianEffort; complexity: GuardianEffort }>;
+
+export type RoutingProfile = keyof typeof ROUTING_PROFILES;
+
+/** Every profile name, for a zod enum at a route boundary. */
+export const ROUTING_PROFILE_NAMES = Object.keys(ROUTING_PROFILES) as [RoutingProfile, ...RoutingProfile[]];
+
+/**
+ * Turn a profile name into the routing hints the router understands.
+ *
+ * @param profile A profile name, or undefined for the defaults.
+ * @returns The importance/complexity pair to send.
+ * @example
+ * const hints = resolveProfile("deep"); // { importance: "high", complexity: "high" }
+ */
+export function resolveProfile(
+  profile: RoutingProfile | undefined,
+): { importance: GuardianEffort; complexity?: GuardianEffort } {
+  if (!profile) {
+    return { importance: GUARDIAN_DEFAULTS.importance, complexity: GUARDIAN_DEFAULTS.complexity };
+  }
+  return ROUTING_PROFILES[profile];
+}
 
 /**
  * The project core-guardian attributes this Worker's spend and decisions to.
@@ -108,14 +147,18 @@ export function buildRunPayload(
   stream = false,
 ): GuardianRunPayload {
   const { messages, task, useCase, importance, complexity } = options;
+
+  // Hoisted rather than written inline. `a ?? b ? c : d` parses as
+  // `(a ?? b) ? c : d`, which is what is wanted here but reads like the
+  // opposite — and this is the one function every model call passes through.
+  const resolvedComplexity = complexity ?? GUARDIAN_DEFAULTS.complexity;
+
   return {
     project: guardianProject(env),
     importance: importance ?? GUARDIAN_DEFAULTS.importance,
     use_case: useCase ?? GUARDIAN_DEFAULTS.useCase,
     ...(task ? { task } : {}),
-    ...(complexity ?? GUARDIAN_DEFAULTS.complexity
-      ? { complexity: (complexity ?? GUARDIAN_DEFAULTS.complexity) as string }
-      : {}),
+    ...(resolvedComplexity ? { complexity: resolvedComplexity } : {}),
     ...(stream ? { stream: true as const } : {}),
     input: { messages },
   };

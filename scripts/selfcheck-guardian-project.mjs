@@ -28,12 +28,34 @@ const CONFIG = `{
   "main": "dist/_worker.js/index.js",
   /* A block comment.
      "name": "ALSO_NOT_THE_WORKER" */
+  // An inactive example, in the style wrangler.jsonc already uses to document
+  // config it is not using. The block lookup must not match THIS one.
+  //   "vars": { "EXAMPLE": "value" }
   "vars": {
     // Keep this note.
     "INBOX_FORWARD_TO": "",
     "DOCS": "https://example.com//double-slash",
   },
 }`;
+
+/**
+ * Re-parse a result the way the script itself does, so an assertion cannot
+ * pass on output that no longer loads. Writing the var into a COMMENT satisfies
+ * a naive `includes()` check while leaving a file wrangler cannot read.
+ *
+ * @param {string} text The rewritten config.
+ * @returns {object} The parsed config.
+ */
+function reparse(text) {
+  // Same transformation the script applies before JSON.parse: blank out
+  // comments (length-preserving is irrelevant here) and drop trailing commas.
+  const stripped = text
+    .replace(/"(?:[^"\\]|\\.)*"|\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, (m) =>
+      m.startsWith('"') ? m : "",
+    )
+    .replace(/,(\s*[}\]])/g, "$1");
+  return JSON.parse(stripped);
+}
 
 // --- 1. inserts the var, and leaves everything else alone --------------------
 {
@@ -66,6 +88,23 @@ const CONFIG = `{
   assert.ok(
     first.text.includes('"INBOX_FORWARD_TO": ""'),
     "other vars are untouched",
+  );
+
+  // The assertion that makes the decoy case able to fail at all: the var has to
+  // be LIVE CONFIG, not text that merely appears somewhere in the file. Writing
+  // it into the commented-out example block would satisfy every `includes()`
+  // above while leaving a file wrangler cannot parse and a var never set.
+  const parsed = reparse(first.text);
+  assert.equal(
+    parsed.vars.GUARDIAN_PROJECT,
+    "my-worker",
+    "the var must land in the REAL vars block, not in a commented-out example",
+  );
+  assert.equal(parsed.vars.INBOX_FORWARD_TO, "", "the real block keeps its other entries");
+  assert.equal(parsed.name, "my-worker", "the rest of the config still parses");
+  assert.ok(
+    first.text.includes('//   "vars": { "EXAMPLE": "value" }'),
+    "the decoy example comment is preserved verbatim",
   );
 
   // --- 2. idempotent ---------------------------------------------------------

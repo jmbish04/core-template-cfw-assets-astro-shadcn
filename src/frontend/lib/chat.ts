@@ -77,11 +77,10 @@ export const ROUTING_PROFILES: Array<{ value: RoutingProfile; label: string; des
   { value: "deep", label: "Deep", description: "Strongest model in budget. Slower, for hard problems." },
 ];
 
-function routingBody(profile: RoutingProfile) {
-  if (profile === "fast") return { importance: "low" as const, complexity: "low" as const };
-  if (profile === "deep") return { importance: "high" as const, complexity: "high" as const };
-  return { importance: "medium" as const, complexity: "medium" as const };
-}
+// The client sends the PROFILE NAME, not routing dials. The server owns the
+// mapping (`resolveProfile` in backend/ai/guardian/config.ts), so the two
+// cannot drift and an open endpoint accepts a closed set of three names
+// instead of two free-form knobs.
 
 // ---------------------------------------------------------------------------
 // Thread index
@@ -168,7 +167,7 @@ export async function streamChat(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       signal,
-      body: JSON.stringify({ threadId, message, systemPrompt, ...routingBody(profile) }),
+      body: JSON.stringify({ threadId, message, systemPrompt, profile }),
     });
   } catch (err) {
     if ((err as Error)?.name === "AbortError") return;

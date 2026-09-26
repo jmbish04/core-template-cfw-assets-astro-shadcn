@@ -7,6 +7,7 @@
 
 import { guardianChat } from "./chat";
 import { GUARDIAN_TASKS } from "./config";
+import { GuardianConfigError } from "./errors";
 
 /** The instruction that shapes a title. Edit here, not at the call site. */
 const TITLE_SYSTEM_PROMPT =
@@ -45,6 +46,9 @@ export async function guardianTitle(env: Env, firstUserMessage: string): Promise
     const title = text.replace(/^["'\s]+|["'\s]+$/g, "").slice(0, TITLE_MAX_CHARS);
     return title || null;
   } catch (error) {
+    // As in `followups.ts`: a permanent misconfiguration is not the kind of
+    // failure "best effort" is meant to absorb.
+    if (error instanceof GuardianConfigError) throw error;
     console.error("guardianTitle error:", error);
     return null;
   }

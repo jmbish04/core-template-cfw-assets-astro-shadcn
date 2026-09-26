@@ -27,87 +27,114 @@ const CONFIG = join(ROOT, "wrangler.jsonc");
 const VAR = "GUARDIAN_PROJECT";
 
 /**
- * Strip JSONC comments so the result can go through `JSON.parse`.
+ * Blank out every JSONC comment, keeping the text the SAME LENGTH.
  *
- * String-aware on purpose: wrangler.jsonc contains `https://` URLs inside its
+ * Length-preserving on purpose: the caller locates the `vars` block by index
+ * in this masked copy and then splices into the ORIGINAL, so the two have to
+ * line up character for character.
+ *
+ * String-aware, because wrangler.jsonc contains `https://` URLs inside its
  * comments and could contain them inside values, and a naive `//` sweep would
  * truncate the file at the first one.
  *
  * @param {string} text Raw JSONC.
- * @returns {string} The same text with comments and trailing commas removed.
+ * @returns {string} The same text, same length, with comment bodies spaced out.
  */
-function stripJsonc(text) {
-  let out = "";
+function maskComments(text) {
+  const out = Array.from(text);
   let inString = false;
   let inLine = false;
   let inBlock = false;
+
+  /** Replace a character with a space, but never a newline — line numbers matter. */
+  const blank = (i) => {
+    if (out[i] !== "\n") out[i] = " ";
+  };
 
   for (let i = 0; i < text.length; i += 1) {
     const ch = text[i];
     const next = text[i + 1];
 
     if (inLine) {
-      if (ch === "\n") {
-        inLine = false;
-        out += ch;
-      }
+      if (ch === "\n") inLine = false;
+      else blank(i);
       continue;
     }
     if (inBlock) {
       if (ch === "*" && next === "/") {
-        inBlock = false;
+        blank(i);
+        blank(i + 1);
         i += 1;
+        inBlock = false;
+      } else {
+        blank(i);
       }
       continue;
     }
     if (inString) {
-      out += ch;
-      if (ch === "\\") {
-        out += text[i + 1] ?? "";
-        i += 1;
-      } else if (ch === '"') {
-        inString = false;
-      }
+      if (ch === "\\") i += 1;
+      else if (ch === '"') inString = false;
       continue;
     }
     if (ch === '"') {
       inString = true;
-      out += ch;
       continue;
     }
     if (ch === "/" && next === "/") {
       inLine = true;
+      blank(i);
+      blank(i + 1);
       i += 1;
       continue;
     }
     if (ch === "/" && next === "*") {
       inBlock = true;
+      blank(i);
+      blank(i + 1);
       i += 1;
       continue;
     }
-    out += ch;
   }
 
+  return out.join("");
+}
+
+/**
+ * Strip JSONC down to something `JSON.parse` accepts.
+ *
+ * @param {string} text Raw JSONC.
+ * @returns {string} Parseable JSON.
+ */
+function stripJsonc(text) {
   // Trailing commas are legal in JSONC and not in JSON.
-  return out.replace(/,(\s*[}\]])/g, "$1");
+  return maskComments(text).replace(/,(\s*[}\]])/g, "$1");
 }
 
 /**
  * Locate the body of a top-level object key, by brace matching.
  *
+ * Searches the COMMENT-MASKED copy, not the raw text. A commented-out example
+ * block — the style wrangler.jsonc already uses to document config it is not
+ * using — would otherwise be matched first, and the caller would splice the
+ * var into the middle of a comment, leaving a file that no longer parses and a
+ * var that was never set. Masking also keeps braces inside comments from
+ * throwing off the depth count.
+ *
  * @param {string} text Raw JSONC.
  * @param {string} key The key whose object body to find, e.g. "vars".
- * @returns {{open: number, close: number} | null} Indices of the `{` and its `}`.
+ * @returns {{open: number, close: number} | null} Indices of the `{` and its `}`,
+ *   valid against the ORIGINAL text.
  */
 function findObjectBody(text, key) {
-  const opener = new RegExp(`"${key}"\\s*:\\s*\\{`).exec(text);
+  const masked = maskComments(text);
+  const opener = new RegExp(`"${key}"\\s*:\\s*\\{`).exec(masked);
   if (!opener) return null;
   const open = opener.index + opener[0].length - 1;
 
   let depth = 0;
   let inString = false;
-  for (let i = open; i < text.length; i += 1) {
-    const ch = text[i];
+  for (let i = open; i < masked.length; i += 1) {
+    const ch = masked[i];
     if (inString) {
       if (ch === "\\") i += 1;
       else if (ch === '"') inString = false;
@@ -143,7 +170,13 @@ export function applyGuardianProject(text) {
   }
 
   const body = text.slice(vars.open, vars.close + 1);
-  const existing = new RegExp(`("${VAR}"\\s*:\\s*)"((?:[^"\\\\]|\\\\.)*)"`).exec(body);
+  // Matched against the masked body for the same reason as the block lookup: a
+  // commented-out GUARDIAN_PROJECT must not be mistaken for the live one.
+  const maskedBody = maskComments(text).slice(vars.open, vars.close + 1);
+  const pattern = new RegExp(`("${VAR}"\\s*:\\s*)"((?:[^"\\\\]|\\\\.)*)"`);
+  const masked = pattern.exec(maskedBody);
+  const existing = masked ? pattern.exec(body.slice(masked.index)) : null;
+  if (existing) existing.index += masked.index;
 
   if (existing) {
     const previous = existing[2];

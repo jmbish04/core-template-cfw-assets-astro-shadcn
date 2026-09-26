@@ -93,6 +93,45 @@ const titleBody = z
 
 const titleResponse = z.object({ title: z.string() });
 
+
+/**
+ * Check that a thread may be used as a fork parent.
+ *
+ * `parent_thread_id` is deliberately not a foreign key (deleting a root must
+ * not cascade away independent branches), so nothing in the database stops a
+ * dangling or circular parent — this is the guard.
+ *
+ * Two rules, both of which the branching surface depends on:
+ *  - the parent must exist, or the branch groups under a root that is in no
+ *    thread list and the branch appears in no fork rail;
+ *  - the parent must itself be a root, because `forkRootId` walks exactly one
+ *    hop; a branch of a branch would report the wrong root.
+ *
+ * @param env The Worker environment.
+ * @param parentThreadId The proposed parent.
+ * @param selfId The thread being written, when it already exists.
+ * @returns null when the parent is usable, otherwise a message to return.
+ */
+async function rejectBadParent(
+  env: Env,
+  parentThreadId: string,
+  selfId?: string,
+): Promise<string | null> {
+  if (selfId && parentThreadId === selfId) return "A thread cannot be its own parent.";
+
+  const [parent] = await getDb(env)
+    .select({ id: chatThreads.id, parentThreadId: chatThreads.parentThreadId })
+    .from(chatThreads)
+    .where(eq(chatThreads.id, parentThreadId))
+    .limit(1);
+
+  if (!parent) return "Parent thread not found.";
+  if (parent.parentThreadId) {
+    return "A thread can only branch from a root thread, not from another branch.";
+  }
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
@@ -147,11 +186,24 @@ threadsRouter.openapi(
         description: "Created thread.",
         content: { "application/json": { schema: selectChatThreadSchema } },
       },
+      400: {
+        description:
+          "The parentThreadId does not exist, is this thread, or is itself a branch. " +
+          "Rejected rather than written, because a dangling parent puts the branch in no " +
+          "fork rail and nothing in the schema would catch it later.",
+        content: { "application/json": { schema: notFoundSchema } },
+      },
     },
   }),
   async (c) => {
     const body = c.req.valid("json");
     const db = getDb(c.env);
+
+    if (body.parentThreadId) {
+      const rejection = await rejectBadParent(c.env, body.parentThreadId);
+      if (rejection) return c.json({ error: rejection }, 400);
+    }
+
     const now = new Date();
     const [row] = await db
       .insert(chatThreads)
@@ -361,6 +413,13 @@ threadsRouter.openapi(
         description: "Updated thread.",
         content: { "application/json": { schema: selectChatThreadSchema } },
       },
+      400: {
+        description:
+          "The parentThreadId does not exist, is this thread, or is itself a branch. " +
+          "Rejected rather than written, because a dangling parent puts the branch in no " +
+          "fork rail and nothing in the schema would catch it later.",
+        content: { "application/json": { schema: notFoundSchema } },
+      },
       404: {
         description: "Not found.",
         content: { "application/json": { schema: notFoundSchema } },
@@ -371,6 +430,11 @@ threadsRouter.openapi(
     const { id } = c.req.valid("param");
     const body = c.req.valid("json");
     const db = getDb(c.env);
+
+    if (body.parentThreadId) {
+      const rejection = await rejectBadParent(c.env, body.parentThreadId, id);
+      if (rejection) return c.json({ error: rejection }, 400);
+    }
 
     const patch: Record<string, unknown> = { updatedAt: new Date() };
     // A deliberate rename settles the title, so the next turn does not
