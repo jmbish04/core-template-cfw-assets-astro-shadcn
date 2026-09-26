@@ -80,7 +80,6 @@ import {
   totalOverdue,
   totalTasks,
   type TaskRecord,
-  type TaskRow,
 } from "./task-tree";
 
 type TableDensity = "compact" | "comfortable";

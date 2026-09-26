@@ -36,7 +36,6 @@ import {
   formatCount,
   getFolderPath,
   type DriveRow,
-  type FileKind,
 } from "@/components/blocks/solution-files-1/components/data";
 import { DriveEmptyState } from "@/components/blocks/solution-files-1/components/empty-state";
 import { FileCardGrid } from "@/components/blocks/solution-files-1/components/file-card-grid";

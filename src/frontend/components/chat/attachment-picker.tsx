@@ -29,7 +29,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
-import { FileIcon, PaperclipIcon, XIcon } from "lucide-react";
+import { CheckIcon, FileIcon, PaperclipIcon, XIcon } from "lucide-react";
 
 export interface DriveFile {
   id: string;
@@ -121,24 +121,35 @@ export function AttachmentPicker({ attached, onAttach, onDetach }: AttachmentPic
               No files matched. Upload one on the Files page first.
             </p>
           ) : (
-            results.map((file) => (
-              <Button
-                key={file.id}
-                variant="ghost"
-                onClick={() => {
-                  onAttach(file);
-                  setOpen(false);
-                }}
-                disabled={attached.some((entry) => entry.id === file.id)}
-                className="[&_svg]:text-muted-foreground h-8 w-full justify-start gap-2 px-2 font-normal [&_svg]:size-3.5"
-              >
-                <FileIcon aria-hidden="true" />
-                <span className="min-w-0 flex-1 truncate text-start">{file.name}</span>
-                <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-                  {humanSize(file.size)}
-                </span>
-              </Button>
-            ))
+            results.map((file) => {
+              // An attached row TOGGLES rather than sitting disabled: a dead
+              // row with no explanation is a dead end, and the only other way
+              // to detach is the chip, which is not visible from in here.
+              const isAttached = attached.some((entry) => entry.id === file.id);
+              return (
+                <Button
+                  key={file.id}
+                  variant="ghost"
+                  aria-pressed={isAttached}
+                  aria-label={isAttached ? `Detach ${file.name}` : `Attach ${file.name}`}
+                  onClick={() => {
+                    if (isAttached) {
+                      onDetach(file.id);
+                      return;
+                    }
+                    onAttach(file);
+                    setOpen(false);
+                  }}
+                  className="[&_svg]:text-muted-foreground h-8 w-full justify-start gap-2 px-2 font-normal [&_svg]:size-3.5"
+                >
+                  {isAttached ? <CheckIcon aria-hidden="true" /> : <FileIcon aria-hidden="true" />}
+                  <span className="min-w-0 flex-1 truncate text-start">{file.name}</span>
+                  <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
+                    {humanSize(file.size)}
+                  </span>
+                </Button>
+              );
+            })
           )}
         </div>
       </PopoverContent>
