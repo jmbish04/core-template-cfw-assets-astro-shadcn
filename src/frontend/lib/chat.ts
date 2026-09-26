@@ -371,7 +371,9 @@ export function useChatThread(options: UseChatThreadOptions = {}): UseChatThread
           onDone: (message, meta) => {
             setLatencyMs(meta.latencyMs);
             if (meta.usage) setUsage(meta.usage);
-            setMessages((prev) => [...prev.filter((m) => m.id !== optimistic.id), { ...optimistic, threadId: message.threadId }, message]);
+            // Paint the reply immediately; the reconcile below makes D1
+            // authoritative once the stream is closed.
+            setMessages((prev) => [...prev, message]);
             setPending("");
           },
           onError: (message) => setError(message),
@@ -381,6 +383,22 @@ export function useChatThread(options: UseChatThreadOptions = {}): UseChatThread
       abortRef.current = null;
       setStreaming(false);
       setPending("");
+
+      // Reconcile against D1 rather than splicing the optimistic turn back in.
+      // On a thread's FIRST message the server invents the id, and adopting it
+      // re-runs the load effect mid-stream — which already brings back the
+      // persisted user row. Splicing on top of that rendered the user's
+      // message twice. The server is the only thing that knows what was
+      // actually stored, so ask it.
+      const settledId = createdId ?? threadId;
+      if (settledId) {
+        try {
+          setMessages(await listMessages(settledId));
+        } catch {
+          // The turn itself succeeded; a failed re-read is not worth an error
+          // banner, and the optimistic view is still correct.
+        }
+      }
     },
     [onThreadCreated, onTitle, profile, streaming, systemPrompt, threadId],
   );
