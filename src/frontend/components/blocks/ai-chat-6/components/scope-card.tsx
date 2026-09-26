@@ -8,8 +8,8 @@
  * from `/chat/sources` and the drive `AttachmentPicker`.
  */
 import { AttachmentChips, AttachmentPicker, type DriveFile } from "@/components/chat";
-import { SourceStrip } from "@/components/blocks/ai-chat-5/components/source-strip";
-import type { LoadedSource, SourceId } from "@/components/blocks/ai-chat-5/components/workspace-sources";
+import { SourceStrip } from "@/components/chat/source-strip";
+import type { LoadedSource, SourceId } from "@/components/chat/workspace-sources";
 
 export interface ScopeCardProps {
   loaded: LoadedSource[];

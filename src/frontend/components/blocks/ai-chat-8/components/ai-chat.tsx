@@ -25,6 +25,7 @@ import {
   ChatComposer,
   ChatErrorBanner,
   ThreadList,
+  Transcript,
   useBelow,
   useThreadSession,
   useThreads,
@@ -37,7 +38,7 @@ import { useChatThread } from "@/lib/chat";
 import { cn } from "@/lib/utils";
 import { MicIcon, MinimizeIcon, MaximizeIcon, SquareIcon } from "lucide-react";
 
-import { AnswerThread } from "./answer-thread";
+import { StructuredAnswer } from "./structured-answer";
 import { SHAPE_SYSTEM_PROMPT } from "./answer-shape";
 import { VoiceTakeCard } from "./voice-take";
 import { useVoice, type VoiceTake } from "./use-voice";
@@ -76,8 +77,20 @@ function Session({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <AnswerThread
-        chat={chat}
+      <Transcript
+        messages={chat.messages}
+        pending={chat.pending}
+        reasoning={chat.reasoning}
+        routed={chat.routed}
+        latencyMs={chat.latencyMs}
+        usage={chat.usage}
+        streaming={chat.streaming}
+        loading={chat.loading}
+        onStop={chat.stop}
+        // This surface's answers are not markdown: the model may return a
+        // fenced JSON shape, so the body goes through StructuredAnswer, which
+        // degrades to prose while the fence is still half-written.
+        renderBody={(content) => <StructuredAnswer text={content} />}
         contentClassName={wide ? "max-w-none" : "max-w-3xl"}
         empty={
           <Empty className="m-auto">

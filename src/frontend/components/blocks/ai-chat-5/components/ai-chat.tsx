@@ -27,9 +27,9 @@ import { PlusIcon } from "lucide-react";
 import { MODES, modePrompt, type ModeId } from "./job-modes";
 import { ModeChips } from "./mode-chips";
 import { SourceReceiptPanel } from "./source-receipt";
-import { SourceStrip } from "./source-strip";
-import { useScope } from "./use-scope";
-import { describeRead, type SourceReceipt } from "./workspace-sources";
+import { SourceStrip } from "@/components/chat/source-strip";
+import { useScope } from "@/components/chat/use-scope";
+import { describeRead, type SourceReceipt } from "@/components/chat/workspace-sources";
 
 /** Opens with the three collections a project dashboard is mostly about. */
 const INITIAL_SCOPE = ["tasks", "projects", "notes"] as const;

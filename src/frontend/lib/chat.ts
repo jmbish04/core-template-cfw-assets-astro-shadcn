@@ -39,6 +39,8 @@ export interface ChatThread {
   id: string;
   title: string;
   model: string | null;
+  /** Thread this one was forked from, or null for a root. See /chat/branching. */
+  parentThreadId: string | null;
   archived: boolean;
   createdAt: Timestamp;
   updatedAt: Timestamp;

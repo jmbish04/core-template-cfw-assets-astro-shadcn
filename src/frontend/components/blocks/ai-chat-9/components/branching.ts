@@ -12,13 +12,12 @@
  * any other. The rail lists the threads in the fork group, which is why a
  * branch survives a refresh, a new tab and another device.
  *
- * TWO THINGS CARRY THE FORK, both of them columns that already exist:
+ * TWO THINGS CARRY THE FORK:
  *
- * 1. `chat_threads.model` holds `fork:<rootThreadId>`. That column is legacy
- *    free text — core-guardian picks the provider and model per request, so
- *    nothing reads it and nothing writes it except this. Adding a real
- *    `parent_thread_id` column would be the better shape; it needs a migration
- *    in `src/backend`, which this surface does not own.
+ * 1. `chat_threads.parent_thread_id` names the thread a branch came from, and
+ *    is null on a root. It is deliberately not a foreign key: deleting a root
+ *    must not cascade away the branches taken from it, which are independent
+ *    conversations.
  * 2. The forking turn's own user message carries the pre-fork transcript
  *    between two sentinel lines. It has to live in the message text because
  *    there is no endpoint that inserts a message into a thread — only
@@ -29,9 +28,6 @@
 import { apiSend, type ApiError } from "@/lib/api";
 import type { ChatMessage, ChatThread } from "@/lib/chat";
 import { toMs } from "@/lib/format";
-
-/** Marks a thread as a branch, and names the thread it forked from. */
-const FORK_PREFIX = "fork:";
 
 /** Opens the carried transcript inside a forking turn's user message. */
 const CONTEXT_OPEN = "[carried from the parent thread]";
@@ -53,9 +49,8 @@ const CONTEXT_BUDGET = 3000;
  * @param thread Any thread from `/api/threads`.
  * @returns The root thread's id — the thread's own id when it is not a branch.
  */
-export function forkRootId(thread: Pick<ChatThread, "id" | "model">): string {
-  const model = thread.model ?? "";
-  return model.startsWith(FORK_PREFIX) ? model.slice(FORK_PREFIX.length) : thread.id;
+export function forkRootId(thread: Pick<ChatThread, "id" | "parentThreadId">): string {
+  return thread.parentThreadId ?? thread.id;
 }
 
 /**
@@ -167,7 +162,7 @@ export function askBehind(messages: ChatMessage[], replyId: string): ChatMessage
  * const branch = await createBranchThread(forkRootId(thread), "Version 2");
  */
 export function createBranchThread(rootId: string, title: string): Promise<ChatThread> {
-  return apiSend<ChatThread>("POST", "threads", { title, model: `${FORK_PREFIX}${rootId}` });
+  return apiSend<ChatThread>("POST", "threads", { title, parentThreadId: rootId });
 }
 
 /** Re-exported so a caller can narrow a failed fork without a second import. */

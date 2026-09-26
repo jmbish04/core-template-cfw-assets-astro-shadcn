@@ -18,7 +18,7 @@
  */
 import { useState } from "react";
 
-import { useScope } from "@/components/blocks/ai-chat-5/components/use-scope";
+import { useScope } from "@/components/chat/use-scope";
 import {
   CanvasDocument,
   ChatErrorBanner,

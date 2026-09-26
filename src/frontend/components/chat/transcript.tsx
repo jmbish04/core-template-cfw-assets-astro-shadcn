@@ -166,11 +166,13 @@ function AssistantTurn({
   message,
   actions,
   receipt,
+  renderBody,
 }: {
   message: ChatMessage;
   actions?: ReactNode;
   /** Live-stream facts for the most recent turn only; not persisted in D1. */
   receipt?: ReactNode;
+  renderBody?: RenderBody;
 }) {
   return (
     <Message role="group" aria-label="Assistant" className="group/turn">
@@ -187,7 +189,7 @@ function AssistantTurn({
           <BubbleContent className="min-w-0">
             {/* The quote pill in /chat/sidebar looks for this attribute. */}
             <div data-answer-body>
-              <Markdown>{message.content}</Markdown>
+              {renderBody ? renderBody(message.content, false) : <Markdown>{message.content}</Markdown>}
             </div>
           </BubbleContent>
         </Bubble>
@@ -232,6 +234,20 @@ function UserTurn({ message }: { message: ChatMessage }) {
   );
 }
 
+/**
+ * Render an assistant reply's body.
+ *
+ * Exists so a surface whose answers are not plain markdown — a structured
+ * answer, a framed receipt, a code artifact — can reuse this transcript rather
+ * than copy its whole structure. `streaming` is true for the in-flight reply,
+ * so a parser can degrade to prose while the text is still half-written
+ * instead of blanking the bubble.
+ *
+ * @param content The reply text so far.
+ * @param streaming Whether this body is the turn still arriving.
+ */
+export type RenderBody = (content: string, streaming: boolean) => ReactNode;
+
 export interface TranscriptProps {
   messages: ChatMessage[];
   /** Text streaming in for the in-flight reply, or "" when idle. */
@@ -253,6 +269,8 @@ export interface TranscriptProps {
   replyActions?: (message: ChatMessage) => ReactNode;
   /** Shown instead of the turns when the thread is empty. */
   empty?: ReactNode;
+  /** Replace the markdown renderer for assistant bodies. */
+  renderBody?: RenderBody;
   className?: string;
   /** Classes for the scrolling column (width, padding). */
   contentClassName?: string;
@@ -276,6 +294,7 @@ export function Transcript({
   onStop,
   replyActions,
   empty,
+  renderBody,
   className,
   contentClassName,
 }: TranscriptProps) {
@@ -315,6 +334,7 @@ export function Transcript({
                   <UserTurn message={message} />
                 ) : (
                   <AssistantTurn
+                    renderBody={renderBody}
                     message={message}
                     actions={replyActions?.(message)}
                     receipt={
@@ -349,7 +369,7 @@ export function Transcript({
                       <Bubble variant="ghost" className="w-full min-w-0">
                         <BubbleContent className="min-w-0">
                           <div data-answer-body>
-                            <Markdown>{pending}</Markdown>
+                            {renderBody ? renderBody(pending, true) : <Markdown>{pending}</Markdown>}
                           </div>
                         </BubbleContent>
                       </Bubble>

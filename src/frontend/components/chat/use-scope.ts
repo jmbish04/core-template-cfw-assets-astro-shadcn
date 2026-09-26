@@ -15,7 +15,7 @@ import {
   sourceById,
   type LoadedSource,
   type SourceId,
-} from "./workspace-sources";
+} from "@/components/chat/workspace-sources";
 
 export interface Scope {
   /** Sources switched on, in strip order, with their fetch state. */

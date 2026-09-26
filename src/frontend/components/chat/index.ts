@@ -6,8 +6,13 @@
  * receipt), the routing-profile picker, the canvas document, the drive
  * attachment picker, the selection-to-quote pill and the error banner.
  *
- * Surfaces 1–4 are built on it; surfaces 5–12 import from it. These exports
- * are a contract — add to them, do not rename them.
+ * These exports are a contract — add to them, do not rename them.
+ *
+ * `workspace-sources` / `use-scope` / `source-strip` live here rather than in
+ * a block because two surfaces need them: /chat/sources scopes a question to
+ * the six real collections, and /chat/agentic scopes a run to the same ones.
+ * One copy of the fetchers means the receipt and the prompt cannot disagree
+ * about what was read.
  */
 
 export { AttachmentChips, AttachmentPicker, describeAttachments, type AttachmentPickerProps, type DriveFile } from "./attachment-picker";
@@ -24,6 +29,20 @@ export {
   Transcript,
   TurnReceipt,
   type ReasoningFoldProps,
+  type RenderBody,
   type TranscriptProps,
   type TurnReceiptProps,
 } from "./transcript";
+export { SourceStrip, type SourceStripProps } from "./source-strip";
+export { useScope, type Scope } from "./use-scope";
+export {
+  SOURCES,
+  buildSourceContext,
+  describeRead,
+  sourceById,
+  type LoadedSource,
+  type SourceId,
+  type SourceReceipt,
+  type SourceSummary,
+  type WorkspaceSource,
+} from "./workspace-sources";

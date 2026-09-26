@@ -12,8 +12,8 @@ import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
-import type { LoadedSource, SourceId } from "./workspace-sources";
-import { SOURCES } from "./workspace-sources";
+import type { LoadedSource, SourceId } from "@/components/chat/workspace-sources";
+import { SOURCES } from "@/components/chat/workspace-sources";
 
 /** Sizes the scope without repeating the six names the toggles already carry. */
 function scopeLine(loaded: LoadedSource[]): string {

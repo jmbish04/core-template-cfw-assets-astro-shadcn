@@ -11,7 +11,7 @@ import { CheckIcon, CircleSlashIcon, MinusIcon, TriangleAlertIcon } from "lucide
 import { Frame, FramePanel } from "@/components/reui/frame";
 import { Item, ItemContent, ItemMedia, ItemTitle } from "@/components/ui/item";
 
-import { sourceById, type SourceReceipt } from "./workspace-sources";
+import { sourceById, type SourceReceipt } from "@/components/chat/workspace-sources";
 
 function RowIcon({ state }: { state: SourceReceipt["state"] }) {
   if (state === "read") return <CheckIcon className="text-success size-4" aria-hidden="true" />;
