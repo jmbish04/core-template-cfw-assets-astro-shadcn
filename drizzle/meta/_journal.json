@@ -57,6 +57,13 @@
       "when": 1790424849242,
       "tag": "0007_abandoned_rafael_vega",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1790426510371,
+      "tag": "0008_gorgeous_angel",
+      "breakpoints": true
     }
   ]
 }

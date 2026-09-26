@@ -284,7 +284,11 @@ projectsRouter.openapi(
     if (!row) {
       return c.json({ error: "Project not found." }, 404);
     }
-    return c.json(row, 200);
+    // Same derivation as the read paths: returning the row as stored would
+    // hand the caller taskCount 0 for a project full of tasks, and a card
+    // rendered from this response would read as though they were deleted.
+    const counts = await taskCountsFor(db, [row.id]);
+    return c.json(withTaskCount(row, counts), 200);
   },
 );
 

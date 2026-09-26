@@ -108,12 +108,12 @@ async function openTurn(
 
   if (threadId) {
     const [existing] = await db
-      .select({ id: chatThreads.id, title: chatThreads.title })
+      .select({ id: chatThreads.id, titled: chatThreads.titled })
       .from(chatThreads)
       .where(eq(chatThreads.id, threadId))
       .limit(1);
     if (!existing) threadId = undefined;
-    else needsTitle = existing.title === PLACEHOLDER_TITLE;
+    else needsTitle = !existing.titled;
   }
 
   if (!threadId) {
@@ -152,7 +152,7 @@ async function titleNewThread(env: Env, threadId: string, firstUserMessage: stri
   if (!title) return null;
   await getDb(env)
     .update(chatThreads)
-    .set({ title, updatedAt: new Date() })
+    .set({ title, titled: true, updatedAt: new Date() })
     .where(eq(chatThreads.id, threadId));
   return title;
 }
@@ -273,92 +273,143 @@ chatRouter.post("/stream", async (c) => {
   );
 
   const encoder = new TextEncoder();
-  const send = (controller: ReadableStreamDefaultController, event: string, data: unknown) =>
-    controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+
+  /**
+   * Write one SSE frame, or report that the client has gone.
+   *
+   * A browser that aborts mid-reply (the Stop button, a navigation) leaves the
+   * controller closed, and `enqueue` then throws. Letting that throw escape
+   * took the whole `start()` down — including the writes that persist the turn
+   * — and, worse, the catch block's own error frame threw a second time. So
+   * this reports failure instead of throwing, and callers stop writing.
+   *
+   * @returns false once the client is no longer listening.
+   */
+  const send = (controller: ReadableStreamDefaultController, event: string, data: unknown): boolean => {
+    try {
+      controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  /** Close the controller, tolerating a client that already disconnected. */
+  const close = (controller: ReadableStreamDefaultController) => {
+    try {
+      controller.close();
+    } catch {
+      // Already closed by the disconnect. Nothing to do.
+    }
+  };
 
   const startedAt = Date.now();
 
+  // The controller is captured here rather than the work being done inside
+  // `start()`. When the browser disconnects the runtime cancels the stream and
+  // stops running its body, which is how an aborted reply used to be thrown
+  // away entirely: the tokens were generated and paid for, and nothing was
+  // written. Driving the turn from a promise handed to `waitUntil` instead
+  // means the persist finishes whether or not anyone is still reading.
+  let controller!: ReadableStreamDefaultController;
   const stream = new ReadableStream({
-    async start(controller) {
-      send(controller, "meta", { threadId });
-
-      let text = "";
-      let reasoning = "";
-      let usage: GuardianUsage | null = null;
-      let provider: string | null = null;
-      let model: string | null = null;
-
-      try {
-        const upstream = await guardianStream(c.env, {
-          task: "chat_reply",
-          useCase: "chat",
-          importance: importance ?? "low",
-          complexity,
-          messages,
-        });
-
-        // The router reports its decision in headers, before the first token,
-        // so the UI can name the real model while the answer is still coming.
-        const routed = guardianStreamMeta(upstream);
-        provider = routed.provider;
-        model = routed.model;
-        send(controller, "routed", { provider, model, requestUuid: routed.requestUuid });
-
-        for await (const event of readGuardianStream(upstream)) {
-          if (event.type === "delta") {
-            text += event.text;
-            send(controller, "delta", { text: event.text });
-          } else if (event.type === "reasoning") {
-            // Thinking is NOT the answer. It is streamed separately so a
-            // surface can fold it away, and never concatenated into `text`.
-            reasoning += event.text;
-            send(controller, "reasoning", { text: event.text });
-          } else {
-            usage = event.usage;
-            send(controller, "usage", event.usage);
-          }
-        }
-      } catch (err) {
-        const mapped = guardianErrorMessage(err);
-        send(controller, "error", { error: mapped.error, status: mapped.status });
-        controller.close();
-        return;
-      }
-
-      // An empty completion is a failure the UI must see, not an empty bubble.
-      // A reasoning model that spent every token thinking lands here too, so
-      // say which of the two happened rather than a generic failure.
-      if (!text.trim()) {
-        send(controller, "error", {
-          error: reasoning.trim()
-            ? "The model spent its whole reply reasoning and produced no answer. Try again."
-            : "The model returned an empty reply.",
-          status: 502,
-        });
-        controller.close();
-        return;
-      }
-
-      const [assistantRow] = await db
-        .insert(chatMessages)
-        .values({ threadId, role: "assistant", content: text, provider, model })
-        .returning();
-      await db.update(chatThreads).set({ updatedAt: new Date() }).where(eq(chatThreads.id, threadId));
-
-      if (needsTitle) {
-        const title = await titleNewThread(c.env, threadId, message);
-        if (title) send(controller, "title", { threadId, title });
-      }
-
-      send(controller, "done", {
-        threadId,
-        message: assistantRow,
-        latencyMs: Date.now() - startedAt,
-        usage,
-      });
-      controller.close();
+    start(c) {
+      controller = c;
     },
   });
+
+  const turn = (async () => {
+    send(controller, "meta", { threadId });
+
+    let text = "";
+    let reasoning = "";
+    let usage: GuardianUsage | null = null;
+    let provider: string | null = null;
+    let model: string | null = null;
+    /** Set once the reader has gone, so we stop generating rather than bill for nobody. */
+    let disconnected = false;
+
+    try {
+      const upstream = await guardianStream(c.env, {
+        task: "chat_reply",
+        useCase: "chat",
+        importance: importance ?? "low",
+        complexity,
+        messages,
+      });
+
+      // The router reports its decision in headers, before the first token,
+      // so the UI can name the real model while the answer is still coming.
+      const routed = guardianStreamMeta(upstream);
+      provider = routed.provider;
+      model = routed.model;
+      send(controller, "routed", { provider, model, requestUuid: routed.requestUuid });
+
+      for await (const event of readGuardianStream(upstream)) {
+        if (event.type === "delta") {
+          text += event.text;
+          // A closed controller means the reader is gone. Stop generating, and
+          // fall through to the persist below so the thread owns the tokens
+          // that were already produced.
+          if (!send(controller, "delta", { text: event.text })) {
+            disconnected = true;
+            break;
+          }
+        } else if (event.type === "reasoning") {
+          // Thinking is NOT the answer. It is streamed separately so a
+          // surface can fold it away, and never concatenated into `text`.
+          reasoning += event.text;
+          send(controller, "reasoning", { text: event.text });
+        } else {
+          usage = event.usage;
+          send(controller, "usage", event.usage);
+        }
+      }
+    } catch (err) {
+      const mapped = guardianErrorMessage(err);
+      send(controller, "error", { error: mapped.error, status: mapped.status });
+      close(controller);
+      return;
+    }
+
+    // An empty completion is a failure the UI must see, not an empty bubble.
+    // A reasoning model that spent every token thinking lands here too, so
+    // say which of the two happened rather than a generic failure.
+    if (!text.trim()) {
+      send(controller, "error", {
+        error: reasoning.trim()
+          ? "The model spent its whole reply reasoning and produced no answer. Try again."
+          : "The model returned an empty reply.",
+        status: 502,
+      });
+      close(controller);
+      return;
+    }
+
+    const [assistantRow] = await db
+      .insert(chatMessages)
+      .values({ threadId, role: "assistant", content: text, provider, model })
+      .returning();
+    await db.update(chatThreads).set({ updatedAt: new Date() }).where(eq(chatThreads.id, threadId));
+
+    // Titling costs a model call. Skip it for a reply nobody waited for; the
+    // next turn on this thread will title it, because `titled` is still false.
+    if (needsTitle && !disconnected) {
+      const title = await titleNewThread(c.env, threadId, message);
+      if (title) send(controller, "title", { threadId, title });
+    }
+
+    send(controller, "done", {
+      threadId,
+      message: assistantRow,
+      latencyMs: Date.now() - startedAt,
+      usage,
+    });
+    close(controller);
+  })();
+
+  // Survives the client hanging up, so the persist above always runs.
+  c.executionCtx.waitUntil(turn);
 
   return new Response(stream, {
     headers: {

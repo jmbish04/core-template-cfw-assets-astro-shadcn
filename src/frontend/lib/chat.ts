@@ -302,6 +302,16 @@ export function useChatThread(options: UseChatThreadOptions = {}): UseChatThread
   const [profile, setProfile] = useState<RoutingProfile>(options.profile ?? "balanced");
 
   const abortRef = useRef<AbortController | null>(null);
+  // The thread id as of RIGHT NOW, not as of the render that produced a
+  // callback. On a thread's first message the server invents the id mid-send,
+  // and a `stop` captured before that re-render would otherwise reconcile
+  // against `undefined` and wipe the transcript the user is looking at.
+  const threadIdRef = useRef(options.threadId);
+  // Mirrors the state exactly rather than remembering the last non-empty id:
+  // if a caller ever drives this hook onto a different thread without
+  // remounting, a stale id here would reconcile the WRONG conversation into
+  // view, where an empty one only makes `stop` a no-op.
+  threadIdRef.current = threadId;
 
   const reload = useCallback(async () => {
     if (!threadId) {
@@ -337,6 +347,12 @@ export function useChatThread(options: UseChatThreadOptions = {}): UseChatThread
       setStreaming(true);
       setPending("");
       setReasoning("");
+      // These describe ONE turn. Carrying them over meant the receipt on the
+      // last settled reply showed the previous turn's latency and tokens
+      // beside the new turn's model for as long as the new reply streamed.
+      setRouted(null);
+      setLatencyMs(null);
+      setUsage(null);
 
       const optimistic: ChatMessage = {
         id: `optimistic-${Date.now()}`,
@@ -360,6 +376,7 @@ export function useChatThread(options: UseChatThreadOptions = {}): UseChatThread
         {
           onMeta: (id) => {
             createdId = id;
+            threadIdRef.current = id;
             if (id !== threadId) {
               setThreadId(id);
               onThreadCreated?.(id);
@@ -409,10 +426,17 @@ export function useChatThread(options: UseChatThreadOptions = {}): UseChatThread
     abortRef.current?.abort();
     abortRef.current = null;
     setStreaming(false);
+    setPending("");
+
     // What the server already persisted is authoritative; re-read rather than
-    // keeping a half-streamed bubble that does not exist in D1.
-    void reload();
-  }, [reload]);
+    // keeping a half-streamed bubble. Read through the ref, because on a new
+    // thread the id arrived during this very send.
+    const id = threadIdRef.current;
+    if (!id) return;
+    void listMessages(id)
+      .then(setMessages)
+      .catch(() => setError("Could not reload this conversation."));
+  }, []);
 
   return {
     threadId,

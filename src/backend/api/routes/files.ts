@@ -40,12 +40,18 @@ const listQuery = z.object({
   q: z.string().optional(),
   /** `all` (default, folder-scoped) or `starred` (drive-wide). */
   scope: z.enum(["all", "starred"]).optional(),
+  limit: z.string().optional().openapi({ description: "Max rows (default 200, max 500)." }),
+  offset: z.string().optional().openapi({ description: "Skip rows for pagination (default 0)." }),
 });
 
 const listResponse = z.object({
   data: z.array(selectFileSchema),
   /** Root → current folder, for the breadcrumb. Empty at the root. */
   path: z.array(z.object({ id: z.string(), name: z.string() })),
+  /** Rows matching the filters, ignoring limit/offset. */
+  total: z.number(),
+  limit: z.number(),
+  offset: z.number(),
 });
 
 const treeResponse = z.object({ data: z.array(selectFileSchema) });
@@ -100,17 +106,37 @@ async function ancestorPath(env: Env, startParentId: string | null) {
   return path;
 }
 
+/**
+ * How many ids to put in one `IN (...)`.
+ *
+ * D1 caps the bound parameters a single statement may carry, and a folder can
+ * hold arbitrarily many children, so every id fan-out in this file is chunked
+ * — the R2 deletes already were, and the D1 statements beside them were not.
+ */
+const ID_CHUNK = 50;
+
+/** Split a list into `ID_CHUNK`-sized batches. */
+function chunk<T>(items: T[], size = ID_CHUNK): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
 /** Every descendant id of `rootId`, inclusive, breadth-first. */
 async function collectSubtree(env: Env, rootId: string): Promise<string[]> {
   const db = getDb(env);
   const all = [rootId];
   let frontier = [rootId];
   for (let depth = 0; frontier.length > 0 && depth < 64; depth += 1) {
-    const children = await db
-      .select({ id: files.id })
-      .from(files)
-      .where(inArray(files.parentId, frontier));
-    frontier = children.map((c) => c.id);
+    const next: string[] = [];
+    for (const batch of chunk(frontier)) {
+      const children = await db
+        .select({ id: files.id })
+        .from(files)
+        .where(inArray(files.parentId, batch));
+      next.push(...children.map((c) => c.id));
+    }
+    frontier = next;
     all.push(...frontier);
   }
   return all;
@@ -146,8 +172,14 @@ filesRouter.openapi(
     },
   }),
   async (c) => {
-    const { parentId, q, scope } = c.req.valid("query");
+    const { parentId, q, scope, limit: lStr, offset: oStr } = c.req.valid("query");
     const db = getDb(c.env);
+
+    // A one-character search across a grown drive would otherwise return the
+    // whole table in one response, and spend the D1 row-read budget to show
+    // the user a single screenful.
+    const limit = Math.min(parseInt(lStr ?? "200", 10) || 200, 500);
+    const offset = Math.max(parseInt(oStr ?? "0", 10) || 0, 0);
 
     // "Starred" and a text search are both DRIVE-WIDE views: scoping either to
     // the current folder would answer a question nobody asked — a starred file
@@ -159,16 +191,23 @@ filesRouter.openapi(
     if (!driveWide) filters.push(parentId ? eq(files.parentId, parentId) : isNull(files.parentId));
     if (scope === "starred") filters.push(eq(files.starred, true));
 
-    const rows = await db
-      .select()
-      .from(files)
-      .where(and(...filters))
-      // Folders before files, then alphabetical — the order the explorer expects.
-      .orderBy(sql`case when ${files.kind} = 'folder' then 0 else 1 end`, asc(files.name));
+    const where = filters.length > 0 ? and(...filters) : undefined;
+
+    const [rows, countResult] = await Promise.all([
+      db
+        .select()
+        .from(files)
+        .where(where)
+        // Folders before files, then alphabetical — the order the explorer expects.
+        .orderBy(sql`case when ${files.kind} = 'folder' then 0 else 1 end`, asc(files.name))
+        .limit(limit)
+        .offset(offset),
+      db.select({ count: sql<number>`count(*)` }).from(files).where(where),
+    ]);
 
     // A drive-wide result set has no single folder to breadcrumb.
     const path = driveWide ? [] : await ancestorPath(c.env, parentId ?? null);
-    return c.json({ data: rows, path }, 200);
+    return c.json({ data: rows, path, total: Number(countResult[0]?.count ?? 0), limit, offset }, 200);
   },
 );
 
@@ -324,14 +363,27 @@ filesRouter.openAPIRegistry.registerPath({
  *  multi-GB drop from pinning the Worker's memory. */
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
+const TOO_LARGE = `File is larger than the ${MAX_UPLOAD_BYTES / 1024 / 1024}MB limit.`;
+
 filesRouter.post("/upload", async (c) => {
+  // Reject on Content-Length BEFORE parsing. `c.req.formData()` buffers the
+  // whole body, so checking `part.size` afterwards is a check that has already
+  // lost: the memory this constant exists to protect is spent by then.
+  // Content-Length counts the multipart envelope too, so an upload just under
+  // the ceiling can still be refused here — the post-parse check below is what
+  // keeps the boundary exact, and this one is what keeps it cheap.
+  const declared = Number(c.req.header("content-length") ?? "0");
+  if (Number.isFinite(declared) && declared > MAX_UPLOAD_BYTES) {
+    return c.json({ error: TOO_LARGE }, 413);
+  }
+
   const form = await c.req.formData().catch(() => null);
   const part = form?.get("file");
   if (!form || !(part instanceof File)) {
     return c.json({ error: "Expected a multipart body with a `file` part." }, 400);
   }
   if (part.size > MAX_UPLOAD_BYTES) {
-    return c.json({ error: `File is larger than the ${MAX_UPLOAD_BYTES / 1024 / 1024}MB limit.` }, 413);
+    return c.json({ error: TOO_LARGE }, 413);
   }
 
   const parentIdRaw = form.get("parentId");
@@ -467,6 +519,20 @@ filesRouter.openapi(
     const body = c.req.valid("json");
     const db = getDb(c.env);
 
+    if (body.parentId) {
+      // Both other write paths check this; without it a move to a file's id or
+      // a stale id succeeds and strands the row where no listing can reach it.
+      const [parent] = await db
+        .select({ id: files.id, kind: files.kind })
+        .from(files)
+        .where(eq(files.id, body.parentId))
+        .limit(1);
+      if (!parent) return c.json({ error: "Destination folder not found." }, 404);
+      if (parent.kind !== "folder") {
+        return c.json({ error: "Entries can only be moved into a folder." }, 400);
+      }
+    }
+
     if (body.parentId !== undefined && (await wouldCycle(c.env, id, body.parentId))) {
       return c.json({ error: "A folder cannot be moved inside itself." }, 400);
     }
@@ -507,18 +573,24 @@ filesRouter.openapi(
     if (!row) return c.json({ error: "Entry not found." }, 404);
 
     const ids = await collectSubtree(c.env, id);
-    const objects = await db
-      .select({ r2Key: files.r2Key })
-      .from(files)
-      .where(and(inArray(files.id, ids), eq(files.kind, "file")));
 
-    const keys = objects.map((o) => o.r2Key).filter((k): k is string => Boolean(k));
+    const keys: string[] = [];
+    for (const batch of chunk(ids)) {
+      const objects = await db
+        .select({ r2Key: files.r2Key })
+        .from(files)
+        .where(and(inArray(files.id, batch), eq(files.kind, "file")));
+      for (const object of objects) if (object.r2Key) keys.push(object.r2Key);
+    }
+
     // R2 delete takes at most 1000 keys per call.
     for (let i = 0; i < keys.length; i += 1000) {
       await c.env.R2_FILES_BUCKET.delete(keys.slice(i, i + 1000));
     }
 
-    await db.delete(files).where(inArray(files.id, ids));
+    for (const batch of chunk(ids)) {
+      await db.delete(files).where(inArray(files.id, batch));
+    }
     return c.json({ ok: true, deleted: ids.length }, 200);
   },
 );

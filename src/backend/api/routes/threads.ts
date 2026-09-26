@@ -408,7 +408,12 @@ threadsRouter.openapi(
     const db = getDb(c.env);
 
     const patch: Record<string, unknown> = { updatedAt: new Date() };
-    if (body.title !== undefined) patch.title = body.title;
+    // A deliberate rename settles the title, so the next turn does not
+    // generate over it — including a rename back to the placeholder text.
+    if (body.title !== undefined) {
+      patch.title = body.title;
+      patch.titled = true;
+    }
     if (body.archived !== undefined) patch.archived = body.archived;
     // Model is free text; core-guardian picks the real one per request.
     if (body.model !== undefined) patch.model = body.model;

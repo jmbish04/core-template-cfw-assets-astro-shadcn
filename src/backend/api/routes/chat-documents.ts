@@ -112,11 +112,21 @@ async function loadOrCreate(env: Env, threadId: string) {
     .limit(1);
   if (existing) return existing;
 
-  const [created] = await db
+  // `thread_id` is UNIQUE, and a canvas surface mounts more than one reader of
+  // this document, so two first-loads can pass the select above together. The
+  // conflict is the normal outcome of that race, not an error: ignore it and
+  // read back whichever insert won.
+  await db
     .insert(chatDocuments)
     .values({ threadId, title: thread.title, body: JSON.stringify(EMPTY_ENVELOPE) })
-    .returning();
-  return created!;
+    .onConflictDoNothing({ target: chatDocuments.threadId });
+
+  const [row] = await db
+    .select()
+    .from(chatDocuments)
+    .where(eq(chatDocuments.threadId, threadId))
+    .limit(1);
+  return row ?? null;
 }
 
 // ---------------------------------------------------------------------------
