@@ -35,7 +35,7 @@ import {
   selectChatThreadSchema,
   selectChatMessageSchema,
 } from "../../db/schema";
-import { guardianChat } from "../../ai/guardian";
+import { guardianFollowups, guardianTitle } from "@/backend/ai/guardian";
 
 // ---------------------------------------------------------------------------
 // Shared schemas
@@ -93,6 +93,45 @@ const titleBody = z
 
 const titleResponse = z.object({ title: z.string() });
 
+
+/**
+ * Check that a thread may be used as a fork parent.
+ *
+ * `parent_thread_id` is deliberately not a foreign key (deleting a root must
+ * not cascade away independent branches), so nothing in the database stops a
+ * dangling or circular parent — this is the guard.
+ *
+ * Two rules, both of which the branching surface depends on:
+ *  - the parent must exist, or the branch groups under a root that is in no
+ *    thread list and the branch appears in no fork rail;
+ *  - the parent must itself be a root, because `forkRootId` walks exactly one
+ *    hop; a branch of a branch would report the wrong root.
+ *
+ * @param env The Worker environment.
+ * @param parentThreadId The proposed parent.
+ * @param selfId The thread being written, when it already exists.
+ * @returns null when the parent is usable, otherwise a message to return.
+ */
+async function rejectBadParent(
+  env: Env,
+  parentThreadId: string,
+  selfId?: string,
+): Promise<string | null> {
+  if (selfId && parentThreadId === selfId) return "A thread cannot be its own parent.";
+
+  const [parent] = await getDb(env)
+    .select({ id: chatThreads.id, parentThreadId: chatThreads.parentThreadId })
+    .from(chatThreads)
+    .where(eq(chatThreads.id, parentThreadId))
+    .limit(1);
+
+  if (!parent) return "Parent thread not found.";
+  if (parent.parentThreadId) {
+    return "A thread can only branch from a root thread, not from another branch.";
+  }
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
@@ -147,11 +186,24 @@ threadsRouter.openapi(
         description: "Created thread.",
         content: { "application/json": { schema: selectChatThreadSchema } },
       },
+      400: {
+        description:
+          "The parentThreadId does not exist, is this thread, or is itself a branch. " +
+          "Rejected rather than written, because a dangling parent puts the branch in no " +
+          "fork rail and nothing in the schema would catch it later.",
+        content: { "application/json": { schema: notFoundSchema } },
+      },
     },
   }),
   async (c) => {
     const body = c.req.valid("json");
     const db = getDb(c.env);
+
+    if (body.parentThreadId) {
+      const rejection = await rejectBadParent(c.env, body.parentThreadId);
+      if (rejection) return c.json({ error: rejection }, 400);
+    }
+
     const now = new Date();
     const [row] = await db
       .insert(chatThreads)
@@ -194,41 +246,11 @@ threadsRouter.openapi(
   async (c) => {
     const { messages } = c.req.valid("json");
 
-    // Keep the prompt tight: last ~6 turns is plenty of context.
-    const transcript = messages
-      .slice(-6)
-      .map((m) => `${m.role}: ${m.content}`)
-      .join("\n");
-
-    try {
-      const { text } = await guardianChat(c.env, {
-        task: "threads_followups",
-        useCase: "chat",
-        importance: "low",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You generate short follow-up prompts the USER might tap next in a chat. " +
-              "Return EXACTLY 3 suggestions, each on its own line, no numbering, no quotes, " +
-              "no preamble. Each must be under 8 words and phrased as the user speaking.",
-          },
-          { role: "user", content: `Conversation so far:\n${transcript}\n\nThree follow-up prompts:` },
-        ],
-      });
-
-      const suggestions = text
-        .split("\n")
-        .map((line) => line.replace(/^[\s\-*\d.)"]+/, "").replace(/["]+$/, "").trim())
-        .filter((line) => line.length > 0 && line.length <= 80)
-        .slice(0, 3);
-
-      return c.json({ suggestions }, 200);
-    } catch (error) {
-      // Followups are best-effort: never fail the chat over a degraded model.
-      console.error("threads followups error:", error);
-      return c.json({ suggestions: [] }, 200);
-    }
+    // The prompt, the context window and the parser all live in
+    // `ai/guardian/followups.ts`; this route only carries the HTTP shape.
+    // It never throws: follow-ups are a convenience, and a degraded router
+    // must not fail the request that asked for them.
+    return c.json({ suggestions: await guardianFollowups(c.env, messages) }, 200);
   },
 );
 
@@ -259,6 +281,13 @@ threadsRouter.openapi(
         description: "Not found.",
         content: { "application/json": { schema: notFoundSchema } },
       },
+      503: {
+        description:
+          "The router could not produce a title. The thread keeps the title it had; " +
+          "this is never reported as success, because a caller that believed it would " +
+          "show a title that was never written.",
+        content: { "application/json": { schema: notFoundSchema } },
+      },
     },
   }),
   async (c) => {
@@ -275,32 +304,20 @@ threadsRouter.openapi(
 
     const firstUser = messages.find((m) => m.role === "user")?.content ?? messages[0]!.content;
 
-    let title = "New chat";
-    try {
-      const { text } = await guardianChat(c.env, {
-        task: "threads_title",
-        useCase: "chat",
-        importance: "low",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You write a short chat title (3-7 words) summarising the user's message. " +
-              "Return ONLY the title — no quotes, no trailing punctuation, no preamble.",
-          },
-          { role: "user", content: firstUser.slice(0, 800) },
-        ],
-      });
-      title = text.replace(/^["'\s]+|["'\s]+$/g, "").slice(0, 80) || "New chat";
-    } catch (error) {
-      console.error("threads title error:", error);
+    // The prompt lives in `ai/guardian/title.ts`. A degraded router yields
+    // null, and the thread keeps whatever title it already had rather than
+    // being stamped back to the placeholder.
+    const generated = await guardianTitle(c.env, firstUser);
+    if (!generated) {
+      return c.json({ error: "Could not generate a title right now." }, 503);
     }
 
     await db
       .update(chatThreads)
-      .set({ title, updatedAt: new Date() })
+      .set({ title: generated, titled: true, updatedAt: new Date() })
       .where(eq(chatThreads.id, id));
 
+    const title = generated;
     return c.json({ title }, 200);
   },
 );
@@ -396,6 +413,13 @@ threadsRouter.openapi(
         description: "Updated thread.",
         content: { "application/json": { schema: selectChatThreadSchema } },
       },
+      400: {
+        description:
+          "The parentThreadId does not exist, is this thread, or is itself a branch. " +
+          "Rejected rather than written, because a dangling parent puts the branch in no " +
+          "fork rail and nothing in the schema would catch it later.",
+        content: { "application/json": { schema: notFoundSchema } },
+      },
       404: {
         description: "Not found.",
         content: { "application/json": { schema: notFoundSchema } },
@@ -406,6 +430,11 @@ threadsRouter.openapi(
     const { id } = c.req.valid("param");
     const body = c.req.valid("json");
     const db = getDb(c.env);
+
+    if (body.parentThreadId) {
+      const rejection = await rejectBadParent(c.env, body.parentThreadId, id);
+      if (rejection) return c.json({ error: rejection }, 400);
+    }
 
     const patch: Record<string, unknown> = { updatedAt: new Date() };
     // A deliberate rename settles the title, so the next turn does not

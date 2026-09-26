@@ -15,7 +15,7 @@
  *
  * There are no Durable Objects / Agents SDK agents in this Worker. Every
  * inference call routes through the `CORE_GUARDIAN` service binding (see
- * `backend/ai/guardian.ts`); chat + notifications persist to D1 directly.
+ * `backend/ai/guardian/`); chat + notifications persist to D1 directly.
  *
  * In addition to `fetch`, the handler exports `email(message, env, ctx)` —
  * Cloudflare Email Routing's inbound entry point. It parses + stores received

@@ -6,7 +6,7 @@
  * timestamps); the conversation MESSAGES live in `chat_messages` (see
  * `messages.ts`), keyed by `chat_threads.id`. There is no Durable Object
  * here — every assistant reply is generated via the `CORE_GUARDIAN` service
- * binding (see `backend/ai/guardian.ts`) and persisted straight to D1.
+ * binding (see `backend/ai/guardian/`) and persisted straight to D1.
  *
  * The `/api/threads` router reads/writes this table; `/api/chat` is the
  * send/receive endpoint that also writes `chat_messages`.

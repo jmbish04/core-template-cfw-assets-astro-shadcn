@@ -18,7 +18,7 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
 
-import { guardianChat } from "../../ai/guardian";
+import { GUARDIAN_TASKS, guardianChat } from "@/backend/ai/guardian";
 import { getDb } from "../../db";
 import { metricsDaily, notifications, projects, tasks } from "../../db/schema";
 
@@ -417,8 +417,7 @@ Respond with only the bullet list. No preamble, no headings.`;
     let insight: string;
     try {
       const result = await guardianChat(c.env, {
-        task: "dashboard_insights",
-        useCase: "chat",
+        task: GUARDIAN_TASKS.dashboardInsights,
         importance: "low",
         messages: [{ role: "user", content: prompt }],
       });

@@ -5,7 +5,7 @@
  * replaces the old `ChatBroker` Durable Object's embedded SQLite message log
  * — messages now live in D1 like everything else, and every assistant turn
  * routes through the `CORE_GUARDIAN` service binding (see
- * `backend/ai/guardian.ts`), never a Workers AI binding directly.
+ * `backend/ai/guardian/`), never a Workers AI binding directly.
  */
 
 import { real, sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
