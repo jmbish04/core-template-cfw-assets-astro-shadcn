@@ -41,6 +41,10 @@ export const projects = sqliteTable("projects", {
   color: text("color").notNull().default("#6366f1"),
   owner: text("owner").notNull().default("you"),
   starred: integer("starred", { mode: "boolean" }).notNull().default(false),
+  // VESTIGIAL: nothing maintains this once the row exists, so every read path
+  // derives the count in its query instead (see `projectColumns` in
+  // api/routes/projects.ts). Kept only so existing rows and the response shape
+  // are unchanged.
   taskCount: integer("task_count").notNull().default(0),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()

@@ -1,5 +1,5 @@
-import { AiChat } from "./components/ai-chat"
-
-export function Page() {
-  return <AiChat />
-}
+/**
+ * @fileoverview Block entry point for ReUI `ai-chat-7`, as adapted for
+ * `/chat/compare`.
+ */
+export { ChatCompare } from "./components/ai-chat";

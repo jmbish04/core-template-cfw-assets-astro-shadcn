@@ -1,361 +1,234 @@
-"use client"
+/**
+ * @fileoverview `/chat/voice` — a docked voice-first assistant.
+ *
+ * Adapted from ReUI `ai-chat-8`. Kept: the thread switcher, the widen toggle,
+ * the transport, the playable take with its transcription, and the answer that
+ * arrives in whichever shape the question deserves.
+ *
+ * The voice half is the browser's own: `MediaRecorder` for the take,
+ * `SpeechRecognition` for the transcription (see `use-voice.ts`). There is no
+ * server-side transcription in this template, so none is claimed — and where
+ * the API is missing the mic is not rendered at all, with a line saying typing
+ * works instead.
+ *
+ * Removed from the stock block: `data.tsx` (759 lines of scripted turns,
+ * availability grids and invented sources), the `setInterval` transport over a
+ * hardcoded note length, the rotating answer-shape script, the fake
+ * transcription delay, and the slot picker over invented calendar slots.
+ *
+ * MOUNTING: `MediaRecorder` and `SpeechRecognition` are browser-only, so this
+ * island must be `client:only="react"`.
+ */
+import { useState } from "react";
 
-import { useEffect, useRef, useState, type CSSProperties } from "react"
-
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
-import { TooltipProvider } from "@/components/ui/tooltip"
-
-import { ChatPanel } from "./chat-panel"
 import {
-  activityFor,
-  composeReply,
-  DICTATED,
-  eventTitle,
-  formatTime,
-  MODELS,
-  MODES,
-  PENDING_EVENT,
-  PLAN_DECLINED,
-  planSettledText,
-  SCHEDULE,
-  THREADS,
-  turnText,
-  type EventRecord,
-  type SlotRecord,
-  type TurnRecord,
-} from "./data"
-import { PageBody } from "./page-body"
-import { type PlanDecision } from "./plan-turn"
-import { prefersReducedMotion, revealDurationMs } from "./reveal"
+  ChatComposer,
+  ChatErrorBanner,
+  ThreadList,
+  useBelow,
+  useThreadSession,
+  useThreads,
+  type ThreadSession,
+} from "@/components/chat";
+import { Button } from "@/components/ui/button";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useChatThread } from "@/lib/chat";
+import { cn } from "@/lib/utils";
+import { MicIcon, MinimizeIcon, MaximizeIcon, SquareIcon } from "lucide-react";
 
-/** Long enough to read as thinking, short enough not to stall the demo. */
-const THINK_MS = 700
-/** Breathing room between the reveal finishing and the reply settling. */
-const SETTLE_MS = 250
-/** How long a take sits on its skeleton before the words land. */
-const TRANSCRIBE_MS = 1400
+import { AnswerThread } from "./answer-thread";
+import { SHAPE_SYSTEM_PROMPT } from "./answer-shape";
+import { VoiceTakeCard } from "./voice-take";
+import { useVoice, type VoiceTake } from "./use-voice";
 
-/** 28rem where there is room, a share of the window where there is not, so a
-    tablet keeps a usable page beside the panel. One owner for each width. */
-const PANEL_WIDTH = "min(28rem, 45vw)"
-const PANEL_WIDTH_WIDE = "min(40rem, 60vw)"
+function Session({
+  session,
+  wide,
+  onTitle,
+  onThreadCreated,
+}: {
+  session: ThreadSession;
+  wide: boolean;
+  onTitle: (id: string, title: string) => void;
+  onThreadCreated: (id: string) => void;
+}) {
+  const [takes, setTakes] = useState<VoiceTake[]>([]);
+  const [sentTakeIds, setSentTakeIds] = useState<string[]>([]);
+  const [seed, setSeed] = useState<{ text: string } | null>(null);
 
-export function AiChat() {
-  const [threadId, setThreadId] = useState(THREADS[0].id)
-  const [turns, setTurns] = useState<TurnRecord[]>(THREADS[0].turns)
-  const [schedule, setSchedule] = useState<EventRecord[]>(SCHEDULE)
-  /** The ask nothing has booked yet; Approve is the only thing that clears it. */
-  const [pendingEvent, setPendingEvent] = useState<EventRecord | null>(
-    PENDING_EVENT
-  )
-  const [decisions, setDecisions] = useState<Record<string, PlanDecision>>({})
-  /** Slot id already sent, per slots turn. */
-  const [slotChoices, setSlotChoices] = useState<Record<string, string>>({})
-  /** Meetings handed down from an answer, scoping the next question. */
-  const [attached, setAttached] = useState<EventRecord[]>([])
-  /** New chat parks the panel on its zero state until the next send. */
-  const [showEmpty, setShowEmpty] = useState(false)
-  const [wide, setWide] = useState(false)
-  const [modelId, setModelId] = useState(MODELS[0].id)
-  const [modeId, setModeId] = useState(MODES[1].id)
-  /** The next answer, held back for a beat so the thinking state is on screen. */
-  const [pendingReply, setPendingReply] = useState<TurnRecord | null>(null)
-  /** The answer currently typing itself out. */
-  const [arrivingId, setArrivingId] = useState<string | null>(null)
-  const [transcribingId, setTranscribingId] = useState<string | null>(null)
-  const [thinkingLabel, setThinkingLabel] = useState("Reading your calendar")
-  /** Edit loads a transcript back into the composer; the serial re-loads it. */
-  const [draft, setDraft] = useState<{ text: string; serial: number } | null>(
-    null
-  )
+  const chat = useChatThread({
+    threadId: session.threadId,
+    systemPrompt: SHAPE_SYSTEM_PROMPT,
+    onThreadCreated: (id) => {
+      session.adoptThread(id);
+      onThreadCreated(id);
+    },
+    onTitle,
+  });
 
-  /** Monotonic counters, so ids never come from inside a state updater. */
-  const turnSerial = useRef(0)
-  const editSerial = useRef(0)
-  const replyCount = useRef(0)
-  /** How many times the current ask has been retried, so Try again walks the
-      alternates instead of repeating the same answer. */
-  const takeCount = useRef(0)
-  const dictationCount = useRef(0)
-  /** The take waiting on its transcript, so the effect needs no turn lookup. */
-  const dictating = useRef<string | null>(null)
+  const voice = useVoice((take) => setTakes((prev) => [...prev, take]));
 
-  // One delivery path for every answer: a send, a chip, a redo and a voice note
-  // all wait the same beat and then land.
-  useEffect(() => {
-    if (!pendingReply) return
-    const timer = window.setTimeout(() => {
-      setTurns((current) => [...current, pendingReply])
-      setArrivingId(pendingReply.id)
-      setPendingReply(null)
-    }, THINK_MS)
-    return () => window.clearTimeout(timer)
-  }, [pendingReply])
-
-  // The settle waits out the reveal's own duration, so a long answer is never
-  // cut mid type; reduced motion reveals it whole and settles straight away.
-  useEffect(() => {
-    if (!arrivingId) return
-    const arriving = turns.find((turn) => turn.id === arrivingId)
-    const text = arriving?.kind === "said" ? arriving.text : ""
-    const settle = prefersReducedMotion()
-      ? SETTLE_MS
-      : revealDurationMs(text) + SETTLE_MS
-    const timer = window.setTimeout(() => setArrivingId(null), settle)
-    return () => window.clearTimeout(timer)
-  }, [arrivingId, turns])
-
-  // A take transcribes, then answers itself, so the mic reaches the same
-  // delivery path a typed question does.
-  useEffect(() => {
-    if (!transcribingId) return
-    const timer = window.setTimeout(() => {
-      const spoken = dictating.current
-      dictating.current = null
-      setTranscribingId(null)
-      if (spoken) startReply(spoken)
-    }, TRANSCRIBE_MS)
-    return () => window.clearTimeout(timer)
-  }, [transcribingId])
-
-  /** Answers a prompt with whichever shape the library returns for it. */
-  function startReply(prompt: string) {
-    const serial = ++turnSerial.current
-    setThinkingLabel(activityFor(prompt))
-    setPendingReply({
-      id: `reply_${serial}`,
-      ...composeReply(prompt, replyCount.current++, takeCount.current),
-    })
-  }
-
-  /** A line the panel owes the reader right now, with no thinking beat: it is
-      the consequence of something they just pressed. */
-  function settleWith(text: string) {
-    const id = `said_${++turnSerial.current}`
-    setTurns((current) => [...current, { id, kind: "said", text }])
-    setArrivingId(id)
-  }
-
-  function send(text: string) {
-    const serial = ++turnSerial.current
-    setTurns((current) => [
-      ...current,
-      {
-        id: `asked_${serial}`,
-        kind: "asked",
-        text,
-        context: attached.length
-          ? attached.map((event) => event.title)
-          : undefined,
-      },
-    ])
-    setShowEmpty(false)
-    setAttached([])
-    takeCount.current = 0
-    startReply(text)
-  }
-
-  function voice(seconds: number) {
-    const id = `voice_${++turnSerial.current}`
-    const transcript = DICTATED[dictationCount.current++ % DICTATED.length]
-    dictating.current = transcript
-    setTurns((current) => [
-      ...current,
-      { id, kind: "voice", seconds, transcript },
-    ])
-    setShowEmpty(false)
-    takeCount.current = 0
-    setTranscribingId(id)
-  }
-
-  /** Drops whatever is in flight: a queued reply, a typing one, or a take
-      still resolving to text. A cancelled take leaves no half turn behind. */
-  function stop() {
-    setPendingReply(null)
-    setArrivingId(null)
-    if (!transcribingId) return
-    const cancelled = transcribingId
-    dictating.current = null
-    setTranscribingId(null)
-    setTurns((current) => current.filter((turn) => turn.id !== cancelled))
-  }
-
-  /** Answers the question above a turn again. The rotating counter means the
-      second attempt is a different shape, not the same words twice. */
-  function redo(turnId: string) {
-    const index = turns.findIndex((turn) => turn.id === turnId)
-    if (index < 0) return
-    let askIndex = index - 1
-    while (askIndex >= 0) {
-      const candidate = turns[askIndex]
-      if (candidate.kind === "asked" || candidate.kind === "voice") break
-      askIndex -= 1
-    }
-    const ask = turns[askIndex]
-    const prompt = ask ? turnText(ask) : ""
-    if (!prompt) return
-    takeCount.current += 1
-    setTurns(turns.slice(0, index))
-    setArrivingId(null)
-    startReply(prompt)
-  }
-
-  /** The only path that writes to the calendar. Everything else is a proposal. */
-  function approve(turnId: string) {
-    const turn = turns.find((entry) => entry.id === turnId)
-    if (!turn || turn.kind !== "plan") return
-    const booked =
-      pendingEvent && pendingEvent.id === turn.addId ? pendingEvent : null
-
-    setSchedule((current) => {
-      const moved = current.map((event) => {
-        const move = turn.moves.find((entry) => entry.eventId === event.id)
-        return move
-          ? { ...event, startsAt: move.startsAt, movedTo: move.day }
-          : event
-      })
-      return booked ? [...moved, booked] : moved
-    })
-
-    const movedTitles = turn.moves
-      .map((move) => eventTitle(schedule, move.eventId))
-      .filter(Boolean)
-    const notified: string[] = []
-    for (const event of [
-      ...schedule.filter((entry) =>
-        turn.moves.some((move) => move.eventId === entry.id)
-      ),
-      ...(booked ? [booked] : []),
-    ])
-      for (const person of event.guests)
-        if (!notified.includes(person.name)) notified.push(person.name)
-
-    if (booked) setPendingEvent(null)
-    setDecisions((current) => ({ ...current, [turnId]: "approved" }))
-    settleWith(planSettledText(movedTitles, notified, booked?.title))
-  }
-
-  function decline(turnId: string) {
-    const turn = turns.find((entry) => entry.id === turnId)
-    if (turn?.kind === "plan" && pendingEvent && pendingEvent.id === turn.addId)
-      setPendingEvent(null)
-    setDecisions((current) => ({ ...current, [turnId]: "declined" }))
-    settleWith(PLAN_DECLINED)
-  }
-
-  function confirmSlot(turnId: string, slot: SlotRecord) {
-    setSlotChoices((current) => ({ ...current, [turnId]: slot.id }))
-    const when = slot.day
-      ? `${slot.day} at ${formatTime(slot.startsAt)}`
-      : formatTime(slot.startsAt)
-    settleWith(
-      `Invite sent for ${when}. Omar has it, and I will chase a reply.`
-    )
-  }
-
-  function attachEvent(id: string) {
-    const event =
-      schedule.find((entry) => entry.id === id) ??
-      (pendingEvent?.id === id ? pendingEvent : undefined)
-    if (!event) return
-    setAttached((current) =>
-      current.some((entry) => entry.id === id) ? current : [...current, event]
-    )
-  }
-
-  function loadThread(id: string) {
-    const next = THREADS.find((entry) => entry.id === id) ?? THREADS[0]
-    setThreadId(next.id)
-    setTurns(next.turns)
-    setShowEmpty(false)
-    setDecisions({})
-    setSlotChoices({})
-    setPendingReply(null)
-    setArrivingId(null)
-    setTranscribingId(null)
-    setAttached([])
-    setDraft(null)
-    dictating.current = null
-  }
-
-  /** Clears the conversation. The calendar keeps whatever was booked, because
-      a new chat is not an undo. */
-  function newChat() {
-    setShowEmpty(true)
-    setTurns([])
-    setDecisions({})
-    setSlotChoices({})
-    setPendingReply(null)
-    setArrivingId(null)
-    setTranscribingId(null)
-    setPendingEvent(null)
-    setAttached([])
-    setDraft(null)
-    dictating.current = null
+  function sendTake(take: VoiceTake) {
+    setSentTakeIds((prev) => [...prev, take.id]);
+    void chat.send(take.transcript);
   }
 
   return (
-    // Every tooltip in the block needs this ancestor to open.
-    <TooltipProvider delay={200}>
-      <SidebarProvider
-        className="h-svh"
-        // customize: --sidebar paints the floating card; card reads as a panel
-        // lifted off the page, where the sidebar token reads as chrome.
-        style={
-          {
-            "--sidebar-width": wide ? PANEL_WIDTH_WIDE : PANEL_WIDTH,
-            "--sidebar": "var(--card)",
-          } as CSSProperties
+    <div className="flex min-h-0 flex-1 flex-col">
+      <AnswerThread
+        chat={chat}
+        contentClassName={wide ? "max-w-none" : "max-w-3xl"}
+        empty={
+          <Empty className="m-auto">
+            <EmptyHeader className="max-w-md">
+              <EmptyTitle>Ask out loud</EmptyTitle>
+              <EmptyDescription>
+                {voice.supported
+                  ? "Hold the mic, say the question, and the take lands here with its transcription. The answer picks its own shape."
+                  : "This browser has no speech recognition, so the mic is hidden. Type the question below instead."}
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         }
-      >
-        {/* The inset comes first: the panel's flow gap is what pushes the page,
-            and a gap placed before the inset would reserve the wrong side. */}
-        <SidebarInset className="flex min-h-0 flex-col overflow-hidden">
-          <PageBody />
-        </SidebarInset>
+      />
 
-        <ChatPanel
-          threadId={threadId}
-          onThreadChange={loadThread}
-          turns={turns}
-          schedule={schedule}
-          pendingEvent={pendingEvent}
-          decisions={decisions}
-          slotChoices={slotChoices}
-          showEmpty={showEmpty}
-          thinking={pendingReply !== null}
-          thinkingLabel={thinkingLabel}
-          arrivingId={arrivingId}
-          transcribingId={transcribingId}
-          wide={wide}
-          onWideChange={setWide}
-          modelId={modelId}
-          onModelChange={setModelId}
-          modeId={modeId}
-          onModeChange={setModeId}
-          draft={draft}
-          attached={attached}
-          onAttachEvent={attachEvent}
-          onDetach={(id) =>
-            setAttached((current) => current.filter((entry) => entry.id !== id))
+      <div className="flex shrink-0 flex-col gap-3 border-t p-3">
+        <ChatErrorBanner error={chat.error} onDismiss={chat.clearError} />
+        <ChatErrorBanner error={voice.error} onDismiss={voice.clearError} />
+
+        {takes.length > 0 && (
+          <div
+            className={cn("mx-auto flex w-full flex-col gap-2", wide ? "max-w-none" : "max-w-3xl")}
+            aria-label="Your takes"
+          >
+            {takes.map((take) => (
+              <VoiceTakeCard
+                key={take.id}
+                take={take}
+                sent={sentTakeIds.includes(take.id)}
+                onSend={() => sendTake(take)}
+                onEdit={(text) => setSeed({ text })}
+              />
+            ))}
+          </div>
+        )}
+
+        {voice.recording && (
+          <p role="status" className="text-muted-foreground mx-auto w-full max-w-3xl text-xs">
+            Recording — {voice.interim || "listening…"}
+          </p>
+        )}
+
+        <ChatComposer
+          onSend={(text) => void chat.send(text)}
+          onStop={chat.stop}
+          streaming={chat.streaming}
+          profile={chat.profile}
+          onProfileChange={chat.setProfile}
+          routed={chat.routed}
+          seed={seed}
+          placeholder="Say it, or type it…"
+          className={cn("mx-auto w-full", wide ? "max-w-none" : "max-w-3xl")}
+          addons={
+            // Rendered only where both browser APIs exist: a mic that cannot
+            // transcribe is a control that silently does nothing.
+            voice.supported ? (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      type="button"
+                      size="icon-sm"
+                      variant={voice.recording ? "destructive" : "ghost"}
+                      aria-label={voice.recording ? "Stop recording" : "Record a question"}
+                      aria-pressed={voice.recording}
+                      onClick={() => (voice.recording ? voice.stop() : void voice.start())}
+                      className="rounded-full"
+                    />
+                  }
+                >
+                  {voice.recording ? (
+                    <SquareIcon className="size-3 fill-current" aria-hidden="true" />
+                  ) : (
+                    <MicIcon aria-hidden="true" />
+                  )}
+                </TooltipTrigger>
+                <TooltipContent>{voice.recording ? "Stop and transcribe" : "Record a question"}</TooltipContent>
+              </Tooltip>
+            ) : null
           }
-          onSend={send}
-          onVoice={voice}
-          onStop={stop}
-          onNewChat={newChat}
-          onApprove={approve}
-          onDecline={decline}
-          onSlotConfirm={confirmSlot}
-          onRedo={redo}
-          onEditVoice={(text) =>
-            setDraft({ text, serial: ++editSerial.current })
-          }
-          onResendVoice={(text) => {
-            takeCount.current = 0
-            startReply(text)
-          }}
         />
-      </SidebarProvider>
+      </div>
+    </div>
+  );
+}
+
+export interface ChatVoiceProps {
+  /** `?t` as the Astro page read it during SSR. */
+  initialThreadId?: string;
+}
+
+/**
+ * The `/chat/voice` island.
+ *
+ * @param props The thread to resume, from the query string.
+ * @returns The thread switcher beside the voice-first assistant.
+ */
+export function ChatVoice({ initialThreadId }: ChatVoiceProps) {
+  const session = useThreadSession(initialThreadId);
+  const threads = useThreads();
+  const [wide, setWide] = useState(false);
+  const narrow = useBelow(1024);
+
+  return (
+    <TooltipProvider>
+      <div className="bg-card flex min-h-0 flex-1 overflow-hidden rounded-lg border">
+        {!narrow && (
+          <div className="flex w-64 shrink-0 flex-col border-e p-2">
+            <ThreadList
+              threads={threads.threads}
+              activeId={session.threadId}
+              loading={threads.loading}
+              onSelect={session.openThread}
+              onNew={session.newThread}
+              onRename={(id, title) => void threads.rename(id, title)}
+              onDelete={(id) => void threads.remove(id)}
+            />
+          </div>
+        )}
+
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <header className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
+            <h2 className="text-sm font-medium">Voice assistant</h2>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant={wide ? "secondary" : "ghost"}
+                    size="icon-sm"
+                    aria-label={wide ? "Narrow the answer column" : "Widen the answer column"}
+                    aria-pressed={wide}
+                    onClick={() => setWide((on) => !on)}
+                    className="ms-auto"
+                  />
+                }
+              >
+                {wide ? <MinimizeIcon aria-hidden="true" /> : <MaximizeIcon aria-hidden="true" />}
+              </TooltipTrigger>
+              <TooltipContent>{wide ? "Narrow" : "Widen"}</TooltipContent>
+            </Tooltip>
+          </header>
+
+          <Session
+            key={session.sessionKey}
+            session={session}
+            wide={wide}
+            onTitle={threads.applyTitle}
+            onThreadCreated={() => void threads.refresh()}
+          />
+        </div>
+      </div>
     </TooltipProvider>
-  )
+  );
 }

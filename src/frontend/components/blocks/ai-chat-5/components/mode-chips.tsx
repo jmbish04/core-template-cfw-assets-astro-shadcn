@@ -1,69 +1,58 @@
-import {
-  Field,
-  FieldGroup,
-  FieldLabel,
-  FieldTitle,
-} from "@/components/ui/field"
-import {
-  RadioGroup,
-  RadioGroupItem,
-} from "@/components/ui/radio-group"
+/**
+ * @fileoverview The four job modes, as one radio row under the composer.
+ *
+ * A mode is a setting, not a button: picking one changes the placeholder and
+ * the instruction prepended to the next message, so the radio semantics the
+ * block ships are the right ones. Kept from ReUI `ai-chat-5`; the four jobs
+ * behind it are this template's own.
+ */
+import { Field, FieldGroup, FieldLabel, FieldTitle } from "@/components/ui/field";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
-import { MODES, type ModeId } from "./data"
+import { MODES, type ModeId } from "./job-modes";
 
-/** Ties each card's label to the radio it activates. */
-const MODE_FIELD_ID = "ai-chat-5-mode"
+const MODE_FIELD_ID = "chat-sources-mode";
+
+export interface ModeChipsProps {
+  mode: ModeId;
+  onModeChange: (id: ModeId) => void;
+}
 
 /**
- * The four jobs this assistant does. Picking one rewrites the placeholder and
- * changes which apps the next run will need, so it is a setting, not a button.
+ * Render the mode row.
+ *
+ * @param props The current mode and its setter.
+ * @returns A radio group styled as chips.
  */
-export function ModeChips({
-  mode,
-  onModeChange,
-}: {
-  mode: ModeId
-  onModeChange: (id: ModeId) => void
-}) {
+export function ModeChips({ mode, onModeChange }: ModeChipsProps) {
   return (
     <RadioGroup
       value={mode}
-      onValueChange={(next: ModeId) => onModeChange(next)}
+      onValueChange={(next: ModeId) => next && onModeChange(next)}
       aria-label="What to do"
-      // One element carries both the radiogroup role and the card row.
-      render={
-        <FieldGroup className="flex-row flex-wrap justify-center gap-x-2 gap-y-4" />
-      }
+      render={<FieldGroup className="flex-row flex-wrap justify-center gap-x-2 gap-y-3" />}
     >
       {MODES.map((item) => {
-        const fieldId = `${MODE_FIELD_ID}-${item.id}`
-
+        const fieldId = `${MODE_FIELD_ID}-${item.id}`;
+        const Icon = item.icon;
         return (
           <FieldLabel
             key={item.id}
             htmlFor={fieldId}
-            // The label goes full width around a Field, hence w-auto!, and it
-            // owns the ring because the control inside it is undrawn.
             className="has-data-checked:border-primary/50 has-data-checked:bg-primary/5 dark:has-data-checked:bg-primary/10 has-[:focus-visible]:ring-ring/50 relative w-auto! cursor-pointer p-0 transition-colors has-[:focus-visible]:ring-[3px]"
           >
-            {/* The card's padding is the label's to give and it ranges from 8
-                to 16px across styles, so the chip pins its own box instead. */}
+            {/* The card's padding varies across styles, so the chip pins its own box. */}
             <Field orientation="horizontal" className="h-8 px-3 py-0">
-              <RadioGroupItem
-                id={fieldId}
-                value={item.id}
-                // Undrawn, not removed: it still takes focus and arrow keys,
-                // and its data-checked is what the card's own styles read.
-                className="sr-only"
-              />
+              {/* Undrawn, not removed: it still takes focus and arrow keys. */}
+              <RadioGroupItem id={fieldId} value={item.id} className="sr-only" />
               <FieldTitle className="gap-1.5">
-                {item.icon}
+                <Icon className="size-4" aria-hidden="true" />
                 {item.label}
               </FieldTitle>
             </Field>
           </FieldLabel>
-        )
+        );
       })}
     </RadioGroup>
-  )
+  );
 }

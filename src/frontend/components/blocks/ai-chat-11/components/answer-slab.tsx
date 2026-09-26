@@ -1,335 +1,185 @@
-import { useState } from "react"
-import {
-  Frame,
-  FrameHeader,
-  FramePanel,
-  FrameTitle,
-} from "@/components/reui/frame"
-import { cn } from "@/lib/utils"
+/**
+ * @fileoverview The framed receipt one reply renders as, on `/chat/stage`.
+ *
+ * ReUI `ai-chat-11` gives every answer a chrome bar and a payload strip
+ * carrying "the run behind it". This template has no tool-calling layer, so
+ * there is no tool log to draw — inventing one would be the single most
+ * dishonest thing this surface could do. What there IS, and what the strip
+ * shows instead:
+ *
+ * - the ROUTING DECISION: which provider and model core-guardian picked, which
+ *   arrives on the `routed` event before the first token;
+ * - the MODEL'S THINKING: the `reasoning` channel, folded. It streams live and
+ *   is not persisted, so a settled turn from an earlier session has none, and
+ *   the fold simply does not render — an absence, never a placeholder;
+ * - the METRICS: prompt/completion/total tokens, latency and the row's own
+ *   cost, each omitted when the router did not report it;
+ * - the CODE PATCH: any fenced block in the reply, through ReUI's `CodeBlock`.
+ */
+import { ReasoningFold, ReplyReceipt, TurnReceipt } from "@/components/chat";
+import { Frame, FrameHeader, FramePanel, FrameTitle } from "@/components/reui/frame";
+import { markdownFences } from "@/components/reui/code-block/code-block";
+import type { ChatMessage, ChatUsage, RoutedTo } from "@/lib/chat";
+import { relativeTime } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
-import { Button } from "@/components/ui/button"
-import {
-  Item,
-  ItemContent,
-  ItemDescription,
-  ItemMedia,
-  ItemTitle,
-} from "@/components/ui/item"
-import {
-  Marker,
-  MarkerContent,
-  MarkerIcon,
-} from "@/components/ui/marker"
-import { MessageFooter } from "@/components/ui/message"
-import { Spinner } from "@/components/ui/spinner"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
-import {
-  ASSISTANT_NAME,
-  MODELS,
-  type AssistantTurn,
-  type Figure,
-  type Payload,
-  type StepState,
-} from "./data"
-import { CodeIcon, CheckIcon, CopyIcon, ThumbsUpIcon, ThumbsDownIcon, RefreshCwIcon } from "lucide-react"
-
-/** Colour never carries a step's outcome alone; each dot ships its own label. */
-const STEP_STATE: Record<StepState, { dot: string; label: string }> = {
-  done: { dot: "bg-success", label: "Completed" },
-  failed: { dot: "bg-destructive", label: "Failed" },
-}
-
-const FIGURE_TONE: Record<Figure["tone"], string> = {
-  neutral: "text-foreground",
-  warning: "text-warning",
-  danger: "text-destructive",
-}
+import { Button } from "@/components/ui/button";
+import { CodeBlock } from "@/components/ui/code-block";
+import { Markdown } from "@/components/ui/markdown";
+import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
+import { MessageFooter } from "@/components/ui/message";
+import { Spinner } from "@/components/ui/spinner";
+import { RefreshCwIcon } from "lucide-react";
 
 /** Frosted, not opaque: the dot field stays faintly visible under a turn. */
-export const GLASS = "bg-card/75 backdrop-blur-md"
+const GLASS = "bg-card/75 backdrop-blur-md";
 
-function TracePayload({
-  payload,
-}: {
-  payload: Extract<Payload, { kind: "trace" }>
-}) {
-  return (
-    // A dense run log, not a stack of tiles: one tight line per step, with the
-    // dot centred on that line so the column reads as a single spine.
-    <ul className="flex flex-col gap-2">
-      {payload.steps.map((step) => {
-        const state = STEP_STATE[step.state]
-        return (
-          <li key={step.id} className="flex items-center gap-2.5">
-            <span
-              aria-hidden="true"
-              className={cn("size-1.5 shrink-0 rounded-full", state.dot)}
-            />
-            <span className="shrink-0 font-mono text-xs">
-              {step.tool}
-              <span className="sr-only">, {state.label}</span>
-            </span>
-            <span className="text-muted-foreground min-w-0 truncate text-xs">
-              {step.artifact}
-            </span>
-          </li>
-        )
-      })}
-    </ul>
-  )
-}
+/** The token counts, as a metric row. Each figure is dropped when unreported. */
+function MetricRow({ usage, latencyMs }: { usage: ChatUsage | null; latencyMs: number | null }) {
+  const figures: Array<{ label: string; value: string }> = [];
+  if (usage) {
+    figures.push({ label: "Prompt", value: usage.promptTokens.toLocaleString() });
+    figures.push({ label: "Completion", value: usage.completionTokens.toLocaleString() });
+    figures.push({ label: "Total", value: usage.totalTokens.toLocaleString() });
+  }
+  if (latencyMs != null) {
+    figures.push({
+      label: "Latency",
+      value: latencyMs >= 1000 ? `${(latencyMs / 1000).toFixed(1)}s` : `${latencyMs}ms`,
+    });
+  }
+  if (figures.length === 0) return null;
 
-function MetricsPayload({
-  payload,
-}: {
-  payload: Extract<Payload, { kind: "metrics" }>
-}) {
   return (
-    <dl className="grid grid-cols-3 gap-3">
-      {payload.figures.map((figure) => (
-        <div key={figure.id} className="flex min-w-0 flex-col gap-0.5">
-          <dt className="text-muted-foreground truncate text-xs">
-            {figure.label}
-          </dt>
-          <dd
-            className={cn(
-              "truncate text-base font-semibold tabular-nums",
-              FIGURE_TONE[figure.tone]
-            )}
-          >
-            {figure.value}
-          </dd>
+    <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {figures.map((figure) => (
+        <div key={figure.label} className="flex min-w-0 flex-col gap-0.5">
+          <dt className="text-muted-foreground truncate text-xs">{figure.label}</dt>
+          <dd className="truncate text-base font-semibold tabular-nums">{figure.value}</dd>
         </div>
       ))}
     </dl>
-  )
+  );
 }
 
-function PatchPayload({
-  payload,
-}: {
-  payload: Extract<Payload, { kind: "patch" }>
-}) {
-  return (
-    <Item size="sm" variant="outline" className="gap-3">
-      <ItemMedia variant="icon">
-        <CodeIcon className="size-4" aria-hidden="true" />
-      </ItemMedia>
-      <ItemContent className="min-w-0">
-        <ItemTitle className="truncate font-mono text-xs font-normal">
-          {payload.file}
-        </ItemTitle>
-        <ItemDescription className="flex items-center gap-1.5 text-xs">
-          <span>{payload.language}</span>
-          <span
-            aria-hidden="true"
-            className="bg-muted-foreground/40 size-1 shrink-0 rounded-full"
-          />
-          <span className="text-success tabular-nums">+{payload.added}</span>
-          <span className="text-destructive tabular-nums">
-            &minus;{payload.removed}
-          </span>
-        </ItemDescription>
-      </ItemContent>
-    </Item>
-  )
-}
-
-function PayloadStrip({ payload }: { payload: Payload }) {
-  if (payload.kind === "trace") return <TracePayload payload={payload} />
-  if (payload.kind === "metrics") return <MetricsPayload payload={payload} />
-  return <PatchPayload payload={payload} />
-}
-
-function CopyAction({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false)
-
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(text)
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 1600)
-    } catch {
-      // Clipboard access is denied in some embeds; the reply stays selectable.
-    }
-  }
-
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={copy}
-            aria-label={copied ? "Reply copied" : "Copy reply"}
-          />
-        }
-      >
-        {copied ? (
-          <CheckIcon className="text-success size-3.5" aria-hidden="true" />
-        ) : (
-          <CopyIcon className="size-3.5" aria-hidden="true" />
-        )}
-      </TooltipTrigger>
-      <TooltipContent>{copied ? "Copied" : "Copy"}</TooltipContent>
-    </Tooltip>
-  )
-}
-
-function RatingAction({
-  turnId,
-  rating,
-  onRate,
-}: {
-  turnId: string
-  rating: "up" | "down" | null
-  onRate: (turnId: string, next: "up" | "down") => void
-}) {
-  return (
-    <>
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Helpful"
-              aria-pressed={rating === "up"}
-              onClick={() => onRate(turnId, "up")}
-            />
-          }
-        >
-          <ThumbsUpIcon className={cn("size-3.5", rating === "up" && "text-success")} aria-hidden="true" />
-        </TooltipTrigger>
-        <TooltipContent>Helpful</TooltipContent>
-      </Tooltip>
-
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Not helpful"
-              aria-pressed={rating === "down"}
-              onClick={() => onRate(turnId, "down")}
-            />
-          }
-        >
-          <ThumbsDownIcon className={cn("size-3.5", rating === "down" && "text-destructive")} aria-hidden="true" />
-        </TooltipTrigger>
-        <TooltipContent>Not helpful</TooltipContent>
-      </Tooltip>
-    </>
-  )
+export interface AnswerSlabProps {
+  /** The settled reply, or null while this turn is still streaming. */
+  message: ChatMessage | null;
+  /** Streaming answer text. Ignored once `message` is set. */
+  pending?: string;
+  /** The thinking channel for the live turn. Empty for a settled one. */
+  reasoning?: string;
+  routed?: RoutedTo | null;
+  latencyMs?: number | null;
+  usage?: ChatUsage | null;
+  streaming?: boolean;
+  /** Hides the metric strip without touching the answer. */
+  showRunDetails?: boolean;
+  /** Ask the same question again, as a new turn. Absent while streaming. */
+  onRetry?: () => void;
+  className?: string;
 }
 
 /**
- * One assistant reply, rendered as a receipt rather than a bubble: a chrome bar
- * naming the run, the prose, and the typed artifact the run produced.
+ * One reply, as a framed receipt carrying the run behind it.
+ *
+ * @param props The settled message (or the live stream) plus its run facts.
+ * @returns The framed answer with its chrome bar and payload strip.
  */
 export function AnswerSlab({
-  turn,
-  thinking,
-  showRunDetails,
-  rating,
-  onRate,
+  message,
+  pending = "",
+  reasoning = "",
+  routed = null,
+  latencyMs = null,
+  usage = null,
+  streaming = false,
+  showRunDetails = true,
   onRetry,
-}: {
-  turn: AssistantTurn
-  /** The step the run is on; only read while the turn streams. */
-  thinking: string
-  /** Hides the latency and token chrome without touching the answer. */
-  showRunDetails: boolean
-  rating: "up" | "down" | null
-  onRate: (turnId: string, next: "up" | "down") => void
-  onRetry: (turnId: string) => void
-}) {
-  const model = MODELS.find((entry) => entry.id === turn.modelId) ?? MODELS[0]
-  const streaming = turn.state === "streaming"
+  className,
+}: AnswerSlabProps) {
+  const body = message?.content ?? pending;
+  const parts = markdownFences(body);
+  const model = message?.model ?? routed?.model;
 
   return (
-    <div className="group/message flex flex-col gap-1.5">
-      <Frame
-        dense
-        spacing="sm"
-        stacked
-        className={cn(GLASS, "w-full")}
-        aria-busy={streaming || undefined}
-      >
-        {/* Chrome: who answered, on what, and what the answer cost. */}
-        <FrameHeader className="flex-row items-center gap-2 py-2">
-          <FrameTitle className="truncate">{ASSISTANT_NAME}</FrameTitle>
-          <span
-            aria-hidden="true"
-            className="bg-muted-foreground/40 size-1 shrink-0 rounded-full"
-          />
-          <span className="text-muted-foreground min-w-0 truncate text-xs">
-            {model.name}
-          </span>
-          {showRunDetails && !streaming && turn.latency ? (
-            <span className="text-muted-foreground ms-auto hidden shrink-0 items-center gap-1.5 text-xs tabular-nums sm:flex">
-              <span>{turn.latency}</span>
-              <span
-                aria-hidden="true"
-                className="bg-muted-foreground/40 size-1 shrink-0 rounded-full"
-              />
-              <span>{turn.tokens?.toLocaleString("en-US")} tokens</span>
+    <div className={cn("group/slab flex flex-col gap-1.5", className)}>
+      <Frame dense stacked spacing="sm" className={cn(GLASS, "w-full")} aria-busy={streaming || undefined}>
+        <FrameHeader className="flex-row flex-wrap items-center gap-2 py-2">
+          <FrameTitle className="truncate">Assistant</FrameTitle>
+          {model && (
+            <>
+              <span aria-hidden="true" className="bg-muted-foreground/40 size-1 shrink-0 rounded-full" />
+              <span className="text-muted-foreground min-w-0 truncate font-mono text-xs">{model}</span>
+            </>
+          )}
+          {showRunDetails && !streaming && (
+            <span className="ms-auto shrink-0">
+              {message ? (
+                <ReplyReceipt message={message} />
+              ) : (
+                <TurnReceipt routed={routed} latencyMs={latencyMs} usage={usage} />
+              )}
             </span>
-          ) : null}
+          )}
         </FrameHeader>
 
-        <FramePanel>
-          {streaming ? (
-            <Marker role="status" className="gap-2">
+        <FramePanel className="flex flex-col gap-3">
+          {reasoning && <ReasoningFold reasoning={reasoning} live={streaming} defaultOpen={!body} />}
+
+          {body ? (
+            <div data-answer-body className="flex min-w-0 flex-col gap-3">
+              {parts.map((part, index) =>
+                part.type === "code" ? (
+                  <CodeBlock
+                    key={index}
+                    code={part.content}
+                    language={part.language ?? "txt"}
+                    maxLines={streaming && part.open ? undefined : 24}
+                  />
+                ) : (
+                  <Markdown key={index}>{part.content}</Markdown>
+                ),
+              )}
+            </div>
+          ) : reasoning ? null : (
+            <Marker role="status">
               <MarkerIcon>
                 <Spinner className="size-3.5" />
               </MarkerIcon>
-              <MarkerContent className="chat11-pulse text-muted-foreground text-sm">
-                {thinking}
+              <MarkerContent className="shimmer text-muted-foreground text-sm">
+                {routed?.model ? `Routed to ${routed.model}` : "Choosing a model"}
               </MarkerContent>
             </Marker>
-          ) : (
-            <p className="text-foreground/90 text-sm leading-relaxed">
-              {turn.text}
-            </p>
           )}
         </FramePanel>
 
-        {turn.payload && !streaming ? (
+        {showRunDetails && !streaming && (usage || latencyMs != null) && (
           <FramePanel className="bg-muted/40">
-            <PayloadStrip payload={turn.payload} />
+            <MetricRow usage={usage} latencyMs={latencyMs} />
           </FramePanel>
-        ) : null}
+        )}
       </Frame>
 
-      {/* Actions stay in the flow but fade in, so the thread reads quiet. */}
-      {!streaming ? (
-        <MessageFooter className="gap-0.5 opacity-0 transition-opacity group-focus-within/message:opacity-100 group-hover/message:opacity-100">
-          <CopyAction text={turn.text} />
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Retry reply"
-                  onClick={() => onRetry(turn.id)}
-                />
-              }
+      {message && (
+        <MessageFooter className="gap-1 opacity-0 transition-opacity group-focus-within/slab:opacity-100 group-hover/slab:opacity-100 max-md:opacity-100">
+          <span className="text-muted-foreground pe-1 text-xs tabular-nums">
+            {relativeTime(message.createdAt)}
+          </span>
+          {onRetry && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onRetry}
+              className="text-muted-foreground h-7 gap-1.5 px-1.5 font-normal [&_svg]:size-3.5"
             >
-              <RefreshCwIcon className="size-3.5" aria-hidden="true" />
-            </TooltipTrigger>
-            <TooltipContent>Retry</TooltipContent>
-          </Tooltip>
-          <RatingAction turnId={turn.id} rating={rating} onRate={onRate} />
+              <RefreshCwIcon aria-hidden="true" />
+              Ask again
+            </Button>
+          )}
         </MessageFooter>
-      ) : null}
+      )}
     </div>
-  )
+  );
 }

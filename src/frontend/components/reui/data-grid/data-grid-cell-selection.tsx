@@ -2197,7 +2197,13 @@ function DataGridCellSelection<TData extends object>({
   useEffect(() => {
     if (!viewportEl || !editorSession) return
     viewportEl.setAttribute("data-cell-editing", "")
-    return () => viewportEl.removeAttribute("data-cell-editing")
+    // Braced so the cleanup returns void. This Worker's tsconfig loads
+    // @cloudflare/workers-types, whose HTMLRewriter `Element.removeAttribute`
+    // returns an Element rather than void, and the bare arrow body made the
+    // cleanup look like it returned one — which React rejects.
+    return () => {
+      viewportEl.removeAttribute("data-cell-editing")
+    }
   }, [viewportEl, editorSession])
 
   // Closing an editor the user finished with keys hands focus back to the

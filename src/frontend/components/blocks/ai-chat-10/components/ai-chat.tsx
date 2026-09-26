@@ -1,273 +1,204 @@
-import { useEffect, useRef, useState } from "react"
+/**
+ * @fileoverview `/chat/scoped` — ReUI `ai-chat-10`, wired to core-guardian.
+ *
+ * A launch surface: a greeting, a framed ask box whose header toggles which
+ * workspace files the chat may read, and three starter asks. Replies come back
+ * as structured documents — sortable tables, highlighted code, comparison bars
+ * derived from the figures actually in the reply.
+ *
+ * The scope is real. See `scoped-sources.tsx`: an enabled file's bytes are
+ * carried into the turn, a disabled one is named to the model as a source it
+ * was not given, with an instruction to call that out as a gap instead of
+ * guessing around it.
+ */
+import { useState } from "react";
 
-import { TooltipProvider } from "@/components/ui/tooltip"
-
-import { ChatHeader } from "./chat-header"
-import { ChatThread } from "./chat-thread"
-import { Composer } from "./composer"
 import {
-  askText,
-  CHATS,
-  draftReply,
-  MODELS,
-  NEW_CHAT_ID,
-  SOURCES,
-  type ChatMessageRecord,
-} from "./data"
-import { StarterCards, WelcomeHero } from "./welcome"
+  ChatComposer,
+  ChatErrorBanner,
+  ThreadList,
+  useThreadSession,
+  useThreads,
+} from "@/components/chat";
+import { useChatThread } from "@/lib/chat";
 
-/** Beat before the reply starts typing itself out. */
-const REPLY_DELAY_MS = 700
+import { Frame, FrameHeader, FramePanel } from "@/components/reui/frame";
+import { Button } from "@/components/ui/button";
+import { Item } from "@/components/ui/item";
 
-const ALL_SOURCE_IDS = SOURCES.map((source) => source.id)
+import { ReuiMark } from "./reui-mark";
+import { ScopeHeader, SCOPE_SYSTEM_PROMPT, useScopedSources } from "./scoped-sources";
+import { ScopedTurns } from "./scoped-turns";
 
-/** A follow up the reply offers when a file it needed was switched off. */
-const RERUN_PREFIX = "Include "
-const RERUN_SUFFIX = " and rerun"
+/**
+ * Three grounded asks. Each names a shape the structured renderer can show, so
+ * the starters demonstrate the surface without the surface faking anything.
+ */
+const STARTERS = [
+  "Compare the files I gave you in a table: name, what it covers, how long it is.",
+  "Quote the exact configuration lines that set the database binding.",
+  "What question about this workspace can the files you have NOT answer?",
+];
 
-export function AiChat() {
-  const [activeChatId, setActiveChatId] = useState(NEW_CHAT_ID)
-  const [messages, setMessages] = useState<ChatMessageRecord[]>([])
-  const [draft, setDraft] = useState("")
-  const [modelId, setModelId] = useState(MODELS[0].id)
-  const [scopeIds, setScopeIds] = useState<string[]>(ALL_SOURCE_IDS)
-  const [memoryOn, setMemoryOn] = useState(true)
-  const [streaming, setStreaming] = useState(false)
-  /** The step named while the reply is prepared, taken from the draft itself. */
-  const [activity, setActivity] = useState("Checking the connected sources")
-  /** The reply currently typing itself out, so the thread can animate it. */
-  const [arrivingId, setArrivingId] = useState<string | null>(null)
-  /** Replies a Stop cut short. They stay cut short, even after the next send. */
-  const [stoppedIds, setStoppedIds] = useState<string[]>([])
+/** The greeting above the ask box. Time of day, not a fixed demo clock. */
+function greeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning. What should I read?";
+  if (hour < 18) return "Good afternoon. What should I read?";
+  return "Good evening. What should I read?";
+}
 
-  const field = useRef<HTMLTextAreaElement>(null)
-  const replyTimer = useRef<number | null>(null)
-  /** Rotates the answer wording, so a rerun is genuinely a different reply. */
-  const variant = useRef(0)
-  /** Only ever climbs, so a regenerated reply cannot reuse a retired key. */
-  const turnCount = useRef(0)
+function Welcome({ onPick }: { onPick: (prompt: string) => void }) {
+  return (
+    <div className="mx-auto flex w-full max-w-3xl flex-col items-center gap-6 px-4 py-10 sm:px-6">
+      <ReuiMark />
+      <h2 className="text-2xl/8 font-medium tracking-tight text-balance sm:text-3xl/9">
+        {greeting()}
+      </h2>
+      <div className="grid w-full gap-2 sm:grid-cols-3">
+        {STARTERS.map((prompt) => (
+          <Item
+            key={prompt}
+            variant="outline"
+            render={<button type="button" />}
+            onClick={() => onPick(prompt)}
+            className="hover:bg-accent/50 h-full items-start text-start"
+          >
+            <span className="text-muted-foreground text-sm/5">{prompt}</span>
+          </Item>
+        ))}
+      </div>
+    </div>
+  );
+}
 
-  const activeChat = CHATS.find((chat) => chat.id === activeChatId)
-  const firstAsk = messages.find((message) => message.role === "user")
-  const title = activeChat?.title ?? (firstAsk ? askText(firstAsk) : "New chat")
+/** One open conversation, remounted when the reader switches thread. */
+function ScopedSession({
+  threadId,
+  onThreadCreated,
+  onTitle,
+}: {
+  threadId: string | undefined;
+  onThreadCreated: (id: string) => void;
+  onTitle: (id: string, title: string) => void;
+}) {
+  const chat = useChatThread({ threadId, systemPrompt: SCOPE_SYSTEM_PROMPT, onThreadCreated, onTitle });
+  const scope = useScopedSources();
+  const [seed, setSeed] = useState<{ text: string } | null>(null);
 
-  useEffect(() => {
-    return () => {
-      if (replyTimer.current) window.clearTimeout(replyTimer.current)
-    }
-  }, [])
-
-  /** Builds one settled exchange, used when a saved chat is opened. */
-  function replayChat(prompt: string) {
-    const reply = draftReply(prompt, scopeIds)
-    return [
-      {
-        id: "replay_ask",
-        role: "user" as const,
-        at: "Earlier",
-        parts: [{ kind: "text" as const, text: prompt }],
-        contextIds: scopeIds,
-      },
-      {
-        id: "replay_reply",
-        role: "assistant" as const,
-        at: "Earlier",
-        parts: reply.parts,
-        modelId,
-        followUps: reply.followUps,
-      },
-    ]
+  async function send(text: string) {
+    await chat.send(await scope.compose(text));
   }
 
-  function clearTimer() {
-    if (replyTimer.current) window.clearTimeout(replyTimer.current)
-    replyTimer.current = null
-  }
-
-  /** A short wait, then the reply types itself out before the beat settles.
-      Ids are computed here, before any dispatch, never inside an updater. */
-  function beginReply(prompt: string, scope: string[]) {
-    clearTimer()
-    const reply = draftReply(prompt, scope, variant.current)
-    turnCount.current += 1
-    const replyId = `reply_${turnCount.current}`
-    setActivity(reply.activity)
-    setStreaming(true)
-    replyTimer.current = window.setTimeout(() => {
-      replyTimer.current = null
-      setMessages((current) => [
-        ...current,
-        {
-          id: replyId,
-          role: "assistant",
-          at: "Now",
-          parts: reply.parts,
-          modelId,
-          followUps: reply.followUps,
-        },
-      ])
-      setArrivingId(replyId)
-    }, REPLY_DELAY_MS)
-  }
-
-  function handleSend(text: string) {
-    // "Include churn-q3.csv and rerun" is the reply's own offer to fix the
-    // gap, so it puts the file back in scope instead of asking it as a question.
-    const isRerun = text.startsWith(RERUN_PREFIX) && text.endsWith(RERUN_SUFFIX)
-    const restored = isRerun
-      ? SOURCES.find(
-          (source) =>
-            source.name ===
-            text.slice(RERUN_PREFIX.length, text.length - RERUN_SUFFIX.length)
-        )
-      : undefined
-
-    const scope =
-      restored && !scopeIds.includes(restored.id)
-        ? [...scopeIds, restored.id]
-        : scopeIds
-    if (scope !== scopeIds) setScopeIds(scope)
-
-    const lastAsk = [...messages]
-      .reverse()
-      .find((message) => message.role === "user")
-    // A rerun repeats the question the miss answered rather than sending the
-    // offer itself, which would only be a sentence about a file.
-    const prompt = restored && lastAsk ? askText(lastAsk) : text
-
-    variant.current = 0
-    setDraft("")
-    setArrivingId(null)
-    turnCount.current += 1
-    setMessages((current) => [
-      ...current,
-      {
-        id: `ask_${turnCount.current}`,
-        role: "user",
-        at: "Now",
-        parts: [{ kind: "text", text: prompt }],
-        contextIds: scope,
-      },
-    ])
-    beginReply(prompt, scope)
-  }
-
-  /** The reveal reports when its last chunk lands, so a long answer runs as
-      long as it needs to instead of being cut off by a timer that guessed. */
-  function handleArrived() {
-    setArrivingId(null)
-    setStreaming(false)
-  }
-
-  function handleStop() {
-    clearTimer()
-    // Frozen where it got to, so Stop keeps the half written answer instead of
-    // handing back the rest of it.
-    if (arrivingId) setStoppedIds((current) => [...current, arrivingId])
-    setArrivingId(null)
-    setStreaming(false)
-  }
-
-  function handleRegenerate() {
-    const lastAsk = [...messages]
-      .reverse()
-      .find((message) => message.role === "user")
-    if (!lastAsk) return
-    variant.current += 1
-    setMessages((current) => {
-      const cut = current.findIndex((message) => message.id === lastAsk.id)
-      return current.slice(0, cut + 1)
-    })
-    beginReply(askText(lastAsk), scopeIds)
-  }
-
-  function handleSelectChat(id: string) {
-    const chat = CHATS.find((item) => item.id === id)
-    if (!chat) return
-    clearTimer()
-    variant.current = 0
-    setActiveChatId(id)
-    setMessages(replayChat(chat.prompt))
-    setDraft("")
-    setArrivingId(null)
-    setStoppedIds([])
-    setStreaming(false)
-  }
-
-  function handleNewChat() {
-    clearTimer()
-    variant.current = 0
-    setActiveChatId(NEW_CHAT_ID)
-    setMessages([])
-    setDraft("")
-    setArrivingId(null)
-    setStoppedIds([])
-    setStreaming(false)
-  }
-
-  const composer = (
-    <Composer
-      value={draft}
-      onValueChange={setDraft}
-      fieldRef={field}
-      scopeIds={scopeIds}
-      onScopeChange={setScopeIds}
-      modelId={modelId}
-      onModelChange={setModelId}
-      streaming={streaming}
-      onSend={handleSend}
-      onStop={handleStop}
-    />
-  )
+  const started = chat.messages.length > 0 || chat.streaming;
 
   return (
-    // Every tooltip in the block needs this ancestor to open.
-    <TooltipProvider>
-      <div className="bg-background text-foreground flex h-svh min-h-0 w-full flex-col">
-        <ChatHeader
-          title={title}
-          activeChatId={activeChatId}
-          streaming={streaming}
-          activityLabel={activity}
-          memoryOn={memoryOn}
-          onToggleMemory={() => setMemoryOn((current) => !current)}
-          onSelectChat={handleSelectChat}
-          onNewChat={handleNewChat}
+    <div className="flex min-h-0 flex-1 flex-col">
+      {started ? (
+        <ScopedTurns
+          messages={chat.messages}
+          pending={chat.pending}
+          reasoning={chat.reasoning}
+          routed={chat.routed}
+          latencyMs={chat.latencyMs}
+          usage={chat.usage}
+          streaming={chat.streaming}
+          loading={chat.loading}
+          onStop={chat.stop}
         />
+      ) : (
+        <div className="scrollbar min-h-0 flex-1 overflow-y-auto">
+          <Welcome onPick={(text) => setSeed({ text })} />
+        </div>
+      )}
 
-        <main className="flex min-h-0 flex-1 flex-col">
-          {messages.length === 0 ? (
-            // Centred while it fits, scrolled once the cards run past the fold.
-            <div className="scrollbar flex min-h-0 flex-1 overflow-y-auto px-3 sm:px-4">
-              {/* Two levels of rhythm, not one uniform gap: the greeting sits
-                  clear of the ask box, and the starters ride close under it. */}
-              <div className="m-auto flex w-full max-w-3xl flex-col gap-16 py-10">
-                <WelcomeHero />
-                <div className="flex flex-col gap-3">
-                  {composer}
-                  <StarterCards onPick={handleSend} />
-                </div>
-              </div>
-            </div>
-          ) : (
-            <>
-              <ChatThread
-                messages={messages}
-                streaming={streaming}
-                stoppedIds={stoppedIds}
-                arrivingId={arrivingId}
-                activityLabel={activity}
-                onRegenerate={handleRegenerate}
-                onSend={handleSend}
-                onArrived={handleArrived}
-              />
-              <div className="shrink-0 px-3 pb-4 sm:px-4">
-                <div className="mx-auto w-full max-w-3xl">{composer}</div>
-              </div>
-            </>
-          )}
-        </main>
+      <div className="mx-auto flex w-full max-w-3xl shrink-0 flex-col gap-2 px-4 pb-4 sm:px-6">
+        <ChatErrorBanner error={chat.error ?? scope.error} onDismiss={chat.clearError} />
+
+        {/* Surface `frame`: the ask box is the block's one framed object, and
+            its header is the scope control rather than a label. */}
+        <Frame dense stacked spacing="sm" className="w-full">
+          <FrameHeader className="py-2">
+            <ScopeHeader sources={scope.sources} loading={scope.loading} onToggle={scope.toggle} />
+          </FrameHeader>
+          <FramePanel className="p-0">
+            <ChatComposer
+              seed={seed}
+              onSend={(text) => void send(text)}
+              onStop={chat.stop}
+              streaming={chat.streaming}
+              profile={chat.profile}
+              onProfileChange={chat.setProfile}
+              routed={chat.routed}
+              placeholder="Ask about the files switched on above…"
+              className="[&_[data-slot=input-group]]:border-0 [&_[data-slot=input-group]]:shadow-none"
+            />
+          </FramePanel>
+        </Frame>
       </div>
-    </TooltipProvider>
-  )
+    </div>
+  );
+}
+
+export interface AiChatProps {
+  /** `?t=<id>` as the Astro page read it during SSR. */
+  initialThreadId?: string;
+}
+
+/**
+ * The scoped, structured chat surface.
+ *
+ * @param props The thread to resume, from the page's query string.
+ * @returns The conversation rail beside the framed ask box.
+ */
+export function AiChat({ initialThreadId }: AiChatProps) {
+  const threads = useThreads();
+  const session = useThreadSession(initialThreadId);
+
+  return (
+    <section
+      aria-label="Scoped chat"
+      className="bg-card/40 border-border/60 flex h-[calc(100svh-8.5rem)] min-h-[34rem] w-full min-w-0 overflow-hidden rounded-xl border"
+    >
+      <aside className="border-border/60 hidden w-64 shrink-0 flex-col gap-2 border-e p-2 lg:flex">
+        <ThreadList
+          threads={threads.threads}
+          activeId={session.threadId}
+          loading={threads.loading}
+          onSelect={session.openThread}
+          onNew={session.newThread}
+          onRename={threads.rename}
+          onDelete={threads.remove}
+          heading="Conversations"
+        />
+      </aside>
+
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <header className="border-border/60 flex h-12 shrink-0 items-center gap-2 border-b px-4">
+          <h2 className="min-w-0 truncate text-sm font-medium">
+            {threads.threads.find((thread) => thread.id === session.threadId)?.title ?? "New conversation"}
+          </h2>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={session.newThread}
+            className="ms-auto shrink-0"
+          >
+            New chat
+          </Button>
+        </header>
+
+        <ScopedSession
+          key={session.sessionKey}
+          threadId={session.threadId}
+          onThreadCreated={(id) => {
+            session.adoptThread(id);
+            void threads.refresh();
+          }}
+          onTitle={threads.applyTitle}
+        />
+      </div>
+    </section>
+  );
 }

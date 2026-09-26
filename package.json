@@ -27,7 +27,7 @@
     "cf-typegen": "wrangler types",
     "deps:lockfile": "corepack pnpm install --no-frozen-lockfile && wrangler types",
     "deps:update": "corepack pnpm update --latest && corepack pnpm install --no-frozen-lockfile && wrangler types",
-    "selfcheck": "for f in scripts/selfcheck*.mjs; do node \"$f\" || exit 1; done",
+    "selfcheck": "for f in scripts/selfcheck*.mjs; do node --no-warnings=MODULE_TYPELESS_PACKAGE_JSON \"$f\" || exit 1; done",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
