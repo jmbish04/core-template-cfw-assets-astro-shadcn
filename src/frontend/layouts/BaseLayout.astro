@@ -1,41 +1,31 @@
 ---
-import { cn } from "@/lib/utils";
-
+/**
+ * BaseLayout — every page renders inside the ReUI app shell (block app-shell-12,
+ * adapted in components/blocks/app-shell-12). Dark is the default; the header
+ * toggle stores an explicit "light" choice. Sidebar collapse persists in the
+ * `sidebar_state` cookie and is applied server-side, so there is no flash.
+ */
 import HeadSEO from "@/components/HeadSEO.astro";
-import { Header } from "@/components/Header";
-import { Footer } from "@/components/Footer";
+import { AppShell } from "@/components/blocks/app-shell-12/components/app-shell";
 
 const { title, description, ogImage } = Astro.props;
+const activePath = Astro.url.pathname;
+const defaultOpen = Astro.cookies.get("sidebar_state")?.value !== "false";
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang="en" class="dark">
   <head>
     <HeadSEO title={title} description={description} ogImage={ogImage} />
     <script is:inline>
-      (() => {
-        try {
-          const stored = localStorage.getItem("theme");
-          const prefersDark = window.matchMedia(
-            "(prefers-color-scheme: dark)",
-          ).matches;
-          const dark = stored ? stored === "dark" : prefersDark;
-          document.documentElement.classList.toggle("dark", dark);
-        } catch {}
-      })();
+      try {
+        if (localStorage.getItem("theme") === "light") document.documentElement.classList.remove("dark");
+      } catch {}
     </script>
   </head>
-  <body
-    class={cn(
-      "group/body overscroll-none antialiased [--footer-height:calc(var(--spacing)*14)] [--header-height:calc(var(--spacing)*14)] xl:[--footer-height:calc(var(--spacing)*24)]",
-    )}
-  >
-    <div class="bg-background relative z-10 flex min-h-svh flex-col">
-      <Header client:load />
-      <main class="flex flex-1 flex-col">
-        <slot />
-      </main>
-      <Footer />
-    </div>
+  <body class="overscroll-none antialiased">
+    <AppShell client:load activePath={activePath} defaultOpen={defaultOpen}>
+      <slot />
+    </AppShell>
   </body>
 </html>

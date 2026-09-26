@@ -26,6 +26,9 @@ export default defineConfig({
     imageService: "cloudflare",
     platformProxy: {
       enabled: true,
+      // `ai` is remote-only. Set CF_REMOTE_BINDINGS=0 to run the UI locally when a
+      // remote preview session can't be created (AI calls then fail, pages still render).
+      remoteBindings: process.env.CF_REMOTE_BINDINGS !== "0",
     },
     routes: {
       // Extend Cloudflare routes to include backend API routes
