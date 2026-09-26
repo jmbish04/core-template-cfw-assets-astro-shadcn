@@ -137,14 +137,52 @@ export async function guardianStream(
   throw new GuardianError(result.status, result.body);
 }
 
+/** Token accounting core-guardian reports on the final stream frame. */
+export interface GuardianUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
+/** One thing that happened on the wire while the model was answering. */
+export type GuardianStreamEvent =
+  /** A chunk of the visible answer. */
+  | { type: "delta"; text: string }
+  /** A chunk of the model's reasoning, when it is a thinking model. */
+  | { type: "reasoning"; text: string }
+  /** Final token counts. Arrives once, after the last delta. */
+  | { type: "usage"; usage: GuardianUsage };
+
 /**
- * Read an OpenAI-shaped SSE body and yield each incremental text delta.
+ * Which provider and model core-guardian actually routed this stream to.
  *
- * Tolerates both `choices[0].delta.content` (chat completions) and a bare
- * `{ text }`/`{ response }` payload, because core-guardian normalises
- * different upstream providers and not all of them use the same field.
+ * The router reports its decision in response HEADERS, because a stream body
+ * has no room for it before the first token. Reading it here is what lets a
+ * chat surface show the real model instead of a label the client guessed.
  */
-export async function* readGuardianDeltas(stream: Response): AsyncGenerator<string> {
+export function guardianStreamMeta(stream: Response) {
+  return {
+    provider: stream.headers.get("x-guardian-provider"),
+    model: stream.headers.get("x-guardian-model"),
+    requestUuid: stream.headers.get("x-request-uuid"),
+  };
+}
+
+/**
+ * Read an OpenAI-shaped SSE body and yield what it carries.
+ *
+ * Three things come down this pipe, and conflating them is the usual bug:
+ *  - `delta.content` — the answer
+ *  - `delta.reasoning` — the thinking, on a reasoning model. It is NOT part of
+ *    the answer and must never be concatenated into it; surfaces that show a
+ *    "thinking" fold render this, and surfaces that do not simply ignore it.
+ *  - a trailing `usage` object with the token counts
+ *
+ * Tolerates a bare `{ text }` / `{ response }` payload too, because
+ * core-guardian normalises several upstream providers and not all of them use
+ * the chat-completions shape.
+ */
+export async function* readGuardianStream(stream: Response): AsyncGenerator<GuardianStreamEvent> {
   const body = stream.body;
   if (!body) return;
 
@@ -165,17 +203,37 @@ export async function* readGuardianDeltas(stream: Response): AsyncGenerator<stri
         if (!line.startsWith("data:")) continue;
         const payload = line.slice(5).trim();
         if (!payload || payload === "[DONE]") continue;
+
+        let json: any;
         try {
-          const json = JSON.parse(payload);
-          const delta =
-            json?.choices?.[0]?.delta?.content ??
-            json?.choices?.[0]?.message?.content ??
-            json?.response ??
-            json?.text ??
-            "";
-          if (typeof delta === "string" && delta.length > 0) yield delta;
+          json = JSON.parse(payload);
         } catch {
           // A non-JSON keepalive frame is normal; skip it.
+          continue;
+        }
+
+        const choice = json?.choices?.[0];
+        const reasoning = choice?.delta?.reasoning;
+        if (typeof reasoning === "string" && reasoning.length > 0) {
+          yield { type: "reasoning", text: reasoning };
+        }
+
+        const delta =
+          choice?.delta?.content ?? choice?.message?.content ?? json?.response ?? json?.text ?? "";
+        if (typeof delta === "string" && delta.length > 0) {
+          yield { type: "delta", text: delta };
+        }
+
+        const usage = json?.usage;
+        if (usage && typeof usage.total_tokens === "number") {
+          yield {
+            type: "usage",
+            usage: {
+              promptTokens: usage.prompt_tokens ?? 0,
+              completionTokens: usage.completion_tokens ?? 0,
+              totalTokens: usage.total_tokens,
+            },
+          };
         }
       }
     }

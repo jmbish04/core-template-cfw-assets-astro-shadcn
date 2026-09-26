@@ -109,11 +109,34 @@ export const appendToDocument = (threadId: string, text: string) =>
 // Streaming
 // ---------------------------------------------------------------------------
 
+/** Token accounting core-guardian reports at the end of a stream. */
+export interface ChatUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
+/** Which provider/model core-guardian actually routed the turn to. */
+export interface RoutedTo {
+  provider: string | null;
+  model: string | null;
+  requestUuid: string | null;
+}
+
 export interface StreamHandlers {
   onMeta?: (threadId: string) => void;
+  /** The real provider/model, known before the first token arrives. */
+  onRouted?: (routed: RoutedTo) => void;
   onDelta?: (text: string) => void;
+  /**
+   * A chunk of the model's THINKING, on a reasoning model. This is not part of
+   * the answer — render it in a fold, or ignore it. Never append it to the
+   * reply text.
+   */
+  onReasoning?: (text: string) => void;
+  onUsage?: (usage: ChatUsage) => void;
   onTitle?: (title: string) => void;
-  onDone?: (message: ChatMessage) => void;
+  onDone?: (message: ChatMessage, meta: { latencyMs: number; usage: ChatUsage | null }) => void;
   onError?: (error: string) => void;
 }
 
@@ -184,10 +207,17 @@ export async function streamChat(
         }
 
         if (event === "meta") handlers.onMeta?.(payload.threadId);
+        else if (event === "routed") handlers.onRouted?.(payload as RoutedTo);
         else if (event === "delta") handlers.onDelta?.(payload.text ?? "");
+        else if (event === "reasoning") handlers.onReasoning?.(payload.text ?? "");
+        else if (event === "usage") handlers.onUsage?.(payload as ChatUsage);
         else if (event === "title") handlers.onTitle?.(payload.title);
-        else if (event === "done") handlers.onDone?.(payload.message);
-        else if (event === "error") handlers.onError?.(payload.error ?? "The assistant failed to reply.");
+        else if (event === "done") {
+          handlers.onDone?.(payload.message, {
+            latencyMs: payload.latencyMs ?? 0,
+            usage: payload.usage ?? null,
+          });
+        } else if (event === "error") handlers.onError?.(payload.error ?? "The assistant failed to reply.");
       }
     }
   } catch (err) {
@@ -220,6 +250,18 @@ export interface UseChatThread {
   messages: ChatMessage[];
   /** Text streaming in for the in-flight assistant turn, or "" when idle. */
   pending: string;
+  /**
+   * The model's THINKING for the in-flight turn, on a reasoning model, or ""
+   * when idle or when the model does not think out loud. Show it in a fold;
+   * it is not part of the answer.
+   */
+  reasoning: string;
+  /** Provider/model core-guardian routed the current or last turn to. */
+  routed: RoutedTo | null;
+  /** Wall-clock time of the last completed turn, in ms. */
+  latencyMs: number | null;
+  /** Token counts for the last completed turn, when the provider reported them. */
+  usage: ChatUsage | null;
   streaming: boolean;
   /** Loading the thread's history (not the reply). */
   loading: boolean;
@@ -247,6 +289,10 @@ export function useChatThread(options: UseChatThreadOptions = {}): UseChatThread
   const [threadId, setThreadId] = useState(options.threadId);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [pending, setPending] = useState("");
+  const [reasoning, setReasoning] = useState("");
+  const [routed, setRouted] = useState<RoutedTo | null>(null);
+  const [latencyMs, setLatencyMs] = useState<number | null>(null);
+  const [usage, setUsage] = useState<ChatUsage | null>(null);
   const [streaming, setStreaming] = useState(false);
   const [loading, setLoading] = useState(Boolean(options.threadId));
   const [error, setError] = useState<string | null>(null);
@@ -287,6 +333,7 @@ export function useChatThread(options: UseChatThreadOptions = {}): UseChatThread
       setError(null);
       setStreaming(true);
       setPending("");
+      setReasoning("");
 
       const optimistic: ChatMessage = {
         id: `optimistic-${Date.now()}`,
@@ -315,9 +362,14 @@ export function useChatThread(options: UseChatThreadOptions = {}): UseChatThread
               onThreadCreated?.(id);
             }
           },
+          onRouted: setRouted,
           onDelta: (chunk) => setPending((prev) => prev + chunk),
+          onReasoning: (chunk) => setReasoning((prev) => prev + chunk),
+          onUsage: setUsage,
           onTitle: (title) => onTitle?.(createdId ?? threadId ?? "", title),
-          onDone: (message) => {
+          onDone: (message, meta) => {
+            setLatencyMs(meta.latencyMs);
+            if (meta.usage) setUsage(meta.usage);
             setMessages((prev) => [...prev.filter((m) => m.id !== optimistic.id), { ...optimistic, threadId: message.threadId }, message]);
             setPending("");
           },
@@ -345,6 +397,10 @@ export function useChatThread(options: UseChatThreadOptions = {}): UseChatThread
     threadId,
     messages,
     pending,
+    reasoning,
+    routed,
+    latencyMs,
+    usage,
     streaming,
     loading,
     error,
@@ -355,4 +411,41 @@ export function useChatThread(options: UseChatThreadOptions = {}): UseChatThread
     clearError: () => setError(null),
     reload,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Canvas document <-> PlateEditor bridge
+// ---------------------------------------------------------------------------
+//
+// `PlateEditor` (components/notes) is string-in / string-out: it takes the
+// stored `body` STRING and hands back a fresh one. The chat-document API is
+// object-in / object-out (it parses the envelope at the route boundary). These
+// two helpers are the seam, so no surface has to JSON.stringify by hand and
+// none of them can disagree about the shape.
+
+/** Envelope object → the `body` string `PlateEditor` expects as `value`. */
+export function documentToEditorBody(doc: Pick<ChatDocument, "body">): string {
+  return JSON.stringify(doc.body);
+}
+
+/**
+ * `PlateEditor`'s `onChange` string → the envelope the API stores.
+ *
+ * Returns `null` when the editor handed back something that is not an
+ * envelope, so a caller skips the save rather than overwriting a good
+ * document with a half-parsed one.
+ */
+export function editorBodyToEnvelope(body: string): RichTextEnvelope | null {
+  try {
+    const parsed = JSON.parse(body);
+    if (parsed && Array.isArray(parsed.value)) {
+      return { v: 1, format: "plate", value: parsed.value };
+    }
+  } catch {
+    // Legacy plain text: wrap it rather than losing it.
+    if (body.trim()) {
+      return { v: 1, format: "plate", value: body.split("\n").map((line) => ({ type: "p", children: [{ text: line }] })) };
+    }
+  }
+  return null;
 }

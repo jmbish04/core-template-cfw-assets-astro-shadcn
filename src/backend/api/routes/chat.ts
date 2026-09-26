@@ -29,7 +29,9 @@ import {
   guardianChat,
   guardianStream,
   guardianTitle,
-  readGuardianDeltas,
+  readGuardianStream,
+  guardianStreamMeta,
+  type GuardianUsage,
   GuardianError,
   type GuardianMessage,
 } from "@/backend/ai/guardian";
@@ -249,8 +251,10 @@ chatRouter.openAPIRegistry.registerPath({
   responses: {
     200: {
       description:
-        "Server-Sent Events. `meta` carries the thread id, `delta` each text chunk, " +
-        "`title` the model-generated thread title, `done` the persisted message, `error` a failure.",
+        "Server-Sent Events. `meta` carries the thread id; `routed` the provider/model core-guardian " +
+        "chose; `delta` each chunk of the answer; `reasoning` each chunk of the model's thinking " +
+        "(never part of the answer); `usage` the final token counts; `title` the model-generated " +
+        "thread title; `done` the persisted message plus latency; `error` a failure.",
       content: { "text/event-stream": { schema: z.string() } },
     },
   },
@@ -272,11 +276,18 @@ chatRouter.post("/stream", async (c) => {
   const send = (controller: ReadableStreamDefaultController, event: string, data: unknown) =>
     controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
 
+  const startedAt = Date.now();
+
   const stream = new ReadableStream({
     async start(controller) {
       send(controller, "meta", { threadId });
 
       let text = "";
+      let reasoning = "";
+      let usage: GuardianUsage | null = null;
+      let provider: string | null = null;
+      let model: string | null = null;
+
       try {
         const upstream = await guardianStream(c.env, {
           task: "chat_reply",
@@ -286,9 +297,26 @@ chatRouter.post("/stream", async (c) => {
           messages,
         });
 
-        for await (const delta of readGuardianDeltas(upstream)) {
-          text += delta;
-          send(controller, "delta", { text: delta });
+        // The router reports its decision in headers, before the first token,
+        // so the UI can name the real model while the answer is still coming.
+        const routed = guardianStreamMeta(upstream);
+        provider = routed.provider;
+        model = routed.model;
+        send(controller, "routed", { provider, model, requestUuid: routed.requestUuid });
+
+        for await (const event of readGuardianStream(upstream)) {
+          if (event.type === "delta") {
+            text += event.text;
+            send(controller, "delta", { text: event.text });
+          } else if (event.type === "reasoning") {
+            // Thinking is NOT the answer. It is streamed separately so a
+            // surface can fold it away, and never concatenated into `text`.
+            reasoning += event.text;
+            send(controller, "reasoning", { text: event.text });
+          } else {
+            usage = event.usage;
+            send(controller, "usage", event.usage);
+          }
         }
       } catch (err) {
         const mapped = guardianErrorMessage(err);
@@ -298,15 +326,22 @@ chatRouter.post("/stream", async (c) => {
       }
 
       // An empty completion is a failure the UI must see, not an empty bubble.
+      // A reasoning model that spent every token thinking lands here too, so
+      // say which of the two happened rather than a generic failure.
       if (!text.trim()) {
-        send(controller, "error", { error: "The model returned an empty reply.", status: 502 });
+        send(controller, "error", {
+          error: reasoning.trim()
+            ? "The model spent its whole reply reasoning and produced no answer. Try again."
+            : "The model returned an empty reply.",
+          status: 502,
+        });
         controller.close();
         return;
       }
 
       const [assistantRow] = await db
         .insert(chatMessages)
-        .values({ threadId, role: "assistant", content: text })
+        .values({ threadId, role: "assistant", content: text, provider, model })
         .returning();
       await db.update(chatThreads).set({ updatedAt: new Date() }).where(eq(chatThreads.id, threadId));
 
@@ -315,7 +350,12 @@ chatRouter.post("/stream", async (c) => {
         if (title) send(controller, "title", { threadId, title });
       }
 
-      send(controller, "done", { threadId, message: assistantRow });
+      send(controller, "done", {
+        threadId,
+        message: assistantRow,
+        latencyMs: Date.now() - startedAt,
+        usage,
+      });
       controller.close();
     },
   });

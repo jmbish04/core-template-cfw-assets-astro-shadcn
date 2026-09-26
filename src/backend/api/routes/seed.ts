@@ -17,7 +17,7 @@ import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 import { sql } from "drizzle-orm";
 
 import { getDb } from "@/backend/db";
-import { activityLog, notifications, projects, tasks, teamNotes, webhooks } from "@/backend/db/schema";
+import { activityLog, files, notifications, projects, tasks, teamNotes, webhooks } from "@/backend/db/schema";
 
 export const seedRouter = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -37,6 +37,7 @@ const seedResponseSchema = z.object({
       webhooks: z.number(),
       activity: z.number(),
       notifications: z.number(),
+      files: z.number(),
     })
     .optional(),
 });
@@ -187,6 +188,58 @@ seedRouter.openapi(
       console.warn("Seed: notifications insert failed", err);
     }
 
+
+    // --- Drive (D1 tree + real R2 objects) ----------------------------------
+    //
+    // The /files explorer reads the tree from D1 and the bytes from R2, so a
+    // seed that only wrote rows would give every file a broken download. Each
+    // seeded file gets a real object, small enough to be free to store.
+    let fileCount = 0;
+    try {
+      const folders = [
+        { key: "docs", name: "Documents" },
+        { key: "design", name: "Design" },
+        { key: "exports", name: "Exports" },
+      ];
+      const folderIds: Record<string, string> = {};
+      for (const folder of folders) {
+        const id = crypto.randomUUID();
+        folderIds[folder.key] = id;
+        await db.insert(files).values({ id, kind: "folder", name: folder.name, parentId: null });
+        fileCount++;
+      }
+
+      const seedFiles = [
+        { parent: "docs", name: "architecture.md", type: "text/markdown", body: "# Architecture\n\nOne Cloudflare Worker serves the Astro SSR pages and the Hono API.\nD1 holds the data; R2 holds file bytes; every model call goes through core-guardian.\n" },
+        { parent: "docs", name: "onboarding.md", type: "text/markdown", body: "# Onboarding\n\n1. pnpm install\n2. pnpm run migrate:local\n3. curl -X POST http://localhost:8787/api/seed\n" },
+        { parent: "design", name: "tokens.json", type: "application/json", body: '{\n  "surface": "frame",\n  "defaultTheme": "dark",\n  "chartPalette": ["chart-1", "chart-2", "chart-3", "chart-4", "chart-5"]\n}\n' },
+        { parent: "exports", name: "tasks.csv", type: "text/csv", body: "id,title,status,priority\n1,Seeded task,todo,medium\n" },
+        { parent: null, name: "README.txt", type: "text/plain", body: "Seeded by POST /api/seed. Bytes live in R2_FILES_BUCKET; this tree lives in D1.\n" },
+      ];
+
+      for (const file of seedFiles) {
+        const id = crypto.randomUUID();
+        const r2Key = `files/${id}`;
+        const bytes = new TextEncoder().encode(file.body);
+        await c.env.R2_FILES_BUCKET.put(r2Key, bytes, { httpMetadata: { contentType: file.type } });
+        await db.insert(files).values({
+          id,
+          kind: "file",
+          name: file.name,
+          mimeType: file.type,
+          size: bytes.byteLength,
+          r2Key,
+          parentId: file.parent ? folderIds[file.parent]! : null,
+        });
+        fileCount++;
+      }
+    } catch (err) {
+      // R2 may be unreachable in a local session without remote bindings. The
+      // rest of the seed is still useful, so record the failure and carry on —
+      // but do NOT report files as seeded when they were not.
+      console.warn("Seed: drive seed failed", err);
+    }
+
     // Recompute denormalized task counts per project.
     await db.run(
       sql`UPDATE projects SET task_count = (SELECT COUNT(*) FROM tasks WHERE tasks.project_id = projects.id)`,
@@ -202,6 +255,7 @@ seedRouter.openapi(
         webhooks: 2,
         activity: 5,
         notifications: notificationCount,
+        files: fileCount,
       },
     });
   },
