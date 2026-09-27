@@ -22,7 +22,14 @@ export { ChatErrorBanner, type ChatErrorBannerProps } from "./errors";
 export { ReplyReceipt, RoutedBadge, RoutingPicker, type ReplyReceiptProps, type RoutingPickerProps } from "./routing-picker";
 export { QuotedLine, SelectionQuotePill, quotedPrompt, type SelectionQuotePillProps } from "./selection-quote";
 export { ThreadList, useThreads, type ThreadListProps, type UseThreads } from "./thread-list";
-export { THREAD_PARAM, useThreadSession, writeThreadParam, type ThreadSession } from "./thread-url";
+export {
+  COMPARE_PARAMS,
+  THREAD_PARAM,
+  useThreadSession,
+  writeParam,
+  writeThreadParam,
+  type ThreadSession,
+} from "./thread-url";
 export { useBelow } from "./use-viewport";
 export {
   ReasoningFold,

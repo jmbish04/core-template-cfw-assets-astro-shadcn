@@ -20,7 +20,7 @@
  */
 import { useRef, useState } from "react";
 
-import { useBelow } from "@/components/chat";
+import { COMPARE_PARAMS, useBelow, writeParam } from "@/components/chat";
 import { Button } from "@/components/ui/button";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -37,11 +37,32 @@ import { useScrollLock } from "./use-scroll-lock";
 const LEFT_LABEL = "Fast";
 const RIGHT_LABEL = "Deep";
 
-function Comparison({ onReset }: { onReset: () => void }) {
+function Comparison({
+  initialLeft,
+  initialRight,
+  onReset,
+}: {
+  initialLeft?: string;
+  initialRight?: string;
+  onReset: () => void;
+}) {
   // Two hooks, two threads, two streams. Owned here rather than inside the
   // panes so one send can start both in the same tick.
-  const left = useChatThread({ profile: "fast" });
-  const right = useChatThread({ profile: "deep" });
+  //
+  // Both ids go into the URL as they are created, so a reload — or a shared
+  // link — resumes THIS comparison. One `?t` cannot describe two threads,
+  // which is why these use `COMPARE_PARAMS` rather than the shared session
+  // helper. `replace: true` keeps a comparison one entry in history.
+  const left = useChatThread({
+    profile: "fast",
+    threadId: initialLeft,
+    onThreadCreated: (id) => writeParam(COMPARE_PARAMS.left, id, true),
+  });
+  const right = useChatThread({
+    profile: "deep",
+    threadId: initialRight,
+    onThreadCreated: (id) => writeParam(COMPARE_PARAMS.right, id, true),
+  });
 
   const [vote, setVote] = useState<Side | null>(null);
   const [locked, setLocked] = useState(true);
@@ -189,13 +210,30 @@ function Comparison({ onReset }: { onReset: () => void }) {
  *
  * @returns Two panes answering one prompt, with the scoreboard beneath.
  */
-export function ChatCompare() {
-  // "New comparison" remounts both threads; there is no `?t` here because a
-  // comparison is two threads and the shared session helper tracks one.
+export function ChatCompare({
+  initialLeft,
+  initialRight,
+}: {
+  initialLeft?: string;
+  initialRight?: string;
+}) {
+  // "New comparison" remounts both threads AND drops both ids from the URL,
+  // so a reload after a reset does not resurrect the pair that was just
+  // retired. The seeded ids are deliberately not re-applied to a later
+  // generation — only the first mount resumes.
   const [generation, setGeneration] = useState(0);
   return (
     <TooltipProvider>
-      <Comparison key={generation} onReset={() => setGeneration((n) => n + 1)} />
+      <Comparison
+        key={generation}
+        initialLeft={generation === 0 ? initialLeft : undefined}
+        initialRight={generation === 0 ? initialRight : undefined}
+        onReset={() => {
+          writeParam(COMPARE_PARAMS.left, undefined, true);
+          writeParam(COMPARE_PARAMS.right, undefined, true);
+          setGeneration((n) => n + 1);
+        }}
+      />
     </TooltipProvider>
   );
 }

@@ -4,9 +4,16 @@
  *
  * ReUI `ai-chat-7` computes its meters from a scripted per-model token rate
  * and a price table baked into `data.ts`. Every number here comes off the
- * wire: `latencyMs` and `usage` from the SSE stream, `costUsd` from the
- * persisted assistant row. A field the router did not report is `null` and is
- * omitted — never shown as zero, which would read as free or instant.
+ * wire.
+ *
+ * The LIVE stream values win, and the PERSISTED ROW is the fallback. That
+ * matters because a comparison is resumable — `?a` and `?b` bring both threads
+ * back — and a scoreboard of em-dashes on a resumed comparison would empty the
+ * one thing this surface exists to show. Latency and token counts are columns
+ * on `chat_messages` for exactly this reason.
+ *
+ * A field the router did not report stays `null` and renders as a dash — never
+ * as zero, which would read as free or instant.
  */
 import type { ChatMessage, ChatUsage, RoutedTo } from "@/lib/chat";
 
@@ -36,16 +43,28 @@ export interface PaneSource {
  */
 export function paneMetrics(pane: PaneSource): PaneMetrics {
   const lastReply = [...pane.messages].reverse().find((message) => message.role === "assistant");
+
+  const latencyMs = pane.latencyMs ?? lastReply?.latencyMs ?? null;
+  const completionTokens = pane.usage?.completionTokens ?? lastReply?.completionTokens ?? null;
+  const totalTokens =
+    pane.usage?.totalTokens ??
+    (lastReply && (lastReply.promptTokens != null || lastReply.completionTokens != null)
+      ? (lastReply.promptTokens ?? 0) + (lastReply.completionTokens ?? 0)
+      : null);
+
+  // Both inputs, or nothing: a rate computed from one measured number and one
+  // assumed zero is a fabrication that reads like a measurement.
   const rate =
-    pane.usage && pane.latencyMs && pane.latencyMs > 0
-      ? pane.usage.completionTokens / (pane.latencyMs / 1000)
+    completionTokens != null && latencyMs != null && latencyMs > 0
+      ? completionTokens / (latencyMs / 1000)
       : null;
+
   return {
     model: pane.routed?.model ?? lastReply?.model ?? null,
     provider: pane.routed?.provider ?? lastReply?.provider ?? null,
-    latencyMs: pane.latencyMs,
+    latencyMs,
     rate,
-    totalTokens: pane.usage?.totalTokens ?? null,
+    totalTokens,
     costUsd: lastReply?.costUsd ?? null,
   };
 }

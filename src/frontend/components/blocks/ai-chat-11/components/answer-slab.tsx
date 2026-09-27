@@ -115,10 +115,17 @@ export function AnswerSlab({
           )}
           {showRunDetails && !streaming && (
             <span className="ms-auto shrink-0">
+              {/* The chrome bar already names the model, so neither receipt
+                  repeats it. A settled turn reads its own persisted columns —
+                  latency and tokens survive a reload now — and ReplyReceipt
+                  adds the cost the router reported. */}
               {message ? (
-                <ReplyReceipt message={message} />
+                <span className="flex items-center gap-1.5">
+                  <TurnReceipt message={message} showModel={false} />
+                  <ReplyReceipt message={{ ...message, model: null }} />
+                </span>
               ) : (
-                <TurnReceipt routed={routed} latencyMs={latencyMs} usage={usage} />
+                <TurnReceipt routed={routed} latencyMs={latencyMs} usage={usage} showModel={false} />
               )}
             </span>
           )}
