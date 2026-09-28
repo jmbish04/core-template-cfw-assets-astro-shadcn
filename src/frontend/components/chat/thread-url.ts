@@ -20,18 +20,41 @@ import { useCallback, useState } from "react";
 export const THREAD_PARAM = "t";
 
 /**
+ * Push a thread id into the address bar under `key`, without navigating.
+ *
+ * Generic because `/chat/compare` holds TWO threads at once and so needs two
+ * keys; every other surface uses `THREAD_PARAM` through `writeThreadParam`.
+ *
+ * @param key Query-string key to write.
+ * @param id Thread to record, or `undefined` to drop the parameter.
+ * @param replace Replace the current entry instead of pushing a new one.
+ */
+export function writeParam(key: string, id: string | undefined, replace = false): void {
+  if (typeof window === "undefined") return;
+  const url = new URL(window.location.href);
+  if (id) url.searchParams.set(key, id);
+  else url.searchParams.delete(key);
+  window.history[replace ? "replaceState" : "pushState"]({}, "", url);
+}
+
+/**
  * Push `?t=<id>` into the address bar without navigating.
  *
  * @param id Thread to record, or `undefined` to drop the parameter.
  * @param replace Replace the current entry instead of pushing a new one.
  */
 export function writeThreadParam(id: string | undefined, replace = false): void {
-  if (typeof window === "undefined") return;
-  const url = new URL(window.location.href);
-  if (id) url.searchParams.set(THREAD_PARAM, id);
-  else url.searchParams.delete(THREAD_PARAM);
-  window.history[replace ? "replaceState" : "pushState"]({}, "", url);
+  writeParam(THREAD_PARAM, id, replace);
 }
+
+/**
+ * Query-string keys for the two panes on `/chat/compare`.
+ *
+ * A comparison is two threads, so one `?t` cannot describe it. Both are
+ * recorded, which is what makes a reload — or a shared link — resume the same
+ * pair rather than starting over against fresh threads.
+ */
+export const COMPARE_PARAMS = { left: "a", right: "b" } as const;
 
 export interface ThreadSession {
   /** Thread the surface should open, or `undefined` for a fresh one. */

@@ -225,6 +225,7 @@ chatRouter.openapi(
       systemPrompt,
     );
 
+    const startedAt = Date.now();
     let result;
     try {
       result = await guardianChat(c.env, {
@@ -246,6 +247,7 @@ chatRouter.openapi(
         provider: result.provider,
         model: result.model,
         costUsd: result.costUsd,
+        latencyMs: Date.now() - startedAt,
       })
       .returning();
     await db.update(chatThreads).set({ updatedAt: new Date() }).where(eq(chatThreads.id, threadId));
@@ -409,7 +411,19 @@ chatRouter.post("/stream", async (c) => {
 
     const [assistantRow] = await db
       .insert(chatMessages)
-      .values({ threadId, role: "assistant", content: text, provider, model })
+      .values({
+        threadId,
+        role: "assistant",
+        content: text,
+        provider,
+        model,
+        latencyMs: Date.now() - startedAt,
+        // Null, not 0, when the provider reported nothing: a measured zero and
+        // "not reported" are different facts and the receipt renders them
+        // differently.
+        promptTokens: usage?.promptTokens ?? null,
+        completionTokens: usage?.completionTokens ?? null,
+      })
       .returning();
     await db.update(chatThreads).set({ updatedAt: new Date() }).where(eq(chatThreads.id, threadId));
 

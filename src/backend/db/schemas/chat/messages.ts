@@ -25,6 +25,9 @@ export const CHAT_MESSAGES_COLUMN_DESCRIPTIONS: Record<string, string> = {
   provider: "core-guardian's chosen provider for this reply (assistant rows only).",
   model: "core-guardian's chosen model for this reply (assistant rows only).",
   cost_usd: "Cost in USD core-guardian reported for this reply (assistant rows only).",
+  latency_ms: "Wall-clock milliseconds the reply took, measured server-side (assistant rows only). Persisted because latency is otherwise a stream-only fact, and every receipt went blank on reload.",
+  prompt_tokens: "Prompt tokens the provider reported (assistant rows only). Null means not reported, never zero.",
+  completion_tokens: "Completion tokens the provider reported (assistant rows only). Null means not reported, never zero.",
   created_at: "Unix timestamp (seconds) the message was written.",
 };
 
@@ -40,6 +43,14 @@ export const chatMessages = sqliteTable("chat_messages", {
   provider: text("provider"),
   model: text("model"),
   costUsd: real("cost_usd"),
+  // Latency and token counts are facts of the STREAM, not of the row — which
+  // meant a reload emptied every receipt, and /chat/stage and /chat/compare
+  // exist to show exactly those numbers. Persisted so a resumed conversation
+  // still reports what it cost. Null means the provider did not report it;
+  // never coerce to 0, which would read as a measured zero.
+  latencyMs: integer("latency_ms"),
+  promptTokens: integer("prompt_tokens"),
+  completionTokens: integer("completion_tokens"),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .$defaultFn(() => new Date()),

@@ -103,6 +103,20 @@ export interface TurnReceiptProps {
   /** Wall-clock time of the completed turn, in ms. */
   latencyMs?: number | null;
   usage?: ChatUsage | null;
+  /**
+   * The persisted row to fall back on.
+   *
+   * Latency and token counts arrive on the stream, so a RELOADED conversation
+   * has none of them in memory — which used to blank every receipt, on two
+   * surfaces whose whole purpose is showing them. They are columns now, and
+   * this is where a resumed turn gets them back.
+   */
+  message?: Pick<ChatMessage, "model" | "latencyMs" | "promptTokens" | "completionTokens"> | null;
+  /**
+   * Include the model name. Turn it off where the surface already names the
+   * model elsewhere in its chrome, so the receipt does not say it twice.
+   */
+  showModel?: boolean;
   className?: string;
 }
 
@@ -115,11 +129,27 @@ export interface TurnReceiptProps {
  * @param props The `routed` / `latencyMs` / `usage` values from `useChatThread`.
  * @returns A muted meta row, or null when nothing was reported.
  */
-export function TurnReceipt({ routed, latencyMs, usage, className }: TurnReceiptProps) {
+export function TurnReceipt({
+  routed,
+  latencyMs,
+  usage,
+  message,
+  showModel = true,
+  className,
+}: TurnReceiptProps) {
+  // Live stream values win; the row is the fallback for a resumed turn.
+  const model = routed?.model ?? message?.model ?? null;
+  const ms = latencyMs ?? message?.latencyMs ?? null;
+  const tokens =
+    usage?.totalTokens ??
+    (message?.promptTokens != null || message?.completionTokens != null
+      ? (message.promptTokens ?? 0) + (message.completionTokens ?? 0)
+      : null);
+
   const parts: string[] = [];
-  if (routed?.model) parts.push(routed.model);
-  if (latencyMs != null) parts.push(latencyMs >= 1000 ? `${(latencyMs / 1000).toFixed(1)}s` : `${latencyMs}ms`);
-  if (usage) parts.push(`${usage.totalTokens.toLocaleString()} tokens`);
+  if (showModel && model) parts.push(model);
+  if (ms != null) parts.push(ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`);
+  if (tokens != null) parts.push(`${tokens.toLocaleString()} tokens`);
   if (parts.length === 0) return null;
 
   return (
@@ -298,9 +328,10 @@ export function Transcript({
   className,
   contentClassName,
 }: TranscriptProps) {
-  // Only the newest assistant turn can carry the live receipt: latency and
-  // tokens are stream facts, not columns in D1, so an older turn has none and
-  // must not borrow this one's.
+  // Every assistant turn carries its OWN receipt, because latency and token
+  // counts are columns now. Only the newest gets the live stream values laid
+  // over the top — an older turn reads its own row and never borrows this
+  // one's, which is what the previous newest-only rule existed to prevent.
   const lastAssistantId = [...messages].reverse().find((m) => m.role === "assistant")?.id;
   if (loading && messages.length === 0) {
     return (
@@ -339,8 +370,10 @@ export function Transcript({
                     actions={replyActions?.(message)}
                     receipt={
                       message.id === lastAssistantId && !streaming ? (
-                        <TurnReceipt latencyMs={latencyMs} usage={usage} />
-                      ) : undefined
+                        <TurnReceipt latencyMs={latencyMs} usage={usage} message={message} />
+                      ) : (
+                        <TurnReceipt message={message} />
+                      )
                     }
                   />
                 )}

@@ -163,8 +163,13 @@ decoration has no real backing, remove the decoration — do not fake it.
   latency), `error`. D1 is the store: `chat_threads`, `chat_messages`,
   `chat_documents` (one editable PlateJS canvas per thread).
   **There is no model picker** — core-guardian chooses per request, so the UI
-  offers a ROUTING PROFILE (Fast / Balanced / Deep → importance+complexity) and
-  reports the model that actually served the turn.
+  offers a ROUTING PROFILE and reports the model that actually served the
+  turn. The wire carries the PROFILE NAME (`fast` | `balanced` | `deep`), not
+  routing dials: `/api/chat` takes `profile`, and `resolveProfile` in
+  `guardian/config.ts` maps it to importance+complexity server-side. A closed
+  set of three names is a far smaller thing to accept from an unauthenticated
+  endpoint than two free knobs, and it keeps the profile definition in one
+  place instead of duplicated in every client.
 - **Pages** (Astro SSR + React islands inside the ReUI app shell):
   - `/`, `/dashboard`, `/analytics` — metric row, charts, and the core-guardian
     insight. Components under `components/{overview,dashboard}/`.
@@ -189,7 +194,8 @@ decoration has no real backing, remove the decoration — do not fake it.
     · `/chat/sources` (5, six real collections set the answer scope)
     · `/chat/agentic` (6, a real multi-turn plan that files a real task)
     · `/chat/compare` (7, one prompt through two routing profiles, scored on
-    measured latency/tokens/cost) · `/chat/voice` (8, MediaRecorder +
+    measured latency/tokens/cost; a comparison is two threads, so it carries
+    `?a` and `?b` rather than the usual single `?t`) · `/chat/voice` (8, MediaRecorder +
     SpeechRecognition, both feature-detected) · `/chat/branching` (9, a fork is
     a real sibling thread via `parent_thread_id`) · `/chat/scoped` (10) ·
     `/chat/stage` (11, framed receipts) · `/chat/support` (12, answers only

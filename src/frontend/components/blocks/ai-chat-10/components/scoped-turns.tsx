@@ -173,9 +173,14 @@ export function ScopedTurns({
                   <ReplyTurn
                     message={message}
                     receipt={
+                      // Live stream values only on the newest turn; every
+                      // other turn reads its own persisted row, so a reload
+                      // does not blank the receipts.
                       message.id === lastReplyId && !streaming ? (
-                        <TurnReceipt routed={routed} latencyMs={latencyMs} usage={usage} />
-                      ) : undefined
+                        <TurnReceipt routed={routed} latencyMs={latencyMs} usage={usage} message={message} />
+                      ) : (
+                        <TurnReceipt message={message} />
+                      )
                     }
                   />
                 )}

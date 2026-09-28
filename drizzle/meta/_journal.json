@@ -64,6 +64,13 @@
       "when": 1790426510371,
       "tag": "0008_gorgeous_angel",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1790467647466,
+      "tag": "0009_plain_human_torch",
+      "breakpoints": true
     }
   ]
 }

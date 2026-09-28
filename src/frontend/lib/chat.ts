@@ -32,6 +32,11 @@ export interface ChatMessage {
   provider: string | null;
   model: string | null;
   costUsd: number | null;
+  /** Wall-clock ms the reply took. Null on a row written before it was recorded. */
+  latencyMs: number | null;
+  /** Null means the provider did not report a count, never a measured zero. */
+  promptTokens: number | null;
+  completionTokens: number | null;
   createdAt: Timestamp;
 }
 
@@ -361,6 +366,9 @@ export function useChatThread(options: UseChatThreadOptions = {}): UseChatThread
         provider: null,
         model: null,
         costUsd: null,
+        latencyMs: null,
+        promptTokens: null,
+        completionTokens: null,
         createdAt: Date.now(),
       };
       setMessages((prev) => [...prev, optimistic]);

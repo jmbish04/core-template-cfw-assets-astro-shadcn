@@ -262,9 +262,14 @@ export function TurnList({
                     // attachments, so that is the only turn worth reading.
                     sources={citedFileNames(messages[index - 1]?.content ?? "")}
                     receipt={
+                      // Live stream values only on the newest turn; every
+                      // other turn reads its own persisted row, so a reload
+                      // does not blank the receipts.
                       message.id === lastReplyId && !streaming ? (
-                        <TurnReceipt routed={routed} latencyMs={latencyMs} usage={usage} />
-                      ) : undefined
+                        <TurnReceipt routed={routed} latencyMs={latencyMs} usage={usage} message={message} />
+                      ) : (
+                        <TurnReceipt message={message} />
+                      )
                     }
                     onRegenerate={() => onRegenerate(message.id)}
                   />
