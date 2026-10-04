@@ -59,22 +59,23 @@ export async function getCloudflareAccountId(env: Env): Promise<string | undefin
 /**
  * HMAC key used to sign the session cookie.
  *
- * Stored in the `SESSIONS` KV namespace (not the Secrets Store) so it can be
- * rotated at runtime without a redeploy. Auto-provisions a random key on first
- * use, with a dev fallback if KV is unavailable.
+ * Derived from WORKER_API_KEY (Secret Store — always bound, stable, the same
+ * root the passcode is checked against). It is NOT stored in KV.
+ *
+ * The previous implementation read a random key from the `SESSIONS` KV and, on
+ * any transient miss (`get` returning null — KV is eventually consistent) or
+ * error, generated a NEW random key and overwrote it. That silently invalidated
+ * every live cookie, so a session that worked yesterday suddenly demanded a
+ * fresh login on every page — then re-login worked (new key) until the next
+ * blip. A key tied to WORKER_API_KEY can never diverge between sign and verify
+ * and survives KV hiccups; rotating WORKER_API_KEY is the deliberate (and only)
+ * way to invalidate all sessions at once.
  */
 export async function getCookieSigningKey(env: Env): Promise<string> {
-  try {
-    let key = await env.SESSIONS.get("COOKIE_SIGNING_KEY");
-    if (key) return key;
-
-    key = crypto.randomUUID();
-    await env.SESSIONS.put("COOKIE_SIGNING_KEY", key);
-    return key;
-  } catch (e) {
-    console.warn("Failed to read/write COOKIE_SIGNING_KEY from KV", e);
-    return "default_dev_key_fallback";
-  }
+  const root = await getWorkerApiKey(env);
+  if (!root) throw new Error("WORKER_API_KEY is not bound; cannot sign session cookies");
+  // Namespaced so the raw API key is never itself the HMAC key.
+  return `cr_session_v1:${root}`;
 }
 
 /**

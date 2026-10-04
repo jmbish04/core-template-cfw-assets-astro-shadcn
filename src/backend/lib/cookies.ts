@@ -2,7 +2,11 @@ import { getCookieSigningKey } from "../utils/secrets";
 import { constantTimeEqual, decodeBase64Url, encodeBase64Url, hmacSign } from "./crypto";
 
 const SESSION_COOKIE = "cr_session";
-const TWO_YEARS_SECONDS = 60 * 60 * 24 * 365 * 2;
+// Browsers clamp a cookie's lifetime to 400 days (RFC 6265bis; Chrome enforces
+// it). A larger Max-Age is silently truncated while the `exp` claim inside the
+// payload would still read longer — the cookie and its own payload would then
+// disagree about when the session ends. Cap both at 400 days.
+const MAX_COOKIE_SECONDS = 60 * 60 * 24 * 400;
 
 export type SessionPayload = {
   sub: "single-user";
@@ -18,13 +22,13 @@ export async function createSessionCookie(
   const session: SessionPayload = {
     sub: "single-user",
     iat: payload.iat ?? now,
-    exp: payload.exp ?? now + TWO_YEARS_SECONDS,
+    exp: payload.exp ?? now + MAX_COOKIE_SECONDS,
   };
   const encodedPayload = encodeBase64Url(JSON.stringify(session));
   const signingKey = await getCookieSigningKey(env);
   const signature = await hmacSign(signingKey, encodedPayload);
 
-  return `${SESSION_COOKIE}=${encodedPayload}.${signature}; HttpOnly; Secure; SameSite=Lax; Max-Age=${TWO_YEARS_SECONDS}; Path=/`;
+  return `${SESSION_COOKIE}=${encodedPayload}.${signature}; HttpOnly; Secure; SameSite=Lax; Max-Age=${MAX_COOKIE_SECONDS}; Path=/`;
 }
 
 export async function verifySessionCookie(
