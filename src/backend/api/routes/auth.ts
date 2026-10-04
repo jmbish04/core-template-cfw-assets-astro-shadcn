@@ -46,7 +46,9 @@ authRouter.openapi(
     const { apiKey } = c.req.valid("json");
     const expected = await getWorkerApiKey(c.env);
     if (!expected) {
-      return c.json({ error: "Server misconfigured: WORKER_API_KEY not set" }, 500);
+      // Log the credential name for the operator; never name it in the response.
+      console.error("auth/login: WORKER_API_KEY is not bound");
+      return c.json({ error: "Authentication is unavailable" }, 503);
     }
 
     if (!constantTimeEqual(apiKey, expected)) {
