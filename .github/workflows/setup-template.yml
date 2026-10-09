@@ -16,7 +16,7 @@ jobs:
   setup:
     # Only run if this is a newly generated repository from the template
     if: ${{ github.repository != 'jmbish04/core-template-cfw-assets-astro-shadcn' }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.pull_request.head.repo.full_name && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || fromJSON('["self-hosted","Linux","X64","proxmox-actions"]') }}
     steps:
       - uses: actions/checkout@v4
         with:
