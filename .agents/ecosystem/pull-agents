@@ -262,6 +262,15 @@ scripts_for_repo() {              # -> one script name per line
   case $'\n'"$(selected_files)"$'\n' in
     *$'\n'AGENTS-frontend.md$'\n'*) printf 'reui.mjs\nui-guard.mjs\n' ;;
   esac
+  # ai-guard goes with the AI chapter, because the chapter's rule -- every inference
+  # goes through core-guardian -- is the one nothing was checking. Measured 2026-11-02:
+  # the router saw 0.0% of the account's Workers AI neurons for a whole billing cycle,
+  # 94 of 272 wrangler configs declared a top-level `ai` binding, and 47 repos called
+  # env.AI.run directly. A rule in a briefing that nothing scans for is a rule that
+  # only holds where somebody happened to read it.
+  case $'\n'"$(selected_files)"$'\n' in
+    *$'\n'AGENTS-ai.md$'\n'*) printf 'ai-guard.mjs\n' ;;
+  esac
 }
 
 # NOTE: this function's STDOUT is the manifest, so every message it prints must go to
